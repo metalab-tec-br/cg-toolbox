@@ -1268,7 +1268,7 @@ if (Number(HTTPS_PORT) !== Number(HTTP_PORT)) {
     if (certConfigurado) {
       console.warn(`Aviso: TLS_CERT_PATH/TLS_KEY_PATH configurados, mas o(s) arquivo(s) não foi(ram) encontrado(s) (cert: ${TLS_CERT_PATH}, key: ${TLS_KEY_PATH}) — porta ${HTTPS_PORT} vai subir em HTTP puro (sem cadeado) até isso ser corrigido.`);
     } else {
-      console.warn(`Aviso: nenhum certificado configurado (TLS_CERT_PATH/TLS_KEY_PATH) — porta ${HTTPS_PORT} está respondendo em HTTP puro, não HTTPS. Configure um certificado (--tls-cert/--tls-key no install-linux.sh) para habilitar HTTPS de verdade nesta porta.`);
+      console.warn(`Aviso: nenhum certificado configurado (TLS_CERT_PATH/TLS_KEY_PATH) — porta ${HTTPS_PORT} está respondendo em HTTP puro, não HTTPS. Configure um certificado (--tls-cert/--tls-key no install-cgtoolbox.sh) para habilitar HTTPS de verdade nesta porta.`);
     }
     startPlainHttp(HTTPS_PORT, '— sem TLS, configure um certificado quando disponível');
   }

@@ -13,7 +13,7 @@ server/*.db-shm
 
 # Scripts/artefatos de instalação bare-metal e documentação — não afetam a
 # aplicação em si, ficam de fora só para manter a imagem enxuta.
-install-linux.sh
+install-cgtoolbox.sh
 *.md
 *.docx
 *.xlsx

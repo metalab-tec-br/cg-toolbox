@@ -1,6 +1,6 @@
 # Dependências — sempre reinstaladas via "npm install" (o binário nativo do
 # better-sqlite3 é específico do SO/arquitetura de quem instalou; nunca deve
-# ser versionado nem copiado entre máquinas — ver Dockerfile/install-linux.sh).
+# ser versionado nem copiado entre máquinas — ver Dockerfile/install-cgtoolbox.sh).
 node_modules/
 server/node_modules/
 

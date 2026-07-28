@@ -45,7 +45,7 @@ COPY server ./server
 # of the final image entirely.
 COPY --from=deps /app/server/node_modules ./server/node_modules
 
-# Dedicated non-root user, same spirit as install-linux.sh's systemd service
+# Dedicated non-root user, same spirit as install-cgtoolbox.sh's systemd service
 # user — and a /app/data folder for the persistent-volume database.
 RUN useradd --system --no-create-home --shell /usr/sbin/nologin cgtoolbox \
     && mkdir -p /app/data \

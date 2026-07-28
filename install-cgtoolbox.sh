@@ -19,14 +19,14 @@
 # app is never unreachable while waiting for a certificate.
 #
 # Usage:
-#   sudo ./install-linux.sh                     # install/update — ports 80 (HTTP) + 443 (HTTP until a cert is set)
-#   sudo ./install-linux.sh --http-port 8080 --https-port 8443
-#   sudo ./install-linux.sh --user cgtoolbox
-#   sudo ./install-linux.sh --ntlm-disabled      # dev/test box, not on a Windows domain
-#   sudo ./install-linux.sh --skip-node-install  # Node already installed the way you want it
-#   sudo ./install-linux.sh --tls-cert /etc/cg-toolbox/tls/cert.pem --tls-key /etc/cg-toolbox/tls/key.pem
+#   sudo ./install-cgtoolbox.sh                     # install/update — ports 80 (HTTP) + 443 (HTTP until a cert is set)
+#   sudo ./install-cgtoolbox.sh --http-port 8080 --https-port 8443
+#   sudo ./install-cgtoolbox.sh --user cgtoolbox
+#   sudo ./install-cgtoolbox.sh --ntlm-disabled      # dev/test box, not on a Windows domain
+#   sudo ./install-cgtoolbox.sh --skip-node-install  # Node already installed the way you want it
+#   sudo ./install-cgtoolbox.sh --tls-cert /etc/cg-toolbox/tls/cert.pem --tls-key /etc/cg-toolbox/tls/key.pem
 #                                                 # turns on real HTTPS on --https-port (self-signed or CA-issued cert/key already on disk)
-#   sudo ./install-linux.sh --uninstall          # stop + remove the service (keeps the files/DB)
+#   sudo ./install-cgtoolbox.sh --uninstall          # stop + remove the service (keeps the files/DB)
 #
 # Safe to re-run: re-running with the app already installed treats this as
 # an UPDATE (stops the service, reinstalls dependencies, restarts) instead
