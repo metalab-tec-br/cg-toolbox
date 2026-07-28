@@ -110,9 +110,31 @@ if [ "$node_ok" -eq 0 ]; then
     exit 1
   fi
   info "Instalando Node.js ${NODE_MAJOR}.x (NodeSource)..."
-  curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash -
+  # Se outro repositório apt da máquina estiver com problema (ex.: chave GPG
+  # não confiável de um repo do Docker já configurado), o próprio script da
+  # NodeSource pode reportar erro e não conseguir registrar o repositório —
+  # sem abortar o "curl | bash" (ele mesmo segue retornando 0). Nesse caso o
+  # 'apt-get install -y nodejs' abaixo cai silenciosamente no pacote nodejs
+  # da distro em vez do da NodeSource — mais antigo e, no caso do
+  # Ubuntu/Debian, sem o npm embutido (ver checagem de npm logo abaixo).
+  curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - || warn "Script da NodeSource retornou erro — seguindo com o nodejs disponível nos repositórios já configurados."
   apt-get install -y nodejs
   ok "Node.js instalado: $(node -v)"
+fi
+
+# O pacote "nodejs" do Ubuntu/Debian (repositório da própria distro, não da
+# NodeSource) vem SEM o npm — só acontece quando o passo acima não conseguiu
+# usar o repositório da NodeSource (ver comentário logo acima). Sempre
+# verificamos e instalamos separadamente se faltar, independente do caminho
+# que o Node tomou para chegar aqui.
+if ! command -v npm >/dev/null 2>&1; then
+  warn "npm não encontrado (comum quando o 'nodejs' vem do repositório da própria distro) — instalando separadamente..."
+  apt-get install -y npm
+  if ! command -v npm >/dev/null 2>&1; then
+    err "Não foi possível instalar o npm. Verifique o apt manualmente (ex.: repositórios com chave GPG inválida) e rode este script de novo."
+    exit 1
+  fi
+  ok "npm instalado: $(npm -v)"
 fi
 
 # Ferramentas de build — necessárias caso o better-sqlite3 não encontre um
