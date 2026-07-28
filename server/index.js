@@ -13,12 +13,25 @@
 // uma fronteira de segurança contra alguém decidido a burlar.
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
+const http = require('http');
+const https = require('https');
 const express = require('express');
 const { db } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const FRONTEND_ROOT = path.join(__dirname, '..');
+
+// HTTPS opcional — se TLS_CERT_PATH e TLS_KEY_PATH estiverem definidos (e os
+// arquivos existirem), sobe com TLS; senão, comportamento de sempre (HTTP
+// puro). Pensado para permitir rodar na porta 443 "de verdade" (com cadeado)
+// assim que um certificado (autoassinado para testar, ou emitido pela CA da
+// empresa/Let's Encrypt para produção) estiver disponível no servidor — não
+// precisa mudar código nenhum depois, só apontar as variáveis de ambiente
+// para o certificado definitivo e reiniciar o serviço.
+const TLS_CERT_PATH = process.env.TLS_CERT_PATH;
+const TLS_KEY_PATH = process.env.TLS_KEY_PATH;
 
 app.use(express.json({ limit: '5mb' }));
 
@@ -1224,6 +1237,20 @@ app.delete('/api/parameters/:key', (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`CG Toolbox server listening on port ${PORT}`);
-});
+if (TLS_CERT_PATH && TLS_KEY_PATH) {
+  if (!fs.existsSync(TLS_CERT_PATH) || !fs.existsSync(TLS_KEY_PATH)) {
+    console.error(`TLS_CERT_PATH/TLS_KEY_PATH definidos, mas o arquivo não existe (cert: ${TLS_CERT_PATH}, key: ${TLS_KEY_PATH}). Encerrando.`);
+    process.exit(1);
+  }
+  const credentials = {
+    cert: fs.readFileSync(TLS_CERT_PATH, 'utf8'),
+    key: fs.readFileSync(TLS_KEY_PATH, 'utf8'),
+  };
+  https.createServer(credentials, app).listen(PORT, () => {
+    console.log(`CG Toolbox server listening on port ${PORT} (HTTPS)`);
+  });
+} else {
+  http.createServer(app).listen(PORT, () => {
+    console.log(`CG Toolbox server listening on port ${PORT} (HTTP)`);
+  });
+}

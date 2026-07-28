@@ -18,6 +18,8 @@
 #   sudo ./install-linux.sh --user cgtoolbox
 #   sudo ./install-linux.sh --ntlm-disabled      # dev/test box, not on a Windows domain
 #   sudo ./install-linux.sh --skip-node-install  # Node already installed the way you want it
+#   sudo ./install-linux.sh --port 443 --tls-cert /etc/cg-toolbox/tls/cert.pem --tls-key /etc/cg-toolbox/tls/key.pem
+#                                                 # real HTTPS (self-signed or CA-issued cert/key already on disk)
 #   sudo ./install-linux.sh --uninstall          # stop + remove the service (keeps the files/DB)
 #
 # Safe to re-run: re-running with the app already installed treats this as
@@ -34,6 +36,8 @@ NTLM_DISABLED=0
 SKIP_NODE_INSTALL=0
 UNINSTALL=0
 NODE_MAJOR=20
+TLS_CERT=""
+TLS_KEY=""
 
 # ── colors (fall back to plain text if not a terminal) ─────────────────
 if [ -t 1 ]; then
@@ -53,6 +57,8 @@ while [ $# -gt 0 ]; do
     --user) SERVICE_USER="$2"; shift 2 ;;
     --ntlm-disabled) NTLM_DISABLED=1; shift ;;
     --skip-node-install) SKIP_NODE_INSTALL=1; shift ;;
+    --tls-cert) TLS_CERT="$2"; shift 2 ;;
+    --tls-key) TLS_KEY="$2"; shift 2 ;;
     --uninstall) UNINSTALL=1; shift ;;
     -h|--help)
       sed -n '2,25p' "$0"; exit 0 ;;
@@ -64,6 +70,22 @@ done
 if [ "$(id -u)" -ne 0 ]; then
   err "Rode este script com sudo: sudo $0 $*"
   exit 1
+fi
+
+# ── validação de --tls-cert / --tls-key: ou os dois, ou nenhum ─────────
+if [ -n "$TLS_CERT" ] || [ -n "$TLS_KEY" ]; then
+  if [ -z "$TLS_CERT" ] || [ -z "$TLS_KEY" ]; then
+    err "--tls-cert e --tls-key precisam ser usados juntos (você passou só um dos dois)."
+    exit 1
+  fi
+  if [ ! -f "$TLS_CERT" ]; then
+    err "Certificado não encontrado: $TLS_CERT"
+    exit 1
+  fi
+  if [ ! -f "$TLS_KEY" ]; then
+    err "Chave privada não encontrada: $TLS_KEY"
+    exit 1
+  fi
 fi
 
 # ── resolve app dir: assume this script lives at the project root
@@ -229,6 +251,17 @@ if [ "$PORT" -lt 1024 ]; then
   CAP_LINE="AmbientCapabilities=CAP_NET_BIND_SERVICE"
 fi
 
+# Idem para TLS_CERT_PATH/TLS_KEY_PATH — só presentes se --tls-cert/--tls-key
+# foram passados (já validados acima: ou os dois, ou nenhum). Ver
+# server/index.js: se essas duas variáveis existirem e apontarem para
+# arquivos válidos, o servidor sobe com HTTPS de verdade nessa porta; senão,
+# comportamento de sempre (HTTP puro).
+TLS_ENV_LINES=""
+if [ -n "$TLS_CERT" ] && [ -n "$TLS_KEY" ]; then
+  TLS_ENV_LINES="Environment=TLS_CERT_PATH=${TLS_CERT}
+Environment=TLS_KEY_PATH=${TLS_KEY}"
+fi
+
 info "Gravando unit systemd em $UNIT_PATH..."
 cat > "$UNIT_PATH" <<EOF
 [Unit]
@@ -245,6 +278,7 @@ User=${SERVICE_USER}
 ${CAP_LINE}
 Environment=PORT=${PORT}
 ${NTLM_ENV_LINE}
+${TLS_ENV_LINES}
 
 [Install]
 WantedBy=multi-user.target
@@ -282,9 +316,16 @@ fi
 # Resumo final ───────────────────────────────────────────────────────
 # ════════════════════════════════════════════════════════════════════
 IP_ADDR="$(hostname -I 2>/dev/null | awk '{print $1}')"
+SCHEME="http"
+if [ -n "$TLS_CERT" ] && [ -n "$TLS_KEY" ]; then
+  SCHEME="https"
+fi
 echo
 ok "Instalação concluída."
-echo "  Acesse em:        http://${IP_ADDR:-<ip-do-servidor>}:${PORT}"
+echo "  Acesse em:        ${SCHEME}://${IP_ADDR:-<ip-do-servidor>}:${PORT}"
+if [ "$SCHEME" = "https" ]; then
+  warn "Se o certificado for autoassinado, o navegador vai mostrar um aviso de segurança até você instalar um certificado emitido por uma CA confiável (pode trocar os arquivos e reiniciar o serviço depois, sem mudar nada no código)."
+fi
 echo "  Ver status:       systemctl status ${SERVICE_NAME}"
 echo "  Ver logs:         journalctl -u ${SERVICE_NAME} -f"
 echo "  Reiniciar:        sudo systemctl restart ${SERVICE_NAME}"
