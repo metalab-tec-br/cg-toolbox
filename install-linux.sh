@@ -179,6 +179,32 @@ ok "Dependências instaladas."
 chown -R "$SERVICE_USER":"$SERVICE_USER" "$APP_DIR"
 
 # ════════════════════════════════════════════════════════════════════
+# 4.5) Confere se o usuário de serviço consegue ATRAVESSAR até o diretório
+#      do servidor. O chown acima só alcança $APP_DIR pra baixo — se o
+#      projeto foi clonado dentro do home de outro usuário (ex.:
+#      /home/fulano/projeto), o próprio /home/fulano costuma ser 750 e
+#      bloqueia qualquer usuário fora do dono, mesmo com $APP_DIR certo.
+#      Sem essa checagem, o serviço fica reiniciando em loop (systemd
+#      status=200/CHDIR) até o restart-limit do systemd desistir, sem
+#      nenhuma pista clara do motivo. ─────────────────────────────────
+# ════════════════════════════════════════════════════════════════════
+blocking_dir=""
+d="$SERVER_DIR"
+while [ "$d" != "/" ] && [ -n "$d" ]; do
+  if ! sudo -u "$SERVICE_USER" test -x "$d" 2>/dev/null; then
+    blocking_dir="$d"
+  fi
+  d="$(dirname "$d")"
+done
+if [ -n "$blocking_dir" ]; then
+  err "O usuário de serviço '$SERVICE_USER' não consegue atravessar '$blocking_dir' (falta permissão de trânsito/+x para 'outros')."
+  warn "Isso é comum quando o projeto foi clonado dentro do home de outro usuário (ex.: /home/usuario/...), que normalmente bloqueia outros usuários por padrão."
+  warn "Corrija com:  sudo chmod o+x '$blocking_dir'   (libera só a passagem, não lista o conteúdo)"
+  warn "Ou, mais correto para produção: mova o projeto para fora de qualquer home, ex. /opt/cg-toolbox, e rode este script de lá."
+  exit 1
+fi
+
+# ════════════════════════════════════════════════════════════════════
 # 5) Unit systemd ────────────────────────────────────────────────────
 # ════════════════════════════════════════════════════════════════════
 NODE_BIN="$(command -v node)"
