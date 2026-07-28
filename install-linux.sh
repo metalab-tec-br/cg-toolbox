@@ -217,6 +217,18 @@ if [ "$NTLM_DISABLED" -eq 1 ]; then
   NTLM_ENV_LINE="Environment=NTLM_DISABLED=1"
 fi
 
+# Portas < 1024 (ex.: 443, 80) são "privilegiadas" no Linux — um processo
+# rodando como usuário sem privilégio (nosso $SERVICE_USER) não consegue
+# abri-las sozinho, e por design não rodamos o Node como root. Em vez disso,
+# concedemos só a capability específica de abrir portas baixas
+# (CAP_NET_BIND_SERVICE) diretamente no systemd — mais cirúrgico que usar
+# 'setcap' no binário do node inteiro (que valeria pra qualquer processo, não
+# só este serviço).
+CAP_LINE=""
+if [ "$PORT" -lt 1024 ]; then
+  CAP_LINE="AmbientCapabilities=CAP_NET_BIND_SERVICE"
+fi
+
 info "Gravando unit systemd em $UNIT_PATH..."
 cat > "$UNIT_PATH" <<EOF
 [Unit]
@@ -230,6 +242,7 @@ ExecStart=${NODE_BIN} index.js
 Restart=always
 RestartSec=3
 User=${SERVICE_USER}
+${CAP_LINE}
 Environment=PORT=${PORT}
 ${NTLM_ENV_LINE}
 
