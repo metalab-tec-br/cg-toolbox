@@ -10,16 +10,22 @@
 #     specific to this machine's OS/architecture)
 #   - creates a dedicated, unprivileged system user to run the service
 #   - registers + starts a systemd unit (auto-restart, survives reboot)
-#   - opens the app's port in ufw/firewalld, if either is active
+#   - opens the app's ports in ufw/firewalld, if either is active
+#
+# By default the app listens on BOTH port 80 and port 443 at the same time
+# (no redirect between them — each serves the app directly). Port 443 uses
+# real HTTPS if --tls-cert/--tls-key point to a valid certificate/key;
+# otherwise it serves plain HTTP too (with a warning in the logs) so the
+# app is never unreachable while waiting for a certificate.
 #
 # Usage:
-#   sudo ./install-linux.sh                     # install/update with defaults
-#   sudo ./install-linux.sh --port 3000
+#   sudo ./install-linux.sh                     # install/update — ports 80 (HTTP) + 443 (HTTP until a cert is set)
+#   sudo ./install-linux.sh --http-port 8080 --https-port 8443
 #   sudo ./install-linux.sh --user cgtoolbox
 #   sudo ./install-linux.sh --ntlm-disabled      # dev/test box, not on a Windows domain
 #   sudo ./install-linux.sh --skip-node-install  # Node already installed the way you want it
-#   sudo ./install-linux.sh --port 443 --tls-cert /etc/cg-toolbox/tls/cert.pem --tls-key /etc/cg-toolbox/tls/key.pem
-#                                                 # real HTTPS (self-signed or CA-issued cert/key already on disk)
+#   sudo ./install-linux.sh --tls-cert /etc/cg-toolbox/tls/cert.pem --tls-key /etc/cg-toolbox/tls/key.pem
+#                                                 # turns on real HTTPS on --https-port (self-signed or CA-issued cert/key already on disk)
 #   sudo ./install-linux.sh --uninstall          # stop + remove the service (keeps the files/DB)
 #
 # Safe to re-run: re-running with the app already installed treats this as
@@ -29,7 +35,8 @@
 set -euo pipefail
 
 # ── defaults (override via flags below) ────────────────────────────────
-PORT=3000
+HTTP_PORT=80
+HTTPS_PORT=443
 SERVICE_NAME="cg-toolbox"
 SERVICE_USER="cgtoolbox"
 NTLM_DISABLED=0
@@ -53,7 +60,9 @@ err()   { echo -e "${C_ERR}ERRO${C_RESET} $*" >&2; }
 # ── parse flags ─────────────────────────────────────────────────────────
 while [ $# -gt 0 ]; do
   case "$1" in
-    --port) PORT="$2"; shift 2 ;;
+    --http-port) HTTP_PORT="$2"; shift 2 ;;
+    --https-port) HTTPS_PORT="$2"; shift 2 ;;
+    --port) warn "--port está obsoleto (agora o app sobe em duas portas ao mesmo tempo) — tratando como --http-port. Use --http-port/--https-port."; HTTP_PORT="$2"; shift 2 ;;
     --user) SERVICE_USER="$2"; shift 2 ;;
     --ntlm-disabled) NTLM_DISABLED=1; shift ;;
     --skip-node-install) SKIP_NODE_INSTALL=1; shift ;;
@@ -61,7 +70,7 @@ while [ $# -gt 0 ]; do
     --tls-key) TLS_KEY="$2"; shift 2 ;;
     --uninstall) UNINSTALL=1; shift ;;
     -h|--help)
-      sed -n '2,25p' "$0"; exit 0 ;;
+      sed -n '2,29p' "$0"; exit 0 ;;
     *) err "Opção desconhecida: $1"; exit 1 ;;
   esac
 done
@@ -227,6 +236,25 @@ if [ -n "$blocking_dir" ]; then
 fi
 
 # ════════════════════════════════════════════════════════════════════
+# 4.6) Confere se o usuário de serviço consegue LER o certificado/chave TLS,
+#      quando informados — evita descobrir isso só depois pelo journalctl
+#      (EACCES), já que é comum gerar o certificado com sudo/root e esquecer
+#      de ajustar o dono. ─────────────────────────────────────────────────
+# ════════════════════════════════════════════════════════════════════
+if [ -n "$TLS_CERT" ] && [ -n "$TLS_KEY" ]; then
+  if ! sudo -u "$SERVICE_USER" test -r "$TLS_CERT"; then
+    err "O usuário de serviço '$SERVICE_USER' não consegue LER o certificado: $TLS_CERT"
+    warn "Corrija com:  sudo chown ${SERVICE_USER}:${SERVICE_USER} '$TLS_CERT'"
+    exit 1
+  fi
+  if ! sudo -u "$SERVICE_USER" test -r "$TLS_KEY"; then
+    err "O usuário de serviço '$SERVICE_USER' não consegue LER a chave privada: $TLS_KEY"
+    warn "Corrija com:  sudo chown ${SERVICE_USER}:${SERVICE_USER} '$TLS_KEY'"
+    exit 1
+  fi
+fi
+
+# ════════════════════════════════════════════════════════════════════
 # 5) Unit systemd ────────────────────────────────────────────────────
 # ════════════════════════════════════════════════════════════════════
 NODE_BIN="$(command -v node)"
@@ -239,23 +267,25 @@ if [ "$NTLM_DISABLED" -eq 1 ]; then
   NTLM_ENV_LINE="Environment=NTLM_DISABLED=1"
 fi
 
-# Portas < 1024 (ex.: 443, 80) são "privilegiadas" no Linux — um processo
-# rodando como usuário sem privilégio (nosso $SERVICE_USER) não consegue
-# abri-las sozinho, e por design não rodamos o Node como root. Em vez disso,
-# concedemos só a capability específica de abrir portas baixas
-# (CAP_NET_BIND_SERVICE) diretamente no systemd — mais cirúrgico que usar
-# 'setcap' no binário do node inteiro (que valeria pra qualquer processo, não
-# só este serviço).
+# Portas < 1024 (ex.: 443, 80 — os padrões deste script) são "privilegiadas"
+# no Linux — um processo rodando como usuário sem privilégio (nosso
+# $SERVICE_USER) não consegue abri-las sozinho, e por design não rodamos o
+# Node como root. Em vez disso, concedemos só a capability específica de
+# abrir portas baixas (CAP_NET_BIND_SERVICE) diretamente no systemd — mais
+# cirúrgico que usar 'setcap' no binário do node inteiro (que valeria pra
+# qualquer processo, não só este serviço). Cobre as duas portas de uma vez
+# (a capability não é por porta).
 CAP_LINE=""
-if [ "$PORT" -lt 1024 ]; then
+if [ "$HTTP_PORT" -lt 1024 ] || [ "$HTTPS_PORT" -lt 1024 ]; then
   CAP_LINE="AmbientCapabilities=CAP_NET_BIND_SERVICE"
 fi
 
 # Idem para TLS_CERT_PATH/TLS_KEY_PATH — só presentes se --tls-cert/--tls-key
-# foram passados (já validados acima: ou os dois, ou nenhum). Ver
-# server/index.js: se essas duas variáveis existirem e apontarem para
-# arquivos válidos, o servidor sobe com HTTPS de verdade nessa porta; senão,
-# comportamento de sempre (HTTP puro).
+# foram passados (já validados acima: ou os dois, ou nenhum, e legíveis pelo
+# usuário de serviço). Ver server/index.js: a porta HTTPS_PORT sobe com TLS
+# de verdade se essas variáveis apontarem pra um certificado/chave válidos;
+# senão sobe em HTTP puro também (nunca fica indisponível esperando o
+# certificado definitivo).
 TLS_ENV_LINES=""
 if [ -n "$TLS_CERT" ] && [ -n "$TLS_KEY" ]; then
   TLS_ENV_LINES="Environment=TLS_CERT_PATH=${TLS_CERT}
@@ -276,7 +306,8 @@ Restart=always
 RestartSec=3
 User=${SERVICE_USER}
 ${CAP_LINE}
-Environment=PORT=${PORT}
+Environment=HTTP_PORT=${HTTP_PORT}
+Environment=HTTPS_PORT=${HTTPS_PORT}
 ${NTLM_ENV_LINE}
 ${TLS_ENV_LINES}
 
@@ -297,17 +328,27 @@ else
 fi
 
 # ════════════════════════════════════════════════════════════════════
-# 6) Firewall — abre a porta se ufw ou firewalld estiverem ativos ───────
+# 6) Firewall — abre as portas se ufw ou firewalld estiverem ativos ─────
 # ════════════════════════════════════════════════════════════════════
+# Lista sem duplicar caso HTTP_PORT == HTTPS_PORT (uso incomum, mas possível).
+PORTS_TO_OPEN="$HTTP_PORT"
+if [ "$HTTPS_PORT" != "$HTTP_PORT" ]; then
+  PORTS_TO_OPEN="$PORTS_TO_OPEN $HTTPS_PORT"
+fi
+
 if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
-  info "ufw ativo — liberando porta ${PORT}/tcp..."
-  ufw allow "${PORT}/tcp" >/dev/null
-  ok "Porta liberada no ufw."
+  for p in $PORTS_TO_OPEN; do
+    info "ufw ativo — liberando porta ${p}/tcp..."
+    ufw allow "${p}/tcp" >/dev/null
+  done
+  ok "Porta(s) liberada(s) no ufw."
 elif command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active --quiet firewalld; then
-  info "firewalld ativo — liberando porta ${PORT}/tcp..."
-  firewall-cmd --permanent --add-port="${PORT}/tcp" >/dev/null
+  for p in $PORTS_TO_OPEN; do
+    info "firewalld ativo — liberando porta ${p}/tcp..."
+    firewall-cmd --permanent --add-port="${p}/tcp" >/dev/null
+  done
   firewall-cmd --reload >/dev/null
-  ok "Porta liberada no firewalld."
+  ok "Porta(s) liberada(s) no firewalld."
 else
   warn "Nenhum firewall ativo detectado (ufw/firewalld) — nada para liberar."
 fi
@@ -316,15 +357,21 @@ fi
 # Resumo final ───────────────────────────────────────────────────────
 # ════════════════════════════════════════════════════════════════════
 IP_ADDR="$(hostname -I 2>/dev/null | awk '{print $1}')"
-SCHEME="http"
+HTTPS_REAL=0
 if [ -n "$TLS_CERT" ] && [ -n "$TLS_KEY" ]; then
-  SCHEME="https"
+  HTTPS_REAL=1
 fi
+
 echo
 ok "Instalação concluída."
-echo "  Acesse em:        ${SCHEME}://${IP_ADDR:-<ip-do-servidor>}:${PORT}"
-if [ "$SCHEME" = "https" ]; then
-  warn "Se o certificado for autoassinado, o navegador vai mostrar um aviso de segurança até você instalar um certificado emitido por uma CA confiável (pode trocar os arquivos e reiniciar o serviço depois, sem mudar nada no código)."
+echo "  Acesse em:        http://${IP_ADDR:-<ip-do-servidor>}:${HTTP_PORT}"
+if [ "$HTTPS_PORT" != "$HTTP_PORT" ]; then
+  if [ "$HTTPS_REAL" -eq 1 ]; then
+    echo "  Acesse em:        https://${IP_ADDR:-<ip-do-servidor>}:${HTTPS_PORT}"
+    warn "Se o certificado for autoassinado, o navegador vai mostrar um aviso de segurança até você instalar um certificado emitido por uma CA confiável (pode trocar os arquivos e reiniciar o serviço depois, sem mudar nada no código)."
+  else
+    echo "  Acesse em:        http://${IP_ADDR:-<ip-do-servidor>}:${HTTPS_PORT}  (ainda sem certificado — HTTPS real só quando --tls-cert/--tls-key forem configurados)"
+  fi
 fi
 echo "  Ver status:       systemctl status ${SERVICE_NAME}"
 echo "  Ver logs:         journalctl -u ${SERVICE_NAME} -f"

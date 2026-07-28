@@ -20,16 +20,20 @@ const express = require('express');
 const { db } = require('./db');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 const FRONTEND_ROOT = path.join(__dirname, '..');
 
-// HTTPS opcional — se TLS_CERT_PATH e TLS_KEY_PATH estiverem definidos (e os
-// arquivos existirem), sobe com TLS; senão, comportamento de sempre (HTTP
-// puro). Pensado para permitir rodar na porta 443 "de verdade" (com cadeado)
-// assim que um certificado (autoassinado para testar, ou emitido pela CA da
-// empresa/Let's Encrypt para produção) estiver disponível no servidor — não
-// precisa mudar código nenhum depois, só apontar as variáveis de ambiente
-// para o certificado definitivo e reiniciar o serviço.
+// Duas portas ativas em paralelo (sem redirecionamento entre elas — cada
+// uma serve a aplicação diretamente):
+//   - HTTP_PORT (padrão 80): sempre em HTTP puro.
+//   - HTTPS_PORT (padrão 443): em HTTPS de verdade SE TLS_CERT_PATH e
+//     TLS_KEY_PATH apontarem para um certificado/chave válidos; caso
+//     contrário sobe em HTTP puro também (com aviso no log), para nunca
+//     ficar indisponível enquanto o certificado definitivo não chega — só
+//     trocar os arquivos e reiniciar o serviço depois, sem mudar código.
+// PORT (variável antiga, de instalações anteriores a essa mudança) continua
+// funcionando como alias de HTTP_PORT, para compatibilidade.
+const HTTP_PORT = process.env.HTTP_PORT || process.env.PORT || 80;
+const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 const TLS_CERT_PATH = process.env.TLS_CERT_PATH;
 const TLS_KEY_PATH = process.env.TLS_KEY_PATH;
 
@@ -1237,20 +1241,35 @@ app.delete('/api/parameters/:key', (req, res) => {
   }
 });
 
-if (TLS_CERT_PATH && TLS_KEY_PATH) {
-  if (!fs.existsSync(TLS_CERT_PATH) || !fs.existsSync(TLS_KEY_PATH)) {
-    console.error(`TLS_CERT_PATH/TLS_KEY_PATH definidos, mas o arquivo não existe (cert: ${TLS_CERT_PATH}, key: ${TLS_KEY_PATH}). Encerrando.`);
-    process.exit(1);
+function startPlainHttp(port, extraLabel) {
+  http.createServer(app).listen(port, () => {
+    console.log(`CG Toolbox server listening on port ${port} (HTTP)${extraLabel ? ' ' + extraLabel : ''}`);
+  });
+}
+
+// Porta HTTP — sempre ativa.
+startPlainHttp(HTTP_PORT);
+
+// Porta HTTPS — ativa em paralelo, só se for diferente da porta HTTP acima
+// (evita tentar abrir a mesma porta duas vezes).
+if (Number(HTTPS_PORT) !== Number(HTTP_PORT)) {
+  const certConfigurado = Boolean(TLS_CERT_PATH && TLS_KEY_PATH);
+  const certValido = certConfigurado && fs.existsSync(TLS_CERT_PATH) && fs.existsSync(TLS_KEY_PATH);
+
+  if (certValido) {
+    const credentials = {
+      cert: fs.readFileSync(TLS_CERT_PATH, 'utf8'),
+      key: fs.readFileSync(TLS_KEY_PATH, 'utf8'),
+    };
+    https.createServer(credentials, app).listen(HTTPS_PORT, () => {
+      console.log(`CG Toolbox server listening on port ${HTTPS_PORT} (HTTPS)`);
+    });
+  } else {
+    if (certConfigurado) {
+      console.warn(`Aviso: TLS_CERT_PATH/TLS_KEY_PATH configurados, mas o(s) arquivo(s) não foi(ram) encontrado(s) (cert: ${TLS_CERT_PATH}, key: ${TLS_KEY_PATH}) — porta ${HTTPS_PORT} vai subir em HTTP puro (sem cadeado) até isso ser corrigido.`);
+    } else {
+      console.warn(`Aviso: nenhum certificado configurado (TLS_CERT_PATH/TLS_KEY_PATH) — porta ${HTTPS_PORT} está respondendo em HTTP puro, não HTTPS. Configure um certificado (--tls-cert/--tls-key no install-linux.sh) para habilitar HTTPS de verdade nesta porta.`);
+    }
+    startPlainHttp(HTTPS_PORT, '— sem TLS, configure um certificado quando disponível');
   }
-  const credentials = {
-    cert: fs.readFileSync(TLS_CERT_PATH, 'utf8'),
-    key: fs.readFileSync(TLS_KEY_PATH, 'utf8'),
-  };
-  https.createServer(credentials, app).listen(PORT, () => {
-    console.log(`CG Toolbox server listening on port ${PORT} (HTTPS)`);
-  });
-} else {
-  http.createServer(app).listen(PORT, () => {
-    console.log(`CG Toolbox server listening on port ${PORT} (HTTP)`);
-  });
 }
