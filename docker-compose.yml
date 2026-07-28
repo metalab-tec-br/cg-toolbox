@@ -1,0 +1,23 @@
+services:
+  cg-toolbox:
+    build: .
+    image: cg-toolbox:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      # Descomente se este host não estiver num domínio Windows — sem NTLM,
+      # os usuários são identificados por um header x-dev-user (ou caem no
+      # usuário do sistema operacional rodando o Node dentro do container,
+      # ex.: "node"), o que quebra favoritos por pessoa.
+      # NTLM_DISABLED: "1"
+    volumes:
+      # Banco de dados (commands.db) num volume nomeado, fora da imagem —
+      # sobrevive a "docker compose down"/rebuild da imagem. Veja no
+      # README/instruções como importar o commands.db já existente para
+      # este volume na primeira instalação.
+      - cg-toolbox-data:/app/data
+
+volumes:
+  cg-toolbox-data:

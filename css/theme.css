@@ -1,0 +1,49 @@
+:root {
+  --bg: #0D1117; --surf: #161B22; --surf2: #21262D; --surf3: #2D333B;
+  --bdr: #30363D; --bdr2: #444C56;
+  /* Cor de destaque (accent) — a mesma escolha do usuário vale para claro e
+     escuro (sem distinção por tema); só definida aqui em :root, o tema claro
+     não redefine --teal/--teal-bg. Padrão é a cor oficial de marca da Check
+     Point (#DA1572); o valor real em vigor é sempre sobrescrito inline em
+     document.documentElement por applyAccentColor() (ver js/theme.js), que
+     roda no boot com a preferência salva — este valor aqui é só o fallback
+     antes do JS rodar. */
+  --teal: #DA1572; --teal-bg: rgba(218,21,114,.08);
+  /* Cores da marca (logo "CG//Toolbox" no header, no estilo do logo CG One)
+     — fixas, independentes da cor de destaque (--teal) escolhida em
+     Configurações. --brand-pink é sempre a barra "//" nos dois temas;
+     --brand-text é o texto "CG"/"Toolbox": branco no tema escuro (padrão
+     aqui em :root, igual à versão branca do logo CG One) e azul-marinho no
+     tema claro (ver [data-theme="light"] abaixo, igual à versão azul). */
+  --brand-pink: #E5136E;
+  --brand-text: #FFFFFF;
+  --blue: #60A5FA; --blue-bg: rgba(96,165,250,.08);
+  --orange: #FB923C; --orange-bg: rgba(251,146,60,.08);
+  --yellow: #FBBF24; --yellow-bg: rgba(251,191,36,.08);
+  --red: #F87171; --red-bg: rgba(248,113,113,.08);
+  --purple: #C084FC; --purple-bg: rgba(192,132,252,.08);
+  --green: #4ADE80; --green-bg: rgba(74,222,128,.08);
+  --text: #E6EDF3; --muted: #8B949E; --dim: #484F58;
+  --str: #A5D6FF;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', sans-serif;
+  --sidebar-w: 210px;
+}
+
+/* ─── LIGHT THEME ─── */
+[data-theme="light"] {
+  --bg: #F6F8FA; --surf: #FFFFFF; --surf2: #F1F3F5; --surf3: #E7EBEF;
+  --bdr: #D0D7DE; --bdr2: #AFB8C1;
+  /* --teal/--teal-bg não são redefinidos aqui: a cor de destaque é a mesma
+     nos dois temas (ver comentário em :root acima e js/theme.js). */
+  --brand-pink: #C40D5F;
+  --brand-text: #101B4D;
+  --blue: #1D4ED8; --blue-bg: rgba(29,78,216,.08);
+  --orange: #C2410C; --orange-bg: rgba(194,65,12,.08);
+  --yellow: #A16207; --yellow-bg: rgba(161,98,7,.08);
+  --red: #B91C1C; --red-bg: rgba(185,28,28,.08);
+  --purple: #7E22CE; --purple-bg: rgba(126,34,206,.08);
+  --green: #15803D; --green-bg: rgba(21,128,61,.08);
+  --text: #1F2328; --muted: #57606A; --dim: #8C959F;
+  --str: #0969DA;
+}

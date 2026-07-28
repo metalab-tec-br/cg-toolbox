@@ -1,0 +1,17 @@
+{
+  "name": "cg-toolbox-server",
+  "version": "1.0.0",
+  "description": "Backend (Express + SQLite) for CG Toolbox, the multi-vendor network support tool — serves the command catalog from a shared relational database instead of hardcoded JS.",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "seed": "node seed.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "express": "^4.19.2",
+    "express-ntlm": "^2.7.0",
+    "ldapts": "^9.0.0"
+  }
+}

@@ -1,0 +1,29 @@
+# Nunca vai pra imagem: node_modules é reinstalado dentro do build (o
+# binário nativo do better-sqlite3 é específico da plataforma da imagem —
+# reaproveitar um node_modules copiado do host quebra o container).
+node_modules
+server/node_modules
+
+# O banco de dados vive num volume (ver docker-compose.yml), não na imagem.
+server/commands.db
+server/commands.db.bak_*
+server/*.db-journal
+server/*.db-wal
+server/*.db-shm
+
+# Scripts/artefatos de instalação bare-metal e documentação — não afetam a
+# aplicação em si, ficam de fora só para manter a imagem enxuta.
+install-linux.sh
+*.md
+*.docx
+*.xlsx
+
+# Metadados de versionamento/editor
+.git
+.gitignore
+.vscode
+.idea
+
+# Backups avulsos (se algum dia voltarem a existir)
+*.bak
+*.bak_*

@@ -1,0 +1,568 @@
+/* ─── SETTINGS MODAL ─── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55);
+  display: none; align-items: center; justify-content: center; z-index: 500; padding: 20px;
+}
+.modal-overlay.show { display: flex; }
+.modal-box {
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: 10px;
+  width: min(480px, 100%); max-height: 86vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.5); display: flex; flex-direction: column;
+}
+.modal-head {
+  display: flex; align-items: center; gap: 8px; padding: 13px 16px;
+  border-bottom: 1px solid var(--bdr); flex-shrink: 0;
+}
+.modal-title { font-size: 13px; font-weight: 800; color: var(--text); flex: 1; }
+.modal-close {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 16px; line-height: 1; padding: 3px 7px; border-radius: 5px; transition: all .12s;
+}
+.modal-close:hover { color: var(--text); background: var(--surf2); }
+.modal-body { padding: 16px; display: flex; flex-direction: column; gap: 15px; }
+.set-group { display: flex; flex-direction: column; gap: 6px; }
+.set-label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; color: var(--dim); }
+/* Rótulo + campo na mesma linha (em vez de empilhados) — usado no modal de
+   Configurações para reduzir a altura total (ex.: "Home page [Command
+   menu]"). O campo (dropdown/input/botão) fica com largura flexível mas
+   limitada, para não esticar demais em rótulos curtos. */
+.set-group-row { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
+.set-group-row > .set-label { flex-shrink: 0; margin-bottom: 0; }
+.set-group-row > .dd,
+.set-group-row > .set-input,
+.set-group-row > .btn { flex: 1 1 auto; min-width: 120px; max-width: 220px; }
+/* Grupo compacto: o toggle não estica para preencher a linha inteira, fica só
+   do tamanho do próprio conteúdo (ex.: Admin mode, no final do modal). */
+.set-group-compact { align-items: flex-start; }
+.set-group-compact > .sb-toggle { flex: 0 0 auto; width: auto; }
+
+/* ─── Cor de destaque (Configurações → linha do Dark mode) ─── */
+.accent-swatches { display: flex; gap: 6px; flex: 0 0 auto; }
+/* Dentro do toggle "Dark mode": empurra os swatches para a direita, na mesma linha. */
+.sb-toggle .accent-swatches { margin-left: auto; }
+.accent-swatch {
+  width: 20px; height: 20px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 2px solid transparent; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15);
+  transition: transform .12s, border-color .12s;
+}
+.accent-swatch:hover { transform: scale(1.15); }
+.accent-swatch.on { border-color: var(--text); }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg-btn {
+  padding: 6px 11px; border-radius: 6px; border: 1px solid var(--bdr);
+  background: var(--surf2); color: var(--muted); font-size: 11.5px; font-weight: 600;
+  cursor: pointer; transition: all .12s; font-family: var(--sans);
+}
+.seg-btn:hover { border-color: var(--teal); color: var(--text); }
+.seg-btn.on { border-color: var(--teal); background: var(--teal-bg); color: var(--teal); }
+.dd-panel.seg .seg-btn { width: 100%; text-align: left; }
+.set-input {
+  background: var(--surf2); border: 1px solid var(--bdr); border-radius: 6px;
+  color: var(--text); font-family: var(--mono); font-size: 12px; padding: 7px 10px;
+  outline: none; width: 100%; transition: border-color .12s;
+}
+.set-input:focus { border-color: var(--teal); }
+.modal-foot {
+  display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--bdr);
+  justify-content: space-between; flex-shrink: 0;
+}
+.btn {
+  padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 700;
+  cursor: pointer; border: 1px solid var(--bdr); background: var(--surf2); color: var(--text);
+  transition: all .12s; font-family: var(--sans);
+}
+.btn:hover { border-color: var(--bdr2); }
+.btn-ghost { background: transparent; }
+.btn-primary { border-color: var(--teal); background: var(--teal); color: #0D1117; }
+.btn-primary:hover { filter: brightness(1.08); border-color: var(--teal); }
+.btn-danger { border-color: var(--red); background: var(--red); color: #fff; }
+.btn-danger:hover { filter: brightness(1.08); border-color: var(--red); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:disabled:hover { border-color: var(--bdr); }
+.btn-sm { padding: 4px 9px; font-size: 11px; }
+/* Realce "modo administrador" — mesmo tratamento visual do item ativo da
+   sidebar (#favNavRow.on: fundo var(--teal-bg) + borda/texto var(--teal),
+   que hoje aparece rosa/magenta — cor da marca). Aplicado nos botões que só
+   existem com o Modo administrador habilitado (Adicionar comando/Exportar
+   CSV na barra de ferramentas, e os 4 botões "Gerenciar..." na sidebar) para
+   sinalizar visualmente que são controles de administração. Seletor com duas
+   classes (".btn.admin-highlight") para vencer ".btn-ghost" (fundo
+   transparente) com folga de especificidade. */
+.btn.admin-highlight { background: var(--teal-bg); border-color: var(--teal); color: var(--teal); }
+.btn.admin-highlight:hover { filter: brightness(1.05); border-color: var(--teal); }
+
+/* Modal de Configurações: maior e com espaçamento mais compacto para caber
+   sem precisar rolar na maioria das telas. */
+#settingsOverlay .modal-box { max-height: 96vh; width: min(520px, 100%); }
+#settingsOverlay .modal-body { padding: 12px 16px; gap: 9px; }
+#settingsOverlay .set-group { gap: 4px; }
+
+/* Modal de confirmação genérico (substitui o confirm() nativo do navegador —
+   fica centralizado na tela e segue as cores do tema, sem exibir o host). */
+.modal-box.modal-confirm { width: min(360px, 100%); }
+.confirm-msg { font-size: 12.5px; color: var(--text); line-height: 1.5; margin: 0; }
+
+/* Grupo de toggles compactos no topo do modal (Tema / Descrição / Modo administrador):
+   mesmo estilo dos toggles da sidebar (botão + rótulo na mesma linha, toggle antes do
+   texto), em ordem alfabética (ver sortToggleGroup em state.js). */
+#settingsToggleGroup { gap: 6px; padding-bottom: 4px; border-bottom: 1px solid var(--bdr); margin-bottom: 2px; }
+#settingsToggleGroup .sb-toggle { margin-bottom: 0; }
+
+
+/* ─── SELETOR DE COLUNAS (exportar comandos) ─── */
+.exp-col-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin-top: 8px; }
+.exp-col-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
+  cursor: pointer; font-size: 12px; color: var(--muted); border: 1px solid transparent;
+  transition: all .12s;
+}
+.exp-col-row:hover { background: var(--surf2); color: var(--text); }
+.exp-col-row input[type="checkbox"] { accent-color: var(--teal); cursor: pointer; flex-shrink: 0; }
+
+/* ─── IMPORTAR COMANDOS (resumo por linha após o import) ─── */
+.imp-report-list { max-height: 220px; overflow-y: auto; margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+.imp-report-row {
+  display: flex; align-items: baseline; gap: 8px; padding: 5px 8px; border-radius: 6px;
+  font-size: 11px; background: var(--green-bg); color: var(--text);
+}
+.imp-report-row-err { background: var(--orange-bg); }
+.imp-report-line { color: var(--muted); flex-shrink: 0; }
+.imp-report-name { font-weight: 600; flex-shrink: 0; }
+.imp-report-msg { color: var(--muted); overflow-wrap: anywhere; }
+
+/* ─── COMMAND EDITOR MODAL ─── */
+.modal-box.modal-wide { width: min(760px, 100%); }
+.set-hint { font-size: 10px; color: var(--dim); line-height: 1.5; }
+.set-row { display: flex; gap: 10px; }
+.set-row > .set-group { flex: 1; min-width: 0; }
+textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans); line-height: 1.4; }
+.set-section-title {
+  font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px;
+  color: var(--teal); padding-top: 4px; border-top: 1px solid var(--bdr); margin-top: 4px;
+}
+.set-section-title:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+/* ─── CATALOG ADMIN (telas separadas: Versões/Ambientes/Tópicos/Parâmetros) ─── */
+.cat-admin-msg { font-size: 11px; min-height: 14px; }
+.cat-admin-msg.err { color: var(--red); }
+.cat-admin-msg.ok { color: var(--teal); }
+.cat-color-input {
+  width: 30px; height: 30px; padding: 0; border: 1px solid var(--bdr); border-radius: 6px;
+  background: none; cursor: pointer; flex-shrink: 0;
+}
+.cat-key-badge {
+  font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--surf);
+  border: 1px solid var(--bdr); border-radius: 5px; padding: 5px 8px; flex-shrink: 0;
+  white-space: nowrap;
+}
+.cat-protected-badge {
+  font-size: 9px; text-transform: uppercase; letter-spacing: .5px; color: var(--dim);
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: 10px;
+  padding: 3px 7px; flex-shrink: 0; white-space: nowrap;
+}
+.cat-row-actions { display: flex; gap: 4px; flex-shrink: 0; margin-left: auto; }
+
+.list-editor { display: flex; flex-direction: column; gap: 8px; }
+.line-row, .tag-row, .diff-row {
+  display: flex; flex-direction: column; gap: 6px; background: var(--surf2);
+  border: 1px solid var(--bdr); border-radius: 6px; padding: 9px;
+}
+.tag-row { flex-direction: row; align-items: center; flex-wrap: wrap; }
+.tag-row .set-input { flex: 1; min-width: 90px; }
+.row-head { display: flex; align-items: center; gap: 8px; }
+.row-head .set-input { flex-shrink: 0; }
+.ln-export-label {
+  display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted);
+  white-space: nowrap; cursor: pointer; flex-shrink: 0;
+}
+.ln-export-label input[type="checkbox"] { accent-color: var(--teal); cursor: pointer; }
+.row-remove-btn { margin-left: auto; }
+/* Alça de arrastar (reordenar linhas do comando, ver command-editor.js) —
+   drag só é ativado a partir dela (mousedown), nunca da linha inteira, para não
+   atrapalhar a seleção/edição de texto dentro do textarea de conteúdo. */
+.ln-drag-handle {
+  display: flex; align-items: center; color: var(--muted); flex-shrink: 0;
+  cursor: grab; padding: 2px; border-radius: 4px;
+}
+.ln-drag-handle:hover { color: var(--text); background: var(--surf); }
+.ln-drag-handle:active { cursor: grabbing; }
+.line-row.dragging { opacity: .45; }
+.diff-lines-wrap { display: flex; flex-direction: column; gap: 6px; padding-left: 10px; border-left: 2px solid var(--bdr); }
+.disclosure-hd {
+  cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 800; color: var(--muted);
+}
+.disclosure-hd:hover { color: var(--text); }
+.disclosure-body { display: none; flex-direction: column; gap: 10px; margin-top: 8px; }
+.disclosure-body.open { display: flex; }
+.resolver-warning {
+  background: var(--orange-bg); border: 1px solid rgba(251,146,60,.35); color: var(--orange);
+  border-radius: 6px; padding: 9px 12px; font-size: 11.5px; line-height: 1.5;
+  display: none; gap: 8px; align-items: flex-start;
+}
+.resolver-warning.show { display: flex; }
+.cmd-editor-error {
+  color: var(--red); font-size: 11.5px; background: var(--red-bg);
+  border: 1px solid rgba(248,113,113,.3); border-radius: 6px; padding: 8px 10px; display: none;
+}
+.cmd-editor-error.show { display: block; }
+.chk-group { display: flex; flex-wrap: wrap; gap: 8px; }
+
+
+/* ─── OVERLAY AUX ─── */
+.cg-mark-box {
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: 12px;
+  padding: 34px 46px; display: flex; flex-direction: column; align-items: center; gap: 18px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.5); cursor: pointer;
+}
+.cg-mark-txt { font-size: 12.5px; font-weight: 700; color: var(--muted); letter-spacing: .4px; }
+.cg-mark { display: inline-flex; align-items: center; gap: 11px; font-family: var(--sans); text-decoration: none; color: inherit; }
+.cg-mark b { color: var(--text); font-size: 32px; font-weight: 800; letter-spacing: -.5px; }
+.cg-mark i { display: inline-flex; gap: 6px; font-style: normal; }
+.cg-mark i span { width: 6px; height: 36px; background: var(--brand-pink); transform: skewX(-18deg); border-radius: 1px; display: inline-block; }
+
+.sb-credit {
+  margin-top: auto; padding: 12px 14px 14px; border-top: 1px solid var(--bdr);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  text-decoration: none; color: inherit; transition: opacity .12s;
+}
+.sb-credit:hover { opacity: .8; }
+.sb-credit-txt { font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: .3px; }
+.sb-credit .cg-mark { gap: 6px; }
+.sb-credit .cg-mark b { font-size: 17px; }
+.sb-credit .cg-mark i { gap: 3px; }
+.sb-credit .cg-mark i span { width: 3px; height: 18px; }
+.sb-credit-img { height: 13px; width: auto; display: block; }
+.sb-credit-img.for-light { display: none; }
+[data-theme="light"] .sb-credit-img.for-dark { display: none; }
+[data-theme="light"] .sb-credit-img.for-light { display: block; }
+
+
+/* ─── DROPDOWN (Versão / Ambiente / Tipo-Assunto) ─── */
+.dd { position: relative; }
+.dd-btn {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
+  color: var(--text); background: var(--surf2); border: 1px solid var(--bdr);
+  transition: border-color .12s; user-select: none; font-family: var(--sans);
+}
+.dd-btn:hover { border-color: var(--bdr2); }
+.dd.open .dd-btn { border-color: var(--teal); }
+/* Destaca o dropdown da sidebar (Versão/Ambiente/Tópico) sempre que o filtro
+   estiver restringindo algo (diferente de 'All') — mesmo tratamento visual
+   do item ativo "Favoritos" (ver #favNavRow.on em layout.css), para ficar
+   óbvio de relance quais filtros estão em uso. 'All' não recebe destaque
+   (ver updateMultiDDLabel em js/state.js). */
+.dd-btn.filter-active { background: var(--teal-bg); border-color: var(--teal); color: var(--teal); }
+.dd-label { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-arrow { font-size: 9px; opacity: .6; transition: transform .12s; flex-shrink: 0; }
+.dd.open .dd-arrow { transform: rotate(180deg); }
+.dd-panel {
+  display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 60;
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: 8px; padding: 5px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.35); max-height: 320px; overflow-y: auto;
+}
+.dd.open .dd-panel { display: flex; flex-direction: column; gap: 1px; }
+.dd-panel-foot {
+  border-top: 1px solid var(--bdr); margin-top: 4px; padding-top: 5px;
+  display: flex; justify-content: space-between;
+}
+.dd-panel-foot .btn { padding: 4px 10px; font-size: 11px; }
+
+/* ─── Editor de comandos: dropdown "Inserir variável" (na linha de cabeçalho, entre Exportável e Remover) ─── */
+.row-head .ln-var-dd { flex-shrink: 0; min-width: 0; }
+.ln-var-dd .dd-btn { width: auto; padding: 4px 8px; font-size: 10.5px; gap: 6px; }
+.ln-var-dd .dd-panel { left: 0; right: auto; min-width: 200px; width: max-content; max-width: 280px; }
+
+/* flag toggles */
+.sb-toggle {
+  display: flex; align-items: center; gap: 8px; padding: 7px 8px;
+  border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500;
+  color: var(--muted); border: 1px solid var(--bdr); background: var(--surf2);
+  transition: all .12s; user-select: none; margin-bottom: 3px;
+}
+.sb-toggle:hover { border-color: var(--teal); color: var(--text); }
+.sb-toggle.on { border-color: var(--teal); color: var(--teal); background: var(--teal-bg); }
+.tog-track {
+  width: 28px; height: 15px; border-radius: 8px; background: var(--surf3);
+  position: relative; flex-shrink: 0; border: 1px solid var(--bdr2); transition: background .12s;
+}
+.sb-toggle.on .tog-track { background: var(--teal); border-color: var(--teal); }
+.tog-knob {
+  position: absolute; top: 2px; left: 2px; width: 9px; height: 9px;
+  border-radius: 50%; background: var(--muted); transition: all .12s;
+}
+.sb-toggle.on .tog-knob { left: 15px; background: #0D1117; }
+/* Variante compacta do toggle usada no cabeçalho do modal (Admin mode, ao
+   lado do título "Settings") — não deve esticar nem empurrar o botão de
+   fechar (✕) para fora da linha. */
+.sb-toggle-head { flex: 0 0 auto; width: auto; margin-bottom: 0; padding: 4px 8px; font-size: 11px; white-space: nowrap; }
+.sb-file-wrap { padding: 0 8px 8px; display: none; }
+.sb-file-wrap.show { display: block; }
+.sb-file {
+  width: 100%; background: var(--surf2); border: 1px solid var(--bdr);
+  border-radius: 5px; color: var(--text); font-family: var(--mono);
+  font-size: 10px; padding: 6px 8px; outline: none;
+  transition: border-color .12s;
+}
+.sb-file:focus { border-color: var(--teal); }
+
+
+/* ─── SECTION (agrupamento recolhível, estilo Check Point) ─── */
+.section { display: flex; flex-direction: column; }
+.sec-title {
+  font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--muted);
+  display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; padding: 2px 0;
+}
+.sec-title::after { content: ''; flex: 1; height: 1px; background: var(--bdr); }
+.sec-chevron { flex-shrink: 0; transition: transform .15s; }
+.section.collapsed .sec-chevron { transform: rotate(-90deg); }
+.sec-count {
+  font-size: 9px; font-weight: 700; color: var(--muted); background: var(--surf2);
+  padding: 1px 7px; border-radius: 8px; letter-spacing: 0; text-transform: none;
+}
+.sec-body { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.section.collapsed .sec-body { display: none; }
+
+/* Bloco recolhível por Versão/Ambiente (modo "Agrupar por Versão") — mesma mecânica de
+   .section, com um destaque visual próprio (borda + fundo) para se diferenciar das
+   seções de Tópico aninhadas dentro dele. */
+.section-version {
+  border: 1px solid var(--teal); border-radius: 8px; padding: 12px 14px; margin: 4px 0;
+  background: var(--surf2);
+}
+.section-version > .sec-title { font-size: 11px; color: var(--teal); text-transform: none; letter-spacing: 0; }
+.section-version > .sec-title::after { display: none; }
+.section-version > .sec-body { gap: 16px; margin-top: 12px; }
+
+/* Bloco recolhível por autor (modo "Group by: Created by") — mesma mecânica e
+   mesma cor de destaque (--teal, que já reflete a accent color escolhida pelo
+   usuário — ver js/theme.js) de .section-version acima; a diferenciação
+   visual entre os dois modos vem do ícone/rótulo (👤 vs 🔀), não da cor. */
+.section-creator {
+  border: 1px solid var(--teal); border-radius: 8px; padding: 12px 14px; margin: 4px 0;
+  background: var(--surf2);
+}
+.section-creator > .sec-title { font-size: 11px; color: var(--teal); text-transform: none; letter-spacing: 0; }
+.section-creator > .sec-title::after { display: none; }
+.section-creator > .sec-body { gap: 16px; margin-top: 12px; }
+
+
+/* ─── CARD ─── */
+.card {
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: 8px; overflow: hidden;
+  transition: border-color .12s;
+}
+.card:hover { border-color: var(--bdr2); }
+.card-head {
+  display: flex; align-items: center; gap: 6px; padding: 8px 12px;
+  background: var(--surf2); border-bottom: 1px solid var(--bdr); flex-wrap: wrap;
+}
+.card-name { font-size: 12px; font-weight: 700; color: var(--text); flex: 1; min-width: 100px; }
+.card-desc { font-size: 10.5px; color: var(--muted); }
+.tag {
+  font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+  font-family: var(--mono); white-space: nowrap;
+}
+.t-teal   { background: var(--teal-bg);   color: var(--teal);   border: 1px solid rgba(255,79,160,.3); }
+.t-blue   { background: var(--blue-bg);   color: var(--blue);   border: 1px solid rgba(96,165,250,.25); }
+.t-orange { background: var(--orange-bg); color: var(--orange); border: 1px solid rgba(251,146,60,.25); }
+.t-yellow { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(251,191,36,.25); }
+.t-red    { background: var(--red-bg);    color: var(--red);    border: 1px solid rgba(248,113,113,.25); }
+.t-purple { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(192,132,252,.25); }
+.t-green  { background: var(--green-bg);  color: var(--green);  border: 1px solid rgba(74,222,128,.25); }
+
+/* Tags de escopo (Vendor/Sistema/Versão/Ambiente) — mostradas logo após o nome
+   do comando no cabeçalho do card (ver scopeTagsHtml em js/terminal-renderer.js).
+   Reaproveita o componente .tag (tamanho/padding/fonte), mas com uma cor neutra
+   própria (em vez das variantes .t-*) + um "pip" colorido com a cor cadastrada
+   no catálogo (mesmo .sb-pip usado nas listas da sidebar, ver layout.css). */
+.scope-tags { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.scope-tag {
+  display: inline-flex; align-items: center;
+  background: var(--surf); color: var(--muted);
+  border: 1px solid var(--bdr);
+  font-size: 10px; padding: 3px 9px;
+}
+.scope-tag .sb-pip { margin-right: 5px; width: 7px; height: 7px; }
+.scope-tag-empty { color: var(--muted); opacity: .7; font-style: italic; }
+
+.card-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.copy-btn {
+  background: var(--surf); border: 1px solid var(--bdr);
+  border-radius: 5px; color: var(--muted); cursor: pointer; font-family: var(--mono);
+  font-size: 10px; padding: 3px 8px; display: flex; align-items: center; gap: 4px;
+  transition: all .12s; white-space: nowrap; flex-shrink: 0;
+}
+.copy-btn:hover { border-color: var(--teal); color: var(--teal); }
+.copy-btn.ok { background: var(--teal-bg); border-color: var(--teal); color: var(--teal); }
+.copy-btn-inline {
+  display: inline-flex; vertical-align: middle; margin-left: 8px;
+  padding: 2px 5px;
+}
+.fav-btn {
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: 5px;
+  color: var(--muted); cursor: pointer; line-height: 1;
+  padding: 3px 7px; display: flex; align-items: center; transition: all .12s; flex-shrink: 0;
+}
+.fav-btn:hover { border-color: var(--yellow); color: var(--yellow); }
+.fav-btn.on { background: var(--yellow-bg); border-color: var(--yellow); color: var(--yellow); }
+/* Hover sobre .fav-wrap (botão de estrela) mostra o popover de autoria/auditoria
+   (.fav-audit-pop, ver terminal-renderer.js: favAuditPopover()), que já traz a
+   contagem de quem favoritou — não há mais um badge de contagem separado no card. */
+.fav-wrap { display: flex; align-items: center; gap: 3px; flex-shrink: 0; position: relative; }
+/* Popover de autoria/auditoria (Criado por / Alterado por / Data alteração /
+   Favoritado por). Escondido por padrão; aparece ao passar o mouse sobre todo
+   o .fav-wrap (não só o ícone), com uma pequena "ponte" invisible (::before)
+   para não sumir no espaço entre o botão e o popover. */
+.fav-audit-pop {
+  display: none; position: absolute; top: 100%; right: 0; margin-top: 6px;
+  z-index: 30; width: max-content; max-width: 320px;
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: 7px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.22); padding: 8px 10px;
+  font-size: 11px; line-height: 1.6; color: var(--txt); text-align: left;
+  cursor: default; white-space: normal;
+}
+.fav-audit-pop::before {
+  content: ''; position: absolute; bottom: 100%; right: 8px; height: 8px; left: 0;
+}
+.fav-wrap:hover .fav-audit-pop { display: block; }
+/* Cada linha (rótulo + valor) numa única linha, sem quebrar — é o que estava
+   quebrando "Modified on: DD/MM/AAAA, HH:MM" em duas linhas antes (o popover
+   tinha largura fixa/curta demais). Agora a largura se ajusta ao conteúdo
+   (width: max-content acima), então basta impedir a quebra do valor. */
+.fav-audit-row { display: flex; justify-content: space-between; gap: 14px; white-space: nowrap; }
+.fav-audit-k { color: var(--muted); flex-shrink: 0; }
+.fav-audit-list-toggle {
+  margin-top: 4px; color: var(--teal); cursor: pointer; font-size: 10.5px; user-select: none;
+}
+.fav-audit-list-toggle:hover { text-decoration: underline; }
+.fav-audit-list {
+  margin: 4px 0 0; padding-left: 16px; max-height: 120px; overflow-y: auto;
+  color: var(--txt);
+}
+.fav-audit-list li { font-size: 10.5px; line-height: 1.7; }
+.edit-btn {
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: 5px;
+  color: var(--muted); cursor: pointer; line-height: 1;
+  padding: 3px 7px; display: flex; align-items: center; transition: all .12s; flex-shrink: 0;
+}
+.edit-btn:hover { border-color: var(--teal); color: var(--teal); }
+
+/* ─── TERMINAL ─── */
+.term {
+  padding: 10px 12px; font-family: var(--mono); font-size: 12.5px;
+  line-height: 1.9; overflow-x: auto;
+}
+.cmd-line { display: block; white-space: pre; }
+.pr { color: var(--teal); font-weight: 700; }
+
+/* Literal command syntax (command names, flags, paths, quoted strings, numbers,
+   pipes/redirects) is intentionally NOT coloured — only the actual "variables"
+   stand out (k-var: a resolved {{token}} value — see markVar() in
+   db-render-engine.js — and k-env: a shell $VAR), so the eye goes straight to
+   what changes per invocation instead of the whole line lighting up. */
+.k-cmd, .k-flag, .k-str, .k-path, .k-num, .k-pipe { color: inherit; font-weight: inherit; }
+.k-var  { color: var(--teal);   font-weight: 600; }  /* resolved {{token}} value, or its <Label> hint */
+.k-env  { color: var(--green); }                      /* $VAR */
+
+.ln-note { display: block; font-size: 10.5px; color: var(--muted); font-style: italic; font-family: var(--sans); margin-top: 1px; }
+.ln-warn { display: block; font-size: 11px; font-family: var(--sans); color: var(--orange); background: var(--orange-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; font-weight: 600; }
+.ln-info { display: block; font-size: 11px; font-family: var(--sans); color: var(--blue); background: var(--blue-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; }
+.ln-ok   { display: block; font-size: 11px; font-family: var(--sans); color: var(--green); background: var(--green-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; font-weight: 600; }
+
+
+/* ─── DIFF BLOCK ─── */
+.diff { border-top: 1px solid var(--bdr); }
+.diff-hd {
+  display: flex; align-items: center; gap: 6px; padding: 6px 12px; cursor: pointer;
+  font-size: 10px; font-weight: 700; color: var(--orange); background: var(--orange-bg);
+  user-select: none;
+}
+.diff-hd svg { transition: transform .15s; flex-shrink: 0; }
+.diff-hd.open svg { transform: rotate(90deg); }
+.diff-body { display: none; flex-direction: column; gap: 8px; padding: 10px 12px; background: var(--bg); }
+.diff-body.open { display: flex; }
+.diff-ver { border: 1px solid var(--bdr); border-radius: 6px; overflow: hidden; }
+.diff-ver-hd {
+  display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+  background: var(--surf2); border-bottom: 1px solid var(--bdr);
+  font-size: 10px; font-weight: 700; color: var(--muted); flex-wrap: wrap;
+}
+.diff-ver-tag { padding: 1px 6px; border-radius: 3px; background: var(--teal-bg); color: var(--teal); border: 1px solid rgba(255,79,160,.3); font-size: 9px; font-weight: 700; font-family: var(--mono); }
+
+
+/* ─── ENV NOTE ─── */
+.env-note {
+  background: var(--blue-bg); border: 1px solid rgba(96,165,250,.2); border-radius: 6px;
+  padding: 8px 12px; font-size: 11.5px; color: var(--blue);
+  display: flex; gap: 8px; align-items: flex-start;
+}
+/* Cabeçalho que separa blocos empilhados quando mais de uma Versão/Ambiente está marcado */
+.combo-header {
+  margin: 20px 12px 6px; padding: 9px 14px; border-radius: 8px;
+  background: var(--surf2); border: 1px solid var(--teal); color: var(--teal);
+  font-size: 12.5px; font-weight: 800; letter-spacing: .2px;
+}
+
+
+/* ─── EMPTY ─── */
+.empty { padding: 60px 20px; text-align: center; color: var(--muted); }
+.empty-ico { display: flex; justify-content: center; margin-bottom: 12px; }
+.empty p { font-size: 13px; }
+
+
+/* ─── ABOUT BLOCK ─── */
+.card-about {
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid var(--bdr);
+  display: flex; gap: 10px; align-items: flex-start;
+  background: linear-gradient(to right, rgba(255,79,160,.05), transparent);
+}
+.about-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.about-purpose {
+  font-size: 11.5px; color: var(--text); font-weight: 500; line-height: 1.5;
+}
+.about-when {
+  font-size: 10.5px; color: var(--muted); line-height: 1.5;
+}
+.about-when strong { color: var(--teal); font-weight: 600; }
+
+/* Modo compacto: oculta descrição curta, bloco 'about' e tags do cabeçalho do card
+   (preferência 'Exibir detalhes dos cards' em Configurações). As tags de escopo
+   (Vendor/Sistema/Versão/Ambiente, ver .scope-tag acima) ficam de fora dessa regra
+   de propósito — devem aparecer sempre, independente dessa preferência. */
+.compact-cards .card-desc,
+.compact-cards .card-about,
+.compact-cards .tag:not(.scope-tag) { display: none; }
+/* Comentários (# ...) sob a linha de comando — mesma preferência 'Exibir descrição':
+   ficam ocultos por padrão (compact-cards) e só aparecem quando habilitada. */
+.compact-cards .ln-note { display: none; }
+
+/* Incluir/duplicar/editar (botão 'Add command', editar/duplicar do card)
+   ficam sempre visíveis para todos os usuários — não dependem de 'Admin
+   mode'. Import/Export em massa (#cmdActionsAdminOnly), o gerenciamento de
+   catálogos (Ambientes/Parâmetros/Tópicos/Versões, #addCommandBlock) e o
+   default org-wide de System commands (#adminDefaultsBlock) continuam
+   restritos a 'Admin mode' em Configurações. */
+body.hide-command-editing #addCommandBlock { display: none; }
+body.hide-command-editing #adminDefaultsBlock { display: none; }
+body.hide-command-editing #cmdActionsAdminOnly { display: none; }
+
+/* ─── AUDIT LOG MODAL (Settings → View audit log, see js/audit-log.js) ─── */
+.audit-log-wrap { max-height: 55vh; overflow-y: auto; border: 1px solid var(--bdr); border-radius: 8px; }
+.audit-log-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.audit-log-table th {
+  position: sticky; top: 0; background: var(--surf2); color: var(--dim);
+  font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px;
+  text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--bdr);
+}
+.audit-log-table td { padding: 7px 10px; border-bottom: 1px solid var(--bdr); color: var(--text); white-space: nowrap; }
+.audit-log-table tr:last-child td { border-bottom: none; }
+.audit-log-loading { text-align: center; color: var(--muted); padding: 18px 10px !important; white-space: normal !important; }
+.audit-log-empty { text-align: center; color: var(--muted); font-size: 12px; padding: 18px 10px; }
+.audit-action-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700;
+}
+.audit-action-create { background: rgba(74,222,128,.15); color: #22C55E; }
+.audit-action-update { background: rgba(96,165,250,.15); color: #3B82F6; }
+.audit-action-delete { background: rgba(248,113,113,.15); color: var(--red); }

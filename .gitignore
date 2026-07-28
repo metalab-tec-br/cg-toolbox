@@ -1,0 +1,20 @@
+# Dependências — sempre reinstaladas via "npm install" (o binário nativo do
+# better-sqlite3 é específico do SO/arquitetura de quem instalou; nunca deve
+# ser versionado nem copiado entre máquinas — ver Dockerfile/install-linux.sh).
+node_modules/
+server/node_modules/
+
+# Backups locais avulsos (o histórico do git já cumpre esse papel)
+*.bak
+*.bak_*
+
+# Arquivos auxiliares do SQLite (journal/WAL/SHM), quando o servidor está rodando
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Lixo comum de SO/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

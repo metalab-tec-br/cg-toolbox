@@ -1,0 +1,643 @@
+// ════════════════════════════════════════════════
+// COMMAND EDITOR — "Add command" / "Edit command" modal (#cmdEditorOverlay).
+// Assembles a payload matching exactly what server/index.js's POST/PUT
+// /api/commands expect (see buildCommandColumns/insertChildren there) and
+// calls createCommand()/updateCommand()/deleteCommand() from api-client.js.
+//
+// The whole app (database + UI) is English-only now — name/desc/about/tags/
+// lines/diffs are all single-language fields, so a single fetchCommands()
+// call is enough to populate the form (no more PT/EN zipping).
+// ════════════════════════════════════════════════
+
+const CMD_EDITOR_TAG_COLORS = ['t-red', 't-blue', 't-teal', 't-yellow', 't-orange', 't-purple', 't-green'];
+const CMD_EDITOR_LINE_TYPES = ['cmd', 'note', 'warn', 'info', 'ok'];
+
+let CMD_EDITOR_MODE = 'create'; // 'create' | 'edit'
+let CMD_EDITOR_ORIGINAL_ID = null;
+let CMD_EDITOR_RESOLVER = null; // placeholder_resolver of the row being edited (preserved as-is, never set by this UI)
+
+function _ce(id) { return document.getElementById(id); }
+function _ceEscAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function _ceEscHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+// ── single-select seg group (topic) ──────────────
+function _ceBindSingleSeg(containerId) {
+  const c = _ce(containerId);
+  if (!c) return;
+  c.addEventListener('click', ev => {
+    const btn = ev.target.closest('.seg-btn');
+    if (!btn) return;
+    c.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+  });
+}
+function _ceSetSingleSeg(containerId, val) {
+  document.querySelectorAll('#' + containerId + ' .seg-btn').forEach(b => b.classList.toggle('on', b.dataset.val === val));
+}
+function _ceGetSingleSeg(containerId) {
+  const b = document.querySelector('#' + containerId + ' .seg-btn.on');
+  return b ? b.dataset.val : null;
+}
+// ── multi-select seg group (versions / environments / topic) ─
+// Version/Environment/Topic now live inside a dropdown (.dd/.dd-btn, same
+// pattern as the Settings modal) instead of a loose list of chips — the
+// optional parameters below (ddBtnId/allLabel/pluralLabel) update the
+// dropdown button text on every click/change. `allLabel` only applies to
+// Version/Environment (none checked = applies to all) — Topic requires at
+// least 1 checked, so it passes null.
+function _ceBindMultiSeg(containerId, ddBtnId, allLabel, pluralLabel, onToggle) {
+  const c = _ce(containerId);
+  if (!c) return;
+  c.addEventListener('click', ev => {
+    const btn = ev.target.closest('.seg-btn');
+    if (!btn) return;
+    btn.classList.toggle('on');
+    if (ddBtnId) _ceUpdateMultiSegDDLabel(containerId, ddBtnId, allLabel, pluralLabel);
+    if (typeof onToggle === 'function') onToggle();
+  });
+}
+function _ceSetMultiSeg(containerId, vals, ddBtnId, allLabel, pluralLabel) {
+  const set = new Set(vals || []);
+  document.querySelectorAll('#' + containerId + ' .seg-btn').forEach(b => b.classList.toggle('on', set.has(b.dataset.val)));
+  if (ddBtnId) _ceUpdateMultiSegDDLabel(containerId, ddBtnId, allLabel, pluralLabel);
+}
+function _ceGetMultiSeg(containerId) {
+  return [...document.querySelectorAll('#' + containerId + ' .seg-btn.on')].map(b => b.dataset.val);
+}
+// ── Vendor is single-select, not multi ──────────────
+// A command belongs to exactly one Vendor (unlike System/Version/Environment/
+// Topic, which a command can have several of) — clicking a Vendor option
+// always selects ONLY that one (like a radio button: no toggle-off, no
+// stacking with a previous pick), still using the same .seg-btn/.on markup
+// and dropdown-label mechanics as the multi-select fields above so the rest
+// of the code (_ceGetMultiSeg('cmdVendorSeg'), _ceApplyEditorCascade, the
+// payload builder, etc.) keeps working unchanged — it just never sees more
+// than 1 item selected.
+function _ceBindVendorSeg(containerId, ddBtnId) {
+  const c = _ce(containerId);
+  if (!c) return;
+  c.addEventListener('click', ev => {
+    const btn = ev.target.closest('.seg-btn');
+    if (!btn) return;
+    c.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('on', b === btn));
+    _ceUpdateMultiSegDDLabel(containerId, ddBtnId, null, 'selected');
+    if (typeof _ceApplyEditorCascade === 'function') _ceApplyEditorCascade();
+  });
+}
+function _ceSetVendorSeg(containerId, vals, ddBtnId) {
+  const val = Array.isArray(vals) ? vals[0] : vals;
+  document.querySelectorAll('#' + containerId + ' .seg-btn').forEach(b => b.classList.toggle('on', val != null && b.dataset.val === val));
+  _ceUpdateMultiSegDDLabel(containerId, ddBtnId, null, 'selected');
+}
+// Dropdown button text: 0 checked (Version/Environment only) = allLabel;
+// 1 checked = that item's label; 2+ = "N " + pluralLabel.
+function _ceUpdateMultiSegDDLabel(containerId, ddBtnId, allLabel, pluralLabel) {
+  const btn = _ce(ddBtnId);
+  const label = btn && btn.querySelector('.dd-label');
+  if (!label) return;
+  const sel = _ceGetMultiSeg(containerId);
+  if (!sel.length) { label.textContent = allLabel || '0'; return; }
+  if (sel.length === 1) {
+    const b = [...document.querySelectorAll('#' + containerId + ' .seg-btn')].find(x => x.dataset.val === sel[0]);
+    label.textContent = b ? b.textContent.trim() : sel[0];
+    return;
+  }
+  label.textContent = pluralLabel ? `${sel.length} ${pluralLabel}` : String(sel.length);
+}
+// Called by js/catalogs.js (renderCatalogUI) after rebuilding the 3 dropdowns
+// (version/environment/topic catalog changed in admin mode) — without this
+// the button text would be stale (the selection itself is preserved by
+// ccSet, only the label isn't).
+function _ceRefreshMultiSegDDLabels() {
+  _ceUpdateMultiSegDDLabel('cmdVendorSeg', 'cmdVendorDDBtn', null, 'selected');
+  _ceUpdateMultiSegDDLabel('cmdSysSeg', 'cmdSysDDBtn', null, 'selected');
+  _ceUpdateMultiSegDDLabel('cmdVersionsSeg', 'cmdVersionsDDBtn', null, 'selected');
+  _ceUpdateMultiSegDDLabel('cmdEnvSeg', 'cmdEnvDDBtn', null, 'selected');
+  _ceUpdateMultiSegDDLabel('cmdTopicSeg', 'cmdTopicDDBtn', null, 'selected');
+}
+
+// ── Cascata Vendor → Sistema → Versão dentro do PRÓPRIO editor ──
+// Diferente da cascata dos filtros (ccRefreshCascade em js/catalogs.js, que só
+// aplica uma classe visual sobre a seleção da SIDEBAR/modal de Configurações),
+// aqui as opções que não pertencem ao(s) Vendor(s)/Sistema(s) MARCADOS NESTE
+// FORMULÁRIO são realmente escondidas (não só marcadas como desabilitadas) —
+// já que não existe conceito de "All" no cadastro (Vendor/System/Version são
+// obrigatórios, ver validação em cmdEditorSave), então não faz sentido listar
+// Sistemas de um fabricante não selecionado, nem Versões de um sistema não
+// selecionado. Roda: (a) a cada clique em cmdVendorSeg/cmdSysSeg (via o
+// onToggle passado a _ceBindMultiSeg abaixo), e (b) sempre que o formulário é
+// resetado/populado ou o catálogo é recarregado (chamado a partir de
+// _ceResetForm/_cePopulateForm aqui, e de renderCatalogUI em catalogs.js).
+function _ceApplyEditorCascade() {
+  const catalogs = (typeof CATALOGS !== 'undefined') ? CATALOGS : null;
+  if (!catalogs) return;
+
+  const vendors = _ceGetMultiSeg('cmdVendorSeg');
+  const allowedSystems = new Set(
+    vendors.length ? (catalogs.systems || []).filter(s => vendors.includes(s.vendor)).map(s => s.key) : []
+  );
+  let sysChanged = false;
+  document.querySelectorAll('#cmdSysSeg .seg-btn[data-val]').forEach(btn => {
+    const allowed = allowedSystems.has(btn.dataset.val);
+    btn.style.display = allowed ? '' : 'none';
+    if (!allowed && btn.classList.contains('on')) { btn.classList.remove('on'); sysChanged = true; }
+  });
+  if (sysChanged) _ceUpdateMultiSegDDLabel('cmdSysSeg', 'cmdSysDDBtn', null, 'selected');
+
+  const systems = _ceGetMultiSeg('cmdSysSeg');
+  const allowedVersions = new Set(
+    systems.length ? (catalogs.versions || []).filter(v => systems.includes(v.system)).map(v => v.key) : []
+  );
+  let verChanged = false;
+  document.querySelectorAll('#cmdVersionsSeg .seg-btn[data-val]').forEach(btn => {
+    const allowed = allowedVersions.has(btn.dataset.val);
+    btn.style.display = allowed ? '' : 'none';
+    if (!allowed && btn.classList.contains('on')) { btn.classList.remove('on'); verChanged = true; }
+  });
+  if (verChanged) _ceUpdateMultiSegDDLabel('cmdVersionsSeg', 'cmdVersionsDDBtn', null, 'selected');
+}
+
+// ── requires_ips toggle (reuses the .sb-toggle switch look) ─
+function _ceSetRequiresIps(on) {
+  _ce('cmdRequiresIpsToggle').classList.toggle('on', !!on);
+  _ce('cmdEmptyNameRow').style.display = on ? 'flex' : 'none';
+  _ce('cmdEmptyDescRow').style.display = on ? 'flex' : 'none';
+  _ce('cmdLinesEmptySection').style.display = on ? '' : 'none';
+}
+function cmdEditorToggleRequiresIps() {
+  _ceSetRequiresIps(!_ce('cmdRequiresIpsToggle').classList.contains('on'));
+}
+function _ceGetRequiresIps() { return _ce('cmdRequiresIpsToggle').classList.contains('on'); }
+
+function cmdEditorToggleDiffsDisclosure() {
+  _ce('cmdDiffsDisclosureHd').classList.toggle('open');
+  _ce('cmdDiffsDisclosureBody').classList.toggle('open');
+}
+
+// ── error banner ──────────────────────────────────
+function _ceShowError(msg) {
+  const el = _ce('cmdEditorError');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+function _ceHideError() {
+  const el = _ce('cmdEditorError');
+  el.textContent = '';
+  el.classList.remove('show');
+}
+
+// ════════════════════════════════════════════════
+// Repeatable list rows: tags / lines / diffs
+// ════════════════════════════════════════════════
+function _ceBuildTagRow(data) {
+  data = data || { css_class: 't-teal', label: '' };
+  const row = document.createElement('div');
+  row.className = 'tag-row';
+  const colorOptions = CMD_EDITOR_TAG_COLORS.map(c => `<option value="${c}"${c === data.css_class ? ' selected' : ''}>${c}</option>`).join('');
+  row.innerHTML = `
+    <select class="set-input tag-class" style="max-width:110px;">${colorOptions}</select>
+    <input class="set-input tag-label" placeholder="Label" value="${_ceEscAttr(data.label)}">
+    <button type="button" class="btn btn-ghost btn-sm row-remove-btn">✕ Remove</button>
+  `;
+  row.querySelector('.row-remove-btn').addEventListener('click', () => row.remove());
+  return row;
+}
+function cmdEditorAddTag(data) { _ce('cmdTagsList').appendChild(_ceBuildTagRow(data)); }
+function _ceReadTags() {
+  return [...document.querySelectorAll('#cmdTagsList .tag-row')].map((row, i) => ({
+    css_class: row.querySelector('.tag-class').value,
+    label: row.querySelector('.tag-label').value || '',
+    sort_order: i,
+  }));
+}
+
+function _ceBuildLineRow(data) {
+  data = data || { line_type: 'cmd', prompt: '[Expert@FW]#', content: '', supports_export: false };
+  const row = document.createElement('div');
+  row.className = 'line-row';
+  const typeOptions = CMD_EDITOR_LINE_TYPES.map(lt => `<option value="${lt}"${lt === data.line_type ? ' selected' : ''}>${lt}</option>`).join('');
+  row.innerHTML = `
+    <div class="row-head">
+      <span class="ln-drag-handle" title="Drag to reorder" onmousedown="_ceArmLineDrag(this)">
+        <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.4"/><circle cx="7.5" cy="2.5" r="1.4"/><circle cx="2.5" cy="8" r="1.4"/><circle cx="7.5" cy="8" r="1.4"/><circle cx="2.5" cy="13.5" r="1.4"/><circle cx="7.5" cy="13.5" r="1.4"/></svg>
+      </span>
+      <select class="set-input ln-type" style="max-width:100px;">${typeOptions}</select>
+      <input class="set-input ln-prompt" style="max-width:180px;" placeholder="[Expert@FW]#" value="${_ceEscAttr(data.prompt)}">
+      <div class="dd ln-var-dd">
+        <button type="button" class="dd-btn btn btn-ghost btn-sm" onclick="_ceToggleVarDropdown(this)">
+          <span class="dd-label">Insert variable</span><span class="dd-arrow">▾</span>
+        </button>
+        <div class="dd-panel seg ln-var-panel">
+          ${_ceBuildVarDDItems()}
+          <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="_ceToggleVarDropdown(this)">Close</button></div>
+        </div>
+      </div>
+      <label class="ln-export-label" title="When checked, the sidebar &quot;Export&quot; toggle automatically appends ' &gt; path' to this command's output.">
+        <input type="checkbox" class="ln-export"${data.supports_export ? ' checked' : ''}>
+        <span>Exportable</span>
+      </label>
+      <button type="button" class="btn btn-ghost btn-sm row-remove-btn">✕ Remove</button>
+    </div>
+    <div class="set-row">
+      <div class="set-group ln-content-group">
+        <span class="set-label ln-content-label">Content</span>
+        <textarea class="set-input ln-content">${_ceEscHtml(data.content)}</textarea>
+      </div>
+    </div>
+  `;
+  row.querySelector('.row-remove-btn').addEventListener('click', () => row.remove());
+  const typeSel = row.querySelector('.ln-type');
+  const promptInput = row.querySelector('.ln-prompt');
+  const exportLabel = row.querySelector('.ln-export-label');
+  const varDD = row.querySelector('.ln-var-dd');
+  const syncPromptVisibility = () => {
+    const isCmd = typeSel.value === 'cmd';
+    promptInput.style.display = isCmd ? '' : 'none';
+    exportLabel.style.display = isCmd ? '' : 'none';
+    varDD.style.display = isCmd ? '' : 'none';
+  };
+  typeSel.addEventListener('change', syncPromptVisibility);
+  syncPromptVisibility();
+  return row;
+}
+function cmdEditorAddLine(containerId, data) { _ce(containerId).appendChild(_ceBuildLineRow(data)); }
+// "Insert variable" panel: lists the parameters registered in the catalog
+// (CATALOGS.parameters) and inserts {{key}} into the command content
+// textarea at the cursor position.
+function _ceBuildVarDDItems() {
+  const params = (typeof CATALOGS !== 'undefined' && CATALOGS.parameters) || [];
+  if (!params.length) {
+    return `<div class="set-hint">No parameters registered</div>`;
+  }
+  return params.map(p => {
+    const label = p.label || p.key;
+    return `<button type="button" class="seg-btn" onclick="_ceInsertVariable(this, '${_ceEscAttr(p.key)}')">${_ceEscHtml(label)}</button>`;
+  }).join('');
+}
+function _ceToggleVarDropdown(btn) {
+  const dd = btn.closest('.dd');
+  if (!dd) return;
+  const willOpen = !dd.classList.contains('open');
+  document.querySelectorAll('.dd.open').forEach(d => { if (d !== dd) d.classList.remove('open'); });
+  dd.classList.toggle('open', willOpen);
+}
+function _ceInsertVariable(btn, key) {
+  const row = btn.closest('.line-row');
+  const dd = btn.closest('.dd');
+  const ta = row && row.querySelector('.ln-content');
+  if (ta) {
+    const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
+    const end = ta.selectionEnd != null ? ta.selectionEnd : ta.value.length;
+    const token = '{{' + key + '}}';
+    ta.value = ta.value.slice(0, start) + token + ta.value.slice(end);
+    const newPos = start + token.length;
+    ta.focus();
+    ta.setSelectionRange(newPos, newPos);
+  }
+  if (dd) dd.classList.remove('open');
+}
+// ── Drag-to-reorder for command lines ──────────────────────────────────
+// sort_order is derived purely from DOM order at save time (see
+// _ceReadLinesFrom below), so moving a .line-row in the DOM is the entire
+// reorder operation — nothing else needs to track position. Works the same
+// way for the Default list, the Empty-state list, and each version/platform
+// diff's own line list, since it only ever reorders a row among its own
+// siblings (drag is rejected if hovering over a row from a different list).
+// Drag is armed only via mousedown on the small grip handle (⠿), not the
+// whole row, so selecting/editing text inside the content textarea is
+// unaffected.
+function _ceArmLineDrag(handle) {
+  const row = handle.closest('.line-row');
+  if (row) row.setAttribute('draggable', 'true');
+}
+document.addEventListener('mouseup', () => {
+  document.querySelectorAll('.line-row[draggable="true"]').forEach(r => r.removeAttribute('draggable'));
+});
+let _ceDragLineRow = null;
+document.addEventListener('dragstart', ev => {
+  const row = ev.target.closest && ev.target.closest('.line-row');
+  if (!row || !row.hasAttribute('draggable')) return;
+  _ceDragLineRow = row;
+  row.classList.add('dragging');
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('text/plain', ''); // required by Firefox to allow the drag
+});
+document.addEventListener('dragover', ev => {
+  if (!_ceDragLineRow) return;
+  const overRow = ev.target.closest && ev.target.closest('.line-row');
+  if (!overRow || overRow === _ceDragLineRow || overRow.parentElement !== _ceDragLineRow.parentElement) return;
+  ev.preventDefault();
+  const rect = overRow.getBoundingClientRect();
+  const before = (ev.clientY - rect.top) < rect.height / 2;
+  overRow.parentElement.insertBefore(_ceDragLineRow, before ? overRow : overRow.nextSibling);
+});
+document.addEventListener('drop', ev => { if (_ceDragLineRow) ev.preventDefault(); });
+document.addEventListener('dragend', ev => {
+  const row = ev.target.closest && ev.target.closest('.line-row');
+  if (row) { row.classList.remove('dragging'); row.removeAttribute('draggable'); }
+  _ceDragLineRow = null;
+});
+
+function _ceReadLinesFrom(containerEl) {
+  return [...containerEl.querySelectorAll('.line-row')].map((row, i) => {
+    const lineType = row.querySelector('.ln-type').value;
+    return {
+      sort_order: i,
+      line_type: lineType,
+      prompt: lineType === 'cmd' ? (row.querySelector('.ln-prompt').value || null) : null,
+      content: row.querySelector('.ln-content').value || '',
+      supports_export: lineType === 'cmd' ? row.querySelector('.ln-export').checked : false,
+    };
+  });
+}
+
+function _ceBuildDiffRow(data) {
+  data = data || { version: '', note: '', lines: [] };
+  const row = document.createElement('div');
+  row.className = 'diff-row';
+  row.innerHTML = `
+    <div class="row-head">
+      <input class="set-input diff-version" style="max-width:160px;" placeholder="e.g.: R82+" value="${_ceEscAttr(data.version)}">
+      <button type="button" class="btn btn-ghost btn-sm row-remove-btn">✕ Remove</button>
+    </div>
+    <div class="set-row">
+      <div class="set-group"><span class="set-label">Note</span><input class="set-input diff-note" value="${_ceEscAttr(data.note)}"></div>
+    </div>
+    <span class="set-label">Diff lines</span>
+    <div class="diff-lines-wrap"></div>
+    <button type="button" class="btn btn-ghost btn-sm diff-add-line-btn">+ Add line</button>
+  `;
+  row.querySelector('.row-remove-btn').addEventListener('click', () => row.remove());
+  const linesWrap = row.querySelector('.diff-lines-wrap');
+  (data.lines || []).forEach(l => linesWrap.appendChild(_ceBuildLineRow(l)));
+  row.querySelector('.diff-add-line-btn').addEventListener('click', () => linesWrap.appendChild(_ceBuildLineRow()));
+  return row;
+}
+function cmdEditorAddDiff(data) { _ce('cmdDiffsList').appendChild(_ceBuildDiffRow(data)); }
+function _ceReadDiffs() {
+  return [...document.querySelectorAll('#cmdDiffsList .diff-row')].map((row, i) => ({
+    version: row.querySelector('.diff-version').value || '',
+    note: row.querySelector('.diff-note').value || '',
+    sort_order: i,
+    lines: _ceReadLinesFrom(row.querySelector('.diff-lines-wrap')),
+  }));
+}
+
+// ════════════════════════════════════════════════
+// Reset / populate / open / close
+// ════════════════════════════════════════════════
+function _ceResetForm() {
+  _ceSetMultiSeg('cmdTopicSeg', ['capture'], 'cmdTopicDDBtn', null, 'selected');
+  _ceSetRequiresIps(false);
+  ['cmdName', 'cmdNameEmpty', 'cmdDesc', 'cmdDescEmpty',
+   'cmdAboutPurpose', 'cmdAboutWhen', 'cmdAboutObs', 'cmdRawTemplate']
+    .forEach(id => { _ce(id).value = ''; });
+  _ce('cmdTagsList').innerHTML = '';
+  _ceSetVendorSeg('cmdVendorSeg', [], 'cmdVendorDDBtn');
+  _ceSetMultiSeg('cmdSysSeg', [], 'cmdSysDDBtn', null, 'selected');
+  _ceSetMultiSeg('cmdVersionsSeg', [], 'cmdVersionsDDBtn', null, 'selected');
+  _ceSetMultiSeg('cmdEnvSeg', [], 'cmdEnvDDBtn', null, 'selected');
+  _ceApplyEditorCascade();
+  _ce('cmdLinesDefaultList').innerHTML = '';
+  _ce('cmdLinesEmptyList').innerHTML = '';
+  _ce('cmdDiffsList').innerHTML = '';
+  _ce('cmdDiffsDisclosureHd').classList.remove('open');
+  _ce('cmdDiffsDisclosureBody').classList.remove('open');
+  _ceHideError();
+  _ce('cmdEditorResolverWarning').classList.remove('show');
+  _ce('cmdEditorDeleteBtn').style.display = 'none';
+  cmdEditorAddLine('cmdLinesDefaultList'); // one blank starter line, convenience only
+}
+
+async function _cePopulateForm(id) {
+  const list = await fetchCommands();
+  const row = list.find(c => c.id === id);
+  if (!row) throw new Error('Command not found: ' + id);
+
+  _ceSetMultiSeg('cmdTopicSeg', row.topics || [row.topic], 'cmdTopicDDBtn', null, 'selected');
+  _ceSetRequiresIps(!!row.requires_ips);
+  _ce('cmdName').value = row.name || '';
+  _ce('cmdNameEmpty').value = row.name_empty || '';
+  _ce('cmdDesc').value = row.desc || '';
+  _ce('cmdDescEmpty').value = row.desc_empty || '';
+  _ce('cmdAboutPurpose').value = (row.about && row.about.purpose) || '';
+  _ce('cmdAboutWhen').value = (row.about && row.about.when) || '';
+  _ce('cmdAboutObs').value = (row.about && row.about.obs) || '';
+  _ce('cmdRawTemplate').value = row.raw_template || '';
+
+  _ce('cmdTagsList').innerHTML = '';
+  (row.tags || []).forEach(tg => {
+    cmdEditorAddTag({ css_class: tg.css_class, label: tg.label || '' });
+  });
+
+  _ceSetVendorSeg('cmdVendorSeg', row.vendors || [], 'cmdVendorDDBtn');
+  _ceSetMultiSeg('cmdSysSeg', row.systems || [], 'cmdSysDDBtn', null, 'selected');
+  _ceSetMultiSeg('cmdVersionsSeg', row.versions || [], 'cmdVersionsDDBtn', null, 'selected');
+  _ceSetMultiSeg('cmdEnvSeg', row.environments || [], 'cmdEnvDDBtn', null, 'selected');
+  _ceApplyEditorCascade();
+
+  _ce('cmdLinesDefaultList').innerHTML = '';
+  ((row.lines && row.lines.default) || []).forEach(l => {
+    cmdEditorAddLine('cmdLinesDefaultList', { line_type: l.line_type, prompt: l.prompt, content: l.content, supports_export: !!l.supports_export });
+  });
+
+  _ce('cmdLinesEmptyList').innerHTML = '';
+  ((row.lines && row.lines.empty) || []).forEach(l => {
+    cmdEditorAddLine('cmdLinesEmptyList', { line_type: l.line_type, prompt: l.prompt, content: l.content, supports_export: !!l.supports_export });
+  });
+
+  _ce('cmdDiffsList').innerHTML = '';
+  (row.diffs || []).forEach(d => {
+    const lines = (d.lines || []).map(l => ({ line_type: l.line_type, prompt: l.prompt, content: l.content }));
+    cmdEditorAddDiff({ version: d.version, note: d.note, lines });
+  });
+  const hasDiffs = (row.diffs || []).length > 0;
+  _ce('cmdDiffsDisclosureHd').classList.toggle('open', hasDiffs);
+  _ce('cmdDiffsDisclosureBody').classList.toggle('open', hasDiffs);
+
+  CMD_EDITOR_RESOLVER = row.placeholder_resolver || null;
+  _ce('cmdEditorResolverWarning').classList.toggle('show', !!CMD_EDITOR_RESOLVER);
+  _ce('cmdEditorDeleteBtn').style.display = '';
+  _ce('cmdEditorDeleteBtn').dataset.name = row.name || id;
+  return row;
+}
+
+async function openCommandEditor(mode, id, ev) {
+  // Incluir/duplicar/editar agora são recursos disponíveis para todos os
+  // usuários (não dependem mais de 'Admin mode' em Configurações — ver
+  // COMMAND_EDITING_ENABLED em js/settings.js, que hoje só controla o
+  // gerenciamento de catálogos e o default de System commands).
+  const isDuplicate = mode === 'duplicate';
+  // Duplicating is, for save purposes, a 'create': it generates a new command (new id),
+  // just pre-filled with the source command's data instead of a blank form.
+  CMD_EDITOR_MODE = isDuplicate ? 'create' : mode;
+  CMD_EDITOR_ORIGINAL_ID = mode === 'edit' ? id : null;
+  CMD_EDITOR_RESOLVER = null;
+  _ceResetForm();
+
+  if (mode === 'edit' || isDuplicate) {
+    let row;
+    try {
+      row = await _cePopulateForm(id);
+    } catch (err) {
+      console.error('Failed to open command editor for ' + mode, err);
+      alert('Failed to save the command. Please try again.');
+      return;
+    }
+    // Sem restrição de dono: qualquer usuário pode editar qualquer comando
+    // (inclusive os de referência created_by='System') — ver terminal-
+    // renderer.js (botão "Edit" agora sempre visível) e server/index.js (PUT
+    // /api/commands/:id não bloqueia mais por created_by).
+  }
+
+  if (isDuplicate) {
+    // Differences from 'edit': no delete button, and doesn't inherit the
+    // source command's advanced code resolver (it's tied to the source id
+    // and wouldn't make sense/work under a new id). The id itself is auto-
+    // generated from the Name at save time (see cmdEditorSave) — nothing to
+    // reset here, since it's never shown/editable in the form.
+    _ce('cmdEditorDeleteBtn').style.display = 'none';
+    CMD_EDITOR_RESOLVER = null;
+    _ce('cmdEditorResolverWarning').classList.remove('show');
+  }
+
+  _ce('cmdEditorTitle').textContent = isDuplicate ? '📋 Duplicate command'
+    : (mode === 'edit' ? '✏️ Edit command' : '➕ New command');
+  _ce('cmdEditorOverlay').classList.add('show');
+  if (mode === 'create' || isDuplicate) setTimeout(() => _ce('cmdName').focus(), 30);
+}
+function closeCommandEditor() {
+  _ce('cmdEditorOverlay').classList.remove('show');
+}
+
+// ════════════════════════════════════════════════
+// Save / Delete
+// ════════════════════════════════════════════════
+async function cmdEditorSave() {
+  _ceHideError();
+  // "All" (empty selection = applies to all) só existe como conceito de FILTRO
+  // (sidebar/Configurações) — no cadastro de um comando, Vendor/System/Version/
+  // Environment/Topic são todos obrigatórios (pelo menos 1 marcado cada),
+  // mesma regra que já valia só para Topic. Ver validação espelhada em
+  // server/index.js: validateBody.
+  const vendors = _ceGetMultiSeg('cmdVendorSeg');
+  const systems = _ceGetMultiSeg('cmdSysSeg');
+  const versions = _ceGetMultiSeg('cmdVersionsSeg');
+  const environments = _ceGetMultiSeg('cmdEnvSeg');
+  const topics = _ceGetMultiSeg('cmdTopicSeg'); // a command can have more than one Topic
+  const name = _ce('cmdName').value.trim();
+
+  if (!vendors.length || !systems.length || !versions.length || !environments.length || !topics.length || !name) {
+    _ceShowError('Fill in the required fields: Vendor, System, Version, Environment, Topic, Name — each list needs at least one option checked ("All" is only a filter, not a value a command can be saved with).');
+    return;
+  }
+
+  // ID: assim como Vendor/System/Version/Environment/Topic (ver
+  // js/catalogs.js/server/index.js: slugifyCatalogKey/uniqueCatalogKey), o
+  // usuário não digita mais um ID — ele é derivado do Name (mesma função
+  // slugifyName já usada na importação em massa, ver js/csv-import.js) e
+  // nunca muda depois de criado (ver PUT /api/commands/:id, que rejeita
+  // qualquer tentativa de alterar o id da URL). Em modo 'edit' o id já existe
+  // (CMD_EDITOR_ORIGINAL_ID); em 'create'/'duplicate' é gerado agora,
+  // conferindo colisão contra os comandos já cadastrados e adicionando um
+  // sufixo -2/-3/... se precisar (mesma lógica de resolveImportRow em
+  // csv-import.js).
+  let id;
+  if (CMD_EDITOR_MODE === 'edit') {
+    id = CMD_EDITOR_ORIGINAL_ID;
+  } else {
+    const existingIds = new Set((await fetchCommands().catch(() => [])).map(c => c.id));
+    id = slugifyName(name);
+    if (existingIds.has(id)) {
+      let n = 2;
+      while (existingIds.has(`${id}-${n}`)) n++;
+      id = `${id}-${n}`;
+    }
+  }
+
+  const requiresIps = _ceGetRequiresIps();
+  const defaultLines = _ceReadLinesFrom(_ce('cmdLinesDefaultList')).map(l => Object.assign({}, l, { variant: 'default' }));
+  const emptyLines = requiresIps ? _ceReadLinesFrom(_ce('cmdLinesEmptyList')).map(l => Object.assign({}, l, { variant: 'empty' })) : [];
+
+  const payload = {
+    id,
+    topics,
+    requires_ips: requiresIps,
+    placeholder_resolver: CMD_EDITOR_MODE === 'edit' ? CMD_EDITOR_RESOLVER : null,
+    raw_template: _ce('cmdRawTemplate').value || '',
+    name,
+    name_empty: _ce('cmdNameEmpty').value || null,
+    desc: _ce('cmdDesc').value || '',
+    desc_empty: _ce('cmdDescEmpty').value || '',
+    about_purpose: _ce('cmdAboutPurpose').value || '',
+    about_when: _ce('cmdAboutWhen').value || '',
+    about_obs: _ce('cmdAboutObs').value || '',
+    tags: _ceReadTags(),
+    vendors, systems, versions, environments,
+    lines: [...defaultLines, ...emptyLines],
+    diffs: _ceReadDiffs(),
+  };
+
+  try {
+    if (CMD_EDITOR_MODE === 'create') {
+      await createCommand(payload);
+    } else {
+      await updateCommand(CMD_EDITOR_ORIGINAL_ID, payload);
+    }
+    closeCommandEditor();
+    await render();
+  } catch (err) {
+    console.error('cmdEditorSave failed', err);
+    const msg = String((err && err.message) || '');
+    // Server-side validation (validateBody em server/index.js) devolve o
+    // motivo exato (ex.: "vendors" is required...) depois do "— " — mostra
+    // isso em vez de um texto genérico, já que há vários campos obrigatórios
+    // (Vendor/System/Version/Environment/Topic/Nome). O 409 (ID já existe) só
+    // deveria acontecer numa corrida rara entre duas abas — o ID em si é
+    // gerado e conferido contra a lista de comandos logo acima, antes do POST.
+    const serverMsg = msg.split(' — ').slice(1).join(' — ');
+    if (msg.indexOf('409') !== -1) _ceShowError('A command with this name already exists — try a slightly different name and save again.');
+    else if (msg.indexOf('400') !== -1) _ceShowError(serverMsg || 'Fill in the required fields: Vendor, System, Version, Environment, Topic, Name.');
+    else _ceShowError('Failed to save the command. Please try again.');
+  }
+}
+
+function cmdEditorDelete() {
+  if (CMD_EDITOR_MODE !== 'edit' || !CMD_EDITOR_ORIGINAL_ID) return;
+  const name = _ce('cmdEditorDeleteBtn').dataset.name || CMD_EDITOR_ORIGINAL_ID;
+  const ok = confirm(`Delete command "${name}" (${CMD_EDITOR_ORIGINAL_ID})? This action cannot be undone.`);
+  if (!ok) return;
+  deleteCommand(CMD_EDITOR_ORIGINAL_ID).then(() => {
+    closeCommandEditor();
+    return render();
+  }).catch(err => {
+    console.error('cmdEditorDelete failed', err);
+    const msg = String((err && err.message) || '');
+    _ceShowError('Failed to delete the command. Please try again.');
+  });
+}
+
+// ════════════════════════════════════════════════
+// Bindings + modal chrome (overlay click / Escape), same pattern as
+// settings-modal.js's #settingsOverlay handling.
+// ════════════════════════════════════════════════
+_ceBindMultiSeg('cmdTopicSeg', 'cmdTopicDDBtn', null, 'selected'); // a command can belong to more than one Topic
+// Vendor/System/Version/Environment: "All" is a filter-only concept — a
+// command being registered/edited must have at least one explicit value in
+// each of these, so (like Topic) the empty-selection label falls back to
+// null ("0") instead of "All", to avoid implying an unselected list is valid.
+// cmdSysSeg passes _ceApplyEditorCascade as onToggle so checking/unchecking a
+// System re-filters which Versions are shown (see _ceApplyEditorCascade
+// above) — Version has nothing below it in this cascade, so it doesn't need
+// one. cmdVendorSeg is bound separately below (_ceBindVendorSeg) since a
+// command belongs to exactly one Vendor, not several.
+_ceBindVendorSeg('cmdVendorSeg', 'cmdVendorDDBtn');
+_ceBindMultiSeg('cmdSysSeg', 'cmdSysDDBtn', null, 'selected', _ceApplyEditorCascade);
+_ceBindMultiSeg('cmdVersionsSeg', 'cmdVersionsDDBtn', null, 'selected');
+_ceBindMultiSeg('cmdEnvSeg', 'cmdEnvDDBtn', null, 'selected');
+document.getElementById('cmdEditorOverlay').addEventListener('click', ev => {
+  if (ev.target.id === 'cmdEditorOverlay') closeCommandEditor();
+});
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape') closeCommandEditor();
+});

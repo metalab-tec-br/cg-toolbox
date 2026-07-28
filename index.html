@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CG Toolbox</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/theme.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-logo" onclick="goHome()" title="Go to home page">
+    <!-- Logo "CG//Toolbox": mesma arte do logo oficial "CG//One" (fonte
+         Poppins Bold + barras rosa), só trocando "One" por "Toolbox" —
+         imagens em img/logo-cg-toolbox-light.png (versão azul-marinho, tema
+         claro) e img/logo-cg-toolbox-dark.png (versão branca, tema escuro),
+         trocadas via [data-theme] (ver css/layout.css). O rodapé "Developed
+         by CG One" da sidebar usa o logo original e não foi alterado. -->
+    <img class="hdr-logo-img for-dark" src="img/logo-cg-toolbox-dark.png?v=4" alt="CG Toolbox">
+    <img class="hdr-logo-img for-light" src="img/logo-cg-toolbox-light.png?v=4" alt="CG Toolbox">
+  </div>
+  <div class="hdr-gap"></div>
+  <div class="hdr-pill"><span class="hdr-dot"></span><span id="hBadge">All · All · All</span></div>
+  <div class="hdr-user" id="hdrUser" title="Identified user (Windows login)">
+    <span class="hdr-user-ico" aria-hidden="true">👤</span><span id="currentUserLabel"></span>
+  </div>
+  <button class="theme-toggle" id="settingsBtn" onclick="openSettingsModal()" title="Settings" style="display:inline-flex;align-items:center;justify-content:center;">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8a4 4 0 100 8 4 4 0 000-8z"/><path d="M19.4 13a7.97 7.97 0 000-2l2.1-1.6-2-3.4-2.5 1a8.1 8.1 0 00-1.7-1L14.9 3h-4l-.4 2.9a8.1 8.1 0 00-1.7 1l-2.5-1-2 3.4L6.6 11a7.97 7.97 0 000 2l-2.1 1.6 2 3.4 2.5-1c.5.4 1.1.8 1.7 1l.4 2.9h4l.4-2.9c.6-.2 1.2-.6 1.7-1l2.5 1 2-3.4L19.4 13z"/></svg>
+  </button>
+</header>
+
+<div class="app">
+
+<!-- ══ SIDEBAR ══ -->
+<nav class="sidebar">
+
+  <div class="cmd-search-wrap">
+    <span class="cmd-search-icon" aria-hidden="true">🔍</span>
+    <input type="text" class="cmd-search" id="cmdSearch" placeholder="Search" oninput="onSearchInput()" onfocus="openCmdSearchHistoryPanel()" onblur="closeCmdSearchHistoryPanel()" autocomplete="off">
+    <button type="button" class="cmd-search-clear" id="cmdSearchClear" onclick="clearCommandSearch()" title="Clear search" style="display:none">✕</button>
+    <div class="cpq-panel" id="cmdSearchHistoryPanel">
+      <div class="cpq-history-head">
+        <span class="cpq-panel-label cpq-history-label" style="margin-bottom:0">History (last 7 days)</span>
+        <button type="button" class="cpq-history-clear" id="cmdSearchHistoryClearBtn" onmousedown="event.preventDefault()" onclick="clearCmdSearchHistory()">Clear history</button>
+      </div>
+      <div class="cpq-history-list" id="cmdSearchHistoryList"></div>
+    </div>
+  </div>
+
+  <div class="sb-block">
+    <div class="sb-list">
+      <div class="sb-row on" id="favNavRow" onclick="toggleFavoritesView()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" style="flex-shrink:0;"><path d="M12 3.5l2.66 5.39 5.95.87-4.3 4.2 1.02 5.93L12 17.4l-5.33 2.8 1.02-5.93-4.3-4.2 5.95-.87L12 3.5z"/></svg>
+        <span>Favorites</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sb-block">
+    <div class="sb-head">Vendor</div>
+    <div class="dd" id="vendorDD">
+      <button type="button" class="dd-btn" id="vendorDDBtn" onclick="toggleDropdown('vendorDD')">
+        <span class="sb-pip" style="background:#8B949E"></span><span class="dd-label">All</span><span class="dd-arrow">▾</span>
+      </button>
+      <div class="dd-panel" id="vendorList">
+        <div class="sb-row"   data-vd="check-point"><div class="sb-chk">✓</div><span class="sb-pip" style="background:#DA1572"></span>Check Point</div>
+        <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleSidebarFilterAll('vendorList')">All</button><button type="button" class="btn btn-ghost" onclick="toggleDropdown('vendorDD')">Close</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sb-block">
+    <div class="sb-head">System</div>
+    <div class="dd" id="sysDD">
+      <button type="button" class="dd-btn" id="sysDDBtn" onclick="toggleDropdown('sysDD')">
+        <span class="sb-pip" style="background:#8B949E"></span><span class="dd-label">All</span><span class="dd-arrow">▾</span>
+      </button>
+      <div class="dd-panel" id="sysList">
+        <div class="sb-row"   data-sys="gaia"><div class="sb-chk">✓</div><span class="sb-pip" style="background:#2DD4BF"></span>Gaia</div>
+        <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleSidebarFilterAll('sysList')">All</button><button type="button" class="btn btn-ghost" onclick="toggleDropdown('sysDD')">Close</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sb-block">
+    <div class="sb-head">Version</div>
+    <div class="dd" id="vDD">
+      <button type="button" class="dd-btn" id="vDDBtn" onclick="toggleDropdown('vDD')">
+        <span class="sb-pip" style="background:#8B949E"></span><span class="dd-label">All</span><span class="dd-arrow">▾</span>
+      </button>
+      <div class="dd-panel" id="vList">
+        <div class="sb-row"   data-v="R81.10"><div class="sb-chk">✓</div><span class="sb-pip" style="background:#FF4FA0"></span>R81.10</div>
+        <div class="sb-row"   data-v="R81.20"><div class="sb-chk">✓</div><span class="sb-pip" style="background:#60A5FA"></span>R81.20</div>
+        <div class="sb-row" data-v="R82">   <div class="sb-chk">✓</div><span class="sb-pip" style="background:#FBBF24"></span>R82</div>
+        <div class="sb-row"   data-v="R82.10"><div class="sb-chk">✓</div><span class="sb-pip" style="background:#C084FC"></span>R82.10</div>
+        <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleSidebarFilterAll('vList')">All</button><button type="button" class="btn btn-ghost" onclick="toggleDropdown('vDD')">Close</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sb-block">
+    <div class="sb-head">Environment</div>
+    <div class="dd" id="eDD">
+      <button type="button" class="dd-btn" id="eDDBtn" onclick="toggleDropdown('eDD')">
+        <span class="sb-pip" style="background:#8B949E"></span><span class="dd-label">All</span><span class="dd-arrow">▾</span>
+      </button>
+      <div class="dd-panel" id="eList">
+        <div class="sb-row"   data-e="cluster">   <div class="sb-chk">✓</div><span class="sb-pip" style="background:#F87171"></span>Cluster HA</div>
+        <div class="sb-row"   data-e="gaia">      <div class="sb-chk">✓</div><span class="sb-pip" style="background:#2DD4BF"></span>Gaia (Clish)</div>
+        <div class="sb-row"   data-e="maestro">   <div class="sb-chk">✓</div><span class="sb-pip" style="background:#FBBF24"></span>Maestro</div>
+        <div class="sb-row"   data-e="mds">       <div class="sb-chk">✓</div><span class="sb-pip" style="background:#C084FC"></span>MDS / MDM</div>
+        <div class="sb-row" data-e="standalone"><div class="sb-chk">✓</div><span class="sb-pip" style="background:#FB923C"></span>Standalone</div>
+        <div class="sb-row"   data-e="vsx">       <div class="sb-chk">✓</div><span class="sb-pip" style="background:#4ADE80"></span>VSX</div>
+        <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleSidebarFilterAll('eList')">All</button><button type="button" class="btn btn-ghost" onclick="toggleDropdown('eDD')">Close</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sb-block">
+    <div class="sb-head">Topic</div>
+    <div class="dd" id="tDD">
+      <button type="button" class="dd-btn" id="tDDBtn" onclick="toggleDropdown('tDD')">
+        <span class="sb-pip" style="background:#8B949E"></span><span class="dd-label">All</span><span class="dd-arrow">▾</span>
+      </button>
+      <div class="dd-panel" id="tList">
+        <div class="sb-row"   data-t="capture">  <div class="sb-chk">✓</div><span class="sb-pip" style="background:#FF4FA0"></span><span>Capture</span></div>
+        <div class="sb-row"   data-t="carrier">  <div class="sb-chk">✓</div><span class="sb-pip" style="background:#8B5CF6"></span><span>Carrier Security</span></div>
+        <div class="sb-row"   data-t="debug">    <div class="sb-chk">✓</div><span class="sb-pip" style="background:#F87171"></span><span>Debug &amp; Drops</span></div>
+        <div class="sb-row"   data-t="dlp">      <div class="sb-chk">✓</div><span class="sb-pip" style="background:#FDE047"></span><span>DLP</span></div>
+        <div class="sb-row"   data-t="identity"> <div class="sb-chk">✓</div><span class="sb-pip" style="background:#2DD4BF"></span><span>Identity Awareness</span></div>
+        <div class="sb-row"   data-t="ips">      <div class="sb-chk">✓</div><span class="sb-pip" style="background:#FB7185"></span><span>IPS</span></div>
+        <div class="sb-row"   data-t="license">  <div class="sb-chk">✓</div><span class="sb-pip" style="background:#F472B6"></span><span>Licenses</span></div>
+        <div class="sb-row"   data-t="logs">     <div class="sb-chk">✓</div><span class="sb-pip" style="background:#60A5FA"></span><span>Logs</span></div>
+        <div class="sb-row"   data-t="management"><div class="sb-chk">✓</div><span class="sb-pip" style="background:#94A3B8"></span><span>Management</span></div>
+        <div class="sb-row"   data-t="mobile">   <div class="sb-chk">✓</div><span class="sb-pip" style="background:#4ADE80"></span><span>Mobile Access</span></div>
+        <div class="sb-row"   data-t="policy">   <div class="sb-chk">✓</div><span class="sb-pip" style="background:#FBBF24"></span><span>Policy</span></div>
+        <div class="sb-row"   data-t="qos">      <div class="sb-chk">✓</div><span class="sb-pip" style="background:#FDBA74"></span><span>QoS</span></div>
+        <div class="sb-row"   data-t="routing">  <div class="sb-chk">✓</div><span class="sb-pip" style="background:#4ADE80"></span><span>Routing</span></div>
+        <div class="sb-row"   data-t="securexl"> <div class="sb-chk">✓</div><span class="sb-pip" style="background:#F87171"></span><span>SecureXL</span></div>
+        <div class="sb-row"   data-t="status">   <div class="sb-chk">✓</div><span class="sb-pip" style="background:#FB923C"></span><span>Status</span></div>
+        <div class="sb-row"   data-t="system">   <div class="sb-chk">✓</div><span class="sb-pip" style="background:#38BDF8"></span><span>System</span></div>
+        <div class="sb-row"   data-t="tables">   <div class="sb-chk">✓</div><span class="sb-pip" style="background:#C084FC"></span><span>Kernel Tables</span></div>
+        <div class="sb-row"   data-t="vpn">      <div class="sb-chk">✓</div><span class="sb-pip" style="background:#22D3EE"></span><span>VPN</span></div>
+        <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleSidebarFilterAll('tList')">All</button><button type="button" class="btn btn-ghost" onclick="toggleDropdown('tDD')">Close</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sb-block">
+    <button type="button" class="btn btn-ghost sb-clear-filters-btn" style="width:100%; font-size:11px;" onclick="clearAllSidebarFilters()">Clear filters</button>
+  </div>
+
+  <div class="sb-block">
+    <div class="sb-head">Options</div>
+    <div class="sb-toggle" id="tog-details" onclick="toggleShowCardDetails()">
+      <div class="tog-track"><div class="tog-knob"></div></div><span>Details</span>
+    </div>
+    <div class="sb-toggle" id="tog-log" onclick="toggleExportEnabled()">
+      <div class="tog-track"><div class="tog-knob"></div></div><span>Export</span>
+    </div>
+    <div class="sb-file-wrap" id="fw-log">
+      <input class="sb-file" id="f-log" value="/tmp/fw_export.txt" oninput="render()">
+    </div>
+    <div class="sb-toggle" id="tog-system-commands" onclick="toggleShowSystemCommands()">
+      <div class="tog-track"><div class="tog-knob"></div></div><span>System commands</span>
+    </div>
+  </div>
+
+  <div class="sb-block" id="addCommandBlock">
+    <div class="sb-head">Manage</div>
+    <!-- One button per item, in hierarchy order (Vendor → System → Version →
+         Environment → Topic), with Parameters last since it's unrelated to
+         that chain — each opens the catalog modal already on the
+         corresponding tab. -->
+    <button type="button" class="btn btn-ghost sb-manage-btn admin-highlight" style="width:100%; font-size:11px;" onclick="openCatalogAdmin('vendors')">Vendors</button>
+    <button type="button" class="btn btn-ghost sb-manage-btn admin-highlight" style="width:100%; font-size:11px; margin-top:6px;" onclick="openCatalogAdmin('systems')">Systems</button>
+    <button type="button" class="btn btn-ghost sb-manage-btn admin-highlight" style="width:100%; font-size:11px; margin-top:6px;" onclick="openCatalogAdmin('versions')">Versions</button>
+    <button type="button" class="btn btn-ghost sb-manage-btn admin-highlight" style="width:100%; font-size:11px; margin-top:6px;" onclick="openCatalogAdmin('environments')">Environments</button>
+    <button type="button" class="btn btn-ghost sb-manage-btn admin-highlight" style="width:100%; font-size:11px; margin-top:6px;" onclick="openCatalogAdmin('topics')">Topics</button>
+    <button type="button" class="btn btn-ghost sb-manage-btn admin-highlight" style="width:100%; font-size:11px; margin-top:6px;" onclick="openCatalogAdmin('parameters')">Parameters</button>
+  </div>
+
+  <a class="sb-credit" href="https://cg-one.com" target="_blank" rel="noopener noreferrer">
+    <span class="sb-credit-txt">Developed by</span>
+    <!-- Logo oficial CG//One (arquivo enviado pelo usuário) — não gerado,
+         apenas recortado/redimensionado a partir do original em
+         img/cg-one-navy.png / img/cg-one-white.png. -->
+    <img class="sb-credit-img for-dark" src="img/cg-one-white.png?v=1" alt="CG One">
+    <img class="sb-credit-img for-light" src="img/cg-one-navy.png?v=1" alt="CG One">
+  </a>
+
+</nav>
+
+<!-- ══ MAIN ══ -->
+<div class="main">
+  <div class="inp-bar">
+    <div class="cpq-bar">
+      <div class="cpq-input-wrap" id="cpqWrap">
+        <span class="cpq-icon" aria-hidden="true" title="Parameters used in the commands below">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M20.6 13.4L13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="7" cy="7" r="1.3" fill="currentColor"/></svg>
+        </span>
+        <div class="cpq-tags-box" id="cpqTagsBox" onclick="focusQueryInput()">
+          <span class="cpq-tags" id="cpqTags"></span>
+          <input type="text" id="cpQuery" class="cpq-input" placeholder="Command parameter" autocomplete="off" oninput="onQueryInput()" onkeydown="onQueryKeydown(event)" onfocus="openQueryPanel()" onblur="closeQueryPanel()">
+        </div>
+        <button type="button" class="cpq-clear" id="cpQueryClear" onclick="clearQuery()" title="Clear filters">✕</button>
+      </div>
+      <div class="cpq-panel" id="cpqPanel">
+        <div class="cpq-panel-label cpq-history-label">Command parameters:</div>
+        <!-- Chips generated dynamically from the admin-managed parameters
+             catalog (js/catalogs.js, `parameters` table) — see renderCatalogUI(). -->
+        <div class="cpq-chips" id="cpqChips"></div>
+        <div class="cpq-empty-note" id="cpqEmptyNote">None of the commands currently shown use source/destination parameters.</div>
+        <div class="cpq-panel-divider"></div>
+        <div class="cpq-history-section" id="cpqHistorySection">
+          <div class="cpq-history-head">
+            <span class="cpq-panel-label cpq-history-label" style="margin-bottom:0">History (last 7 days)</span>
+            <button type="button" class="cpq-history-clear" id="cpqHistoryClearBtn" onmousedown="event.preventDefault()" onclick="clearQueryHistory()">Clear history</button>
+          </div>
+          <div class="cpq-history-list" id="cpqHistoryList"></div>
+        </div>
+      </div>
+    </div>
+    <input type="hidden" id="src_ip"><input type="hidden" id="dst_ip">
+    <input type="hidden" id="src_port" value="0"><input type="hidden" id="dst_port" value="0">
+    <input type="hidden" id="proto" value="0"><input type="hidden" id="iface"><input type="hidden" id="vsid" value="0">
+    <input type="hidden" id="ip"><input type="hidden" id="port">
+  </div>
+  <div class="content-toolbar">
+    <span class="ctb-label">Group by</span>
+    <div class="dd ctb-groupby-dd" id="groupByDD">
+      <button type="button" class="dd-btn" id="groupByDDBtn" onclick="toggleDropdown('groupByDD')">
+        <span class="dd-label">Topic</span><span class="dd-arrow">▾</span>
+      </button>
+      <div class="dd-panel seg" id="groupByToggle">
+        <button type="button" class="seg-btn" data-val="creator" onclick="setGroupBy('creator')">Created by</button>
+        <button type="button" class="seg-btn" data-val="topic" onclick="setGroupBy('topic')">Topic</button>
+        <button type="button" class="seg-btn" data-val="favorites" onclick="setGroupBy('favorites')">User favorites</button>
+        <button type="button" class="seg-btn" data-val="version" onclick="setGroupBy('version')">Version</button>
+      </div>
+    </div>
+    <button type="button" class="icon-btn" onclick="expandAllSections()" title="Expand all">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 5.5l6 5 6-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 1.5l6 5 6-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button type="button" class="icon-btn" onclick="collapseAllSections()" title="Collapse all">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 10.5l6-5 6 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 14.5l6-5 6 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <!-- "Import"/"Export"/"Add command" — moved here from the sidebar; "Manage
+         Versions/Environments/Topics" stays in the sidebar (see the
+         #addCommandBlock block below, before the footer). Import/Export are
+         bulk operations wrapped in #cmdActionsAdminOnly, hidden outside Admin
+         mode (body.hide-command-editing #cmdActionsAdminOnly); "Add command"
+         sits outside that wrapper and is always visible to every user (see
+         task that lifted the Admin-mode gate from add/duplicate/edit). -->
+    <div class="ctb-cmd-actions" id="cmdActionsBlock">
+      <span class="ctb-cmd-actions-admin" id="cmdActionsAdminOnly">
+        <button type="button" class="btn ctb-cmd-btn admin-highlight" onclick="openImportCommandsModal(event)" title="Bulk-create commands from a .csv file.">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 10.5V3M4.5 6.5L8 3l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span>Import commands</span>
+        </button>
+        <button type="button" class="btn ctb-cmd-btn admin-highlight" id="exportCsvBtn" onclick="openExportColumnsModal()" title="Exports the command catalog (current language) as a .csv file — you choose the columns">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 2v7.5M4.5 6.5L8 10l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span>Export commands</span>
+        </button>
+      </span>
+      <button type="button" class="btn ctb-cmd-btn admin-highlight" onclick="openCommandEditor('create')">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Add command</span>
+      </button>
+    </div>
+  </div>
+  <div class="content" id="out"></div>
+</div>
+</div><!-- .app -->
+
+<!-- ══ SETTINGS MODAL ══ -->
+<div class="modal-overlay" id="settingsOverlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title" style="display:flex;align-items:center;gap:6px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8a4 4 0 100 8 4 4 0 000-8z"/><path d="M19.4 13a7.97 7.97 0 000-2l2.1-1.6-2-3.4-2.5 1a8.1 8.1 0 00-1.7-1L14.9 3h-4l-.4 2.9a8.1 8.1 0 00-1.7 1l-2.5-1-2 3.4L6.6 11a7.97 7.97 0 000 2l-2.1 1.6 2 3.4 2.5-1c.5.4 1.1.8 1.7 1l.4 2.9h4l.4-2.9c.6-.2 1.2-.6 1.7-1l2.5 1 2-3.4L19.4 13z"/></svg>
+        <span>Settings</span>
+      </span>
+      <!-- Admin mode fica no cabeçalho do modal (ao lado do título), não mais
+           no rodapé — é um toggle de modo/permissão, não uma preferência de
+           exibição do grupo 'Default settings' (ver toggleModalEnableEditing
+           em js/settings.js). -->
+      <div class="sb-toggle sb-toggle-head" id="mEnableEditingToggle" onclick="toggleModalEnableEditing()">
+        <div class="tog-track"><div class="tog-knob"></div></div><span>Admin mode</span>
+      </div>
+      <button class="modal-close" onclick="closeSettingsModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="set-group" id="settingsToggleGroup">
+        <span class="set-label">Default settings</span>
+        <div class="sb-toggle" id="mThemeToggle" onclick="toggleModalTheme()">
+          <div class="tog-track"><div class="tog-knob"></div></div><span>Dark mode</span>
+          <!-- Cor de destaque (--teal/--teal-bg) — vale igual nos dois temas,
+               ver ACCENT_PRESETS/applyAccentColor em js/theme.js. Padrão: rosa
+               (cor oficial de marca da Check Point, #DA1572), por isso listado
+               primeiro. stopPropagation evita disparar o toggle do tema
+               (onclick do pai) ao clicar num swatch. -->
+          <div class="accent-swatches" id="accentSwatches" onclick="event.stopPropagation()">
+            <button type="button" class="accent-swatch" data-accent="pink" style="background:#DA1572" onclick="setAccentColor('pink')" title="Check Point pink (default)"></button>
+            <button type="button" class="accent-swatch" data-accent="blue" style="background:#60A5FA" onclick="setAccentColor('blue')" title="Light blue"></button>
+            <button type="button" class="accent-swatch" data-accent="green" style="background:#4ADE80" onclick="setAccentColor('green')" title="Green"></button>
+            <button type="button" class="accent-swatch" data-accent="purple" style="background:#C084FC" onclick="setAccentColor('purple')" title="Purple"></button>
+            <button type="button" class="accent-swatch" data-accent="orange" style="background:#FB923C" onclick="setAccentColor('orange')" title="Orange"></button>
+            <button type="button" class="accent-swatch" data-accent="red" style="background:#F87171" onclick="setAccentColor('red')" title="Red"></button>
+          </div>
+        </div>
+        <div class="sb-toggle" id="mDescToggle" onclick="toggleModalDesc()">
+          <div class="tog-track"><div class="tog-knob"></div></div><span>Details</span>
+        </div>
+        <!-- Mesma preferência pessoal do toggle "System commands" da sidebar
+             (Options) — só um espelho aqui no modal, igual ao par
+             tog-details/mDescToggle acima (ver syncShowSystemCommandsToggleUI
+             em js/settings.js). Não confundir com o "Admin default" abaixo,
+             que é o valor herdado por quem ainda não mexeu neste toggle. -->
+        <div class="sb-toggle" id="mSystemCommandsToggle" onclick="toggleModalSystemCommands()">
+          <div class="tog-track"><div class="tog-knob"></div></div><span>System commands</span>
+        </div>
+        <!-- Mesma preferência pessoal do toggle "Export" da sidebar (Options)
+             — só um espelho aqui no modal, igual ao par tog-details/mDescToggle
+             e tog-system-commands/mSystemCommandsToggle acima (ver
+             syncExportToggleUI em js/settings.js). -->
+        <div class="sb-toggle" id="mExportToggle" onclick="toggleModalExport()">
+          <div class="tog-track"><div class="tog-knob"></div></div><span>Export</span>
+        </div>
+      </div>
+      <!-- Default (org-wide) para o toggle "System commands" da sidebar — só
+           visível com Admin mode ligado (ver body.hide-command-editing em
+           components.css). Diferente do toggle da sidebar: isto NÃO é a
+           preferência pessoal de quem está mexendo agora, é o valor que
+           qualquer usuário SEM escolha própria salva vai herdar (ver
+           applyGlobalDefaultsIfNeeded em js/settings.js). -->
+      <div class="set-group" id="adminDefaultsBlock">
+        <span class="set-label">Admin default</span>
+        <div class="sb-toggle" id="mSystemCommandsDefaultToggle" onclick="toggleModalSystemCommandsDefault()">
+          <div class="tog-track"><div class="tog-knob"></div></div><span>Show System commands by default</span>
+        </div>
+      </div>
+      <div class="set-group set-group-row">
+        <span class="set-label">Environment</span>
+        <div class="dd" id="mEnvDD">
+          <button type="button" class="dd-btn" id="mEnvDDBtn" onclick="toggleDropdown('mEnvDD')">
+            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="mEnv">
+            <button type="button" class="seg-btn" data-val="cluster">Cluster HA</button>
+            <button type="button" class="seg-btn" data-val="gaia">Gaia (Clish)</button>
+            <button type="button" class="seg-btn" data-val="maestro">Maestro</button>
+            <button type="button" class="seg-btn" data-val="mds">MDS / MDM</button>
+            <button type="button" class="seg-btn" data-val="standalone">Standalone</button>
+            <button type="button" class="seg-btn" data-val="vsx">VSX</button>
+            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mEnvDD')">Close</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="set-group set-group-row">
+        <span class="set-label">Group by</span>
+        <div class="dd" id="mGroupByDD">
+          <button type="button" class="dd-btn" id="mGroupByDDBtn" onclick="toggleDropdown('mGroupByDD')">
+            <span class="dd-label">Topic</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="mGroupBy">
+            <button type="button" class="seg-btn" data-val="creator">Created by</button>
+            <button type="button" class="seg-btn" data-val="topic">Topic</button>
+            <button type="button" class="seg-btn" data-val="favorites">User favorites</button>
+            <button type="button" class="seg-btn" data-val="version">Version</button>
+          </div>
+        </div>
+      </div>
+      <div class="set-group set-group-row">
+        <span class="set-label">Home page</span>
+        <div class="dd" id="mHomeDD">
+          <button type="button" class="dd-btn" id="mHomeDDBtn" onclick="toggleDropdown('mHomeDD')">
+            <span class="dd-label">Favoritos</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="mHome">
+            <button type="button" class="seg-btn" data-val="favorites">Favorites</button>
+            <button type="button" class="seg-btn" data-val="menu">Command menu</button>
+            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mHomeDD')">Close</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="set-group set-group-row">
+        <span class="set-label">System</span>
+        <div class="dd" id="mSysDD">
+          <button type="button" class="dd-btn" id="mSysDDBtn" onclick="toggleDropdown('mSysDD')">
+            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="mSys">
+            <button type="button" class="seg-btn" data-val="gaia">Gaia</button>
+            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mSysDD')">Close</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="set-group set-group-row">
+        <span class="set-label">Path — file export</span>
+        <input class="set-input" id="mLogFile" placeholder="/tmp/fw_export.txt">
+      </div>
+      <div class="set-group set-group-row">
+        <span class="set-label">Topic</span>
+        <div class="dd" id="mTypeDD">
+          <button type="button" class="dd-btn" id="mTypeDDBtn" onclick="toggleDropdown('mTypeDD')">
+            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="mType">
+            <button type="button" class="seg-btn" data-val="capture">Capture</button>
+            <button type="button" class="seg-btn" data-val="carrier">Carrier Security</button>
+            <button type="button" class="seg-btn" data-val="debug">Debug</button>
+            <button type="button" class="seg-btn" data-val="dlp">DLP</button>
+            <button type="button" class="seg-btn" data-val="identity">Identity Awareness</button>
+            <button type="button" class="seg-btn" data-val="ips">IPS</button>
+            <button type="button" class="seg-btn" data-val="license">Licenses</button>
+            <button type="button" class="seg-btn" data-val="logs">Logs</button>
+            <button type="button" class="seg-btn" data-val="management">Management</button>
+            <button type="button" class="seg-btn" data-val="mobile">Mobile Access</button>
+            <button type="button" class="seg-btn" data-val="policy">Policy</button>
+            <button type="button" class="seg-btn" data-val="qos">QoS</button>
+            <button type="button" class="seg-btn" data-val="routing">Routing</button>
+            <button type="button" class="seg-btn" data-val="securexl">SecureXL</button>
+            <button type="button" class="seg-btn" data-val="status">Status</button>
+            <button type="button" class="seg-btn" data-val="system">System</button>
+            <button type="button" class="seg-btn" data-val="tables">Tables</button>
+            <button type="button" class="seg-btn" data-val="vpn">VPN</button>
+            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mTypeDD')">Close</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="set-group set-group-row">
+        <span class="set-label">Vendor</span>
+        <div class="dd" id="mVendorDD">
+          <button type="button" class="dd-btn" id="mVendorDDBtn" onclick="toggleDropdown('mVendorDD')">
+            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="mVendor">
+            <button type="button" class="seg-btn" data-val="check-point">Check Point</button>
+            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mVendorDD')">Close</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="set-group set-group-row">
+        <span class="set-label">Version</span>
+        <div class="dd" id="mVersionDD">
+          <button type="button" class="dd-btn" id="mVersionDDBtn" onclick="toggleDropdown('mVersionDD')">
+            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="mVersion">
+            <button type="button" class="seg-btn" data-val="R81.10">R81.10</button>
+            <button type="button" class="seg-btn" data-val="R81.20">R81.20</button>
+            <button type="button" class="seg-btn" data-val="R82">R82</button>
+            <button type="button" class="seg-btn" data-val="R82.10">R82.10</button>
+            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mVersionDD')">Close</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="btn btn-ghost" id="mClearFavBtn" onclick="clearFavoritesConfirm()">🗑️ Clear favorites</button>
+        <button class="btn btn-ghost" onclick="restoreDefaultsModal()">Restore defaults</button>
+        <!-- Log de auditoria (create/update/delete de comandos, 30 dias) — ver
+             server/index.js (GET /api/audit-log) e js/audit-log.js. Visível
+             para todos os usuários, assim como os demais botões deste rodapé. -->
+        <button type="button" class="btn btn-ghost" onclick="openAuditLogModal()">📋 View audit log</button>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="closeSettingsModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveSettingsModal()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ AUDIT LOG MODAL — histórico de create/update/delete de comandos,
+     últimos 30 dias (ver server/index.js: GET /api/audit-log, tabela
+     audit_log em schema.sql, e js/audit-log.js). ══ -->
+<div class="modal-overlay" id="auditLogOverlay">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <span class="modal-title" style="display:flex;align-items:center;gap:6px;">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h10v11H3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <span>Audit log</span>
+      </span>
+      <button class="modal-close" onclick="closeAuditLogModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <span class="set-hint">Command create/update/delete history — entries older than 30 days are removed automatically.</span>
+      <div class="audit-log-wrap" id="auditLogWrap">
+        <table class="audit-log-table">
+          <thead>
+            <tr><th>Date/Time</th><th>User</th><th>Action</th><th>Command</th></tr>
+          </thead>
+          <tbody id="auditLogTbody"></tbody>
+        </table>
+        <div class="audit-log-empty" id="auditLogEmpty" style="display:none;">No audit log entries in the last 30 days.</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div></div>
+      <button class="btn" onclick="closeAuditLogModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD/EDIT COMMAND MODAL ══ -->
+<div class="modal-overlay" id="cmdEditorOverlay">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <span class="modal-title" id="cmdEditorTitle">➕ New command</span>
+      <button class="modal-close" onclick="closeCommandEditor()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="cmd-editor-error" id="cmdEditorError"></div>
+      <div class="resolver-warning" id="cmdEditorResolverWarning">
+        <span>⚠️</span><span>⚠️ This command uses advanced code-driven logic (net-utils.js) to expand IP lists/ranges/CIDR — e.g. fw monitor, tcpdump, fw ctl zdebug, fw tab, ip route get, fwaccel conns, fw fetchlogs, fwm logexport. Editing the lines here only changes the display fallback shown when that logic does not apply — the actual computed behavior requires a code change, not just this data edit.</span>
+      </div>
+
+      <!-- Form order (adjusted per user request): 1) Name, 2) Short
+           description, 3) Purpose, 4) When to use, 5) Note, 6) Vendor,
+           7) System, 8) Version, 9) Environment, 10) Topic, 11) Command
+           (terminal lines) — everything else (empty-state variants, toggle,
+           Raw template, Tags, Diffs) stays below, in its previous relative
+           order, until the user decides where each one goes. -->
+      <div class="set-group">
+        <span class="set-label">Name</span><input class="set-input" id="cmdName">
+      </div>
+
+      <div class="set-group">
+        <span class="set-label">Short description</span><input class="set-input" id="cmdDesc">
+      </div>
+
+      <div class="set-group">
+        <span class="set-label">Purpose</span><textarea class="set-input" id="cmdAboutPurpose"></textarea>
+      </div>
+      <div class="set-group">
+        <span class="set-label">When to use</span><textarea class="set-input" id="cmdAboutWhen"></textarea>
+      </div>
+      <div class="set-group">
+        <span class="set-label">Note</span><textarea class="set-input" id="cmdAboutObs"></textarea>
+      </div>
+
+      <div class="set-group">
+        <span class="set-label">Vendor</span>
+        <span class="set-hint">Choose one — required (a command belongs to a single vendor; "All" is only a filter option, not a value a command can be saved with)</span>
+        <div class="dd" id="cmdVendorDD">
+          <button type="button" class="dd-btn" id="cmdVendorDDBtn" onclick="toggleDropdown('cmdVendorDD')">
+            <span class="dd-label">0</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="cmdVendorSeg">
+            <button type="button" class="seg-btn" data-val="check-point">Check Point</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <span class="set-label">Systems</span>
+        <span class="set-hint">Check one or more — required ("All" is only a filter option, not a value a command can be saved with)</span>
+        <div class="dd" id="cmdSysDD">
+          <button type="button" class="dd-btn" id="cmdSysDDBtn" onclick="toggleDropdown('cmdSysDD')">
+            <span class="dd-label">0</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="cmdSysSeg">
+            <button type="button" class="seg-btn" data-val="gaia">Gaia</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <span class="set-label">Versions</span>
+        <span class="set-hint">Check one or more — required ("All" is only a filter option, not a value a command can be saved with)</span>
+        <div class="dd" id="cmdVersionsDD">
+          <button type="button" class="dd-btn" id="cmdVersionsDDBtn" onclick="toggleDropdown('cmdVersionsDD')">
+            <span class="dd-label">0</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="cmdVersionsSeg">
+            <button type="button" class="seg-btn" data-val="R81.10">R81.10</button>
+            <button type="button" class="seg-btn" data-val="R81.20">R81.20</button>
+            <button type="button" class="seg-btn" data-val="R82">R82</button>
+            <button type="button" class="seg-btn" data-val="R82.10">R82.10</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <span class="set-label">Environments</span>
+        <span class="set-hint">Check one or more — required ("All" is only a filter option, not a value a command can be saved with)</span>
+        <div class="dd" id="cmdEnvDD">
+          <button type="button" class="dd-btn" id="cmdEnvDDBtn" onclick="toggleDropdown('cmdEnvDD')">
+            <span class="dd-label">0</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="cmdEnvSeg">
+            <button type="button" class="seg-btn" data-val="standalone">Standalone</button>
+            <button type="button" class="seg-btn" data-val="cluster">Cluster HA</button>
+            <button type="button" class="seg-btn" data-val="vsx">VSX</button>
+            <button type="button" class="seg-btn" data-val="maestro">Maestro</button>
+            <button type="button" class="seg-btn" data-val="mds">MDS / MDM</button>
+            <button type="button" class="seg-btn" data-val="gaia">Gaia (Clish)</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <span class="set-label">Topic</span>
+        <span class="set-hint">Check one or more — a command can appear under several sections</span>
+        <div class="dd" id="cmdTopicDD">
+          <button type="button" class="dd-btn" id="cmdTopicDDBtn" onclick="toggleDropdown('cmdTopicDD')">
+            <span class="dd-label">Capture</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="cmdTopicSeg">
+            <button type="button" class="seg-btn on" data-val="capture">Capture</button>
+            <button type="button" class="seg-btn" data-val="carrier">Carrier Security</button>
+            <button type="button" class="seg-btn" data-val="debug">Debug &amp; Drops</button>
+            <button type="button" class="seg-btn" data-val="dlp">DLP</button>
+            <button type="button" class="seg-btn" data-val="identity">Identity Awareness</button>
+            <button type="button" class="seg-btn" data-val="ips">IPS</button>
+            <button type="button" class="seg-btn" data-val="license">Licenses</button>
+            <button type="button" class="seg-btn" data-val="logs">Logs</button>
+            <button type="button" class="seg-btn" data-val="management">Management</button>
+            <button type="button" class="seg-btn" data-val="mobile">Mobile Access</button>
+            <button type="button" class="seg-btn" data-val="policy">Policy</button>
+            <button type="button" class="seg-btn" data-val="qos">QoS</button>
+            <button type="button" class="seg-btn" data-val="routing">Routing</button>
+            <button type="button" class="seg-btn" data-val="securexl">SecureXL</button>
+            <button type="button" class="seg-btn" data-val="status">Status</button>
+            <button type="button" class="seg-btn" data-val="system">System</button>
+            <button type="button" class="seg-btn" data-val="tables">Kernel Tables</button>
+            <button type="button" class="seg-btn" data-val="vpn">VPN</button>
+            <button type="button" class="seg-btn" data-val="environment">🏗️ Environment (specific card)</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-section-title">Command</div>
+      <span class="set-hint">Supports the tokens {{src_ip}}, {{dst_ip}}, {{src_port}}, {{dst_port}}, {{proto}}, {{iface}}, {{vsid}}, {{logFile}} — substituted at render time.</span>
+      <div class="list-editor" id="cmdLinesDefaultList"></div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="cmdEditorAddLine('cmdLinesDefaultList')">+ Add line</button>
+
+      <!-- ── Demais campos (posição a definir) ── -->
+      <div class="set-group" id="cmdEmptyDescRow" style="display:none;">
+        <span class="set-label">Description when SRC/DST are empty</span><input class="set-input" id="cmdDescEmpty">
+      </div>
+
+      <div id="cmdLinesEmptySection" style="display:none;">
+        <div class="set-section-title">Lines when SRC/DST are empty</div>
+        <div class="list-editor" id="cmdLinesEmptyList"></div>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="cmdEditorAddLine('cmdLinesEmptyList')">+ Add line</button>
+      </div>
+
+      <div class="set-group">
+        <div class="sb-toggle" id="cmdRequiresIpsToggle" onclick="cmdEditorToggleRequiresIps()">
+          <div class="tog-track"><div class="tog-knob"></div></div><span>This command changes content when SRC/DST are empty</span>
+        </div>
+      </div>
+
+      <div class="set-group" id="cmdEmptyNameRow" style="display:none;">
+        <span class="set-label">Name when SRC/DST are empty</span><input class="set-input" id="cmdNameEmpty">
+      </div>
+
+      <div class="set-group">
+        <span class="set-label">Raw template (copy button)</span>
+        <input class="set-input" id="cmdRawTemplate">
+        <span class="set-hint">Technical text copied by the copy button — not translated. Accepts the same {{...}} tokens as the lines below.</span>
+      </div>
+
+      <div class="set-section-title">Header tags</div>
+      <div class="list-editor" id="cmdTagsList"></div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="cmdEditorAddTag()">+ Add tag</button>
+
+      <div>
+        <div class="disclosure-hd" id="cmdDiffsDisclosureHd" onclick="cmdEditorToggleDiffsDisclosure()">
+          <span>▸ Differences by version (advanced)</span>
+        </div>
+        <div class="disclosure-body" id="cmdDiffsDisclosureBody">
+          <div class="list-editor" id="cmdDiffsList"></div>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="cmdEditorAddDiff()">+ Add difference</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="cmdEditorDeleteBtn" style="display:none;color:var(--red);" onclick="cmdEditorDelete()">🗑️ Delete command</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="closeCommandEditor()">Cancel</button>
+        <button class="btn btn-primary" onclick="cmdEditorSave()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CATALOG ADMIN MODALS — create/edit/delete for Versions, Environments, Topics
+     and Parameters (admin mode). One separate screen per item (per user
+     request) instead of the old single tabbed modal — each "Manage..." button
+     in the sidebar opens its own window (see openCatalogAdmin(kind) in
+     js/catalog-admin.js). ══ -->
+<div class="modal-overlay" id="catalogAdminVendorsOverlay">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <span class="modal-title">🏢 Manage Vendors</span>
+      <button class="modal-close" onclick="closeCatalogAdmin('vendors')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="cat-admin-msg" id="catAdminMsgVendors"></div>
+      <div class="cat-panel" id="catPanelVendors">
+        <div class="list-editor" id="catVendorsList"></div>
+        <div class="tag-row" id="catVendorNewRow">
+          <input class="set-input" id="catVdNewLabel" style="flex:1;" placeholder="Label">
+          <input type="color" class="cat-color-input" id="catVdNewColor" value="#8B949E">
+          <button type="button" class="btn btn-sm" onclick="catAdminAddVendor()">+ Add vendor</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div></div>
+      <button class="btn" onclick="closeCatalogAdmin('vendors')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="catalogAdminSystemsOverlay">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <span class="modal-title">💻 Manage Systems</span>
+      <button class="modal-close" onclick="closeCatalogAdmin('systems')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="cat-admin-msg" id="catAdminMsgSystems"></div>
+      <div class="cat-panel" id="catPanelSystems">
+        <div class="list-editor" id="catSysList"></div>
+        <div class="tag-row" id="catSysNewRow">
+          <select class="set-input" id="catSysNewVendor" style="max-width:150px;"></select>
+          <input class="set-input" id="catSysNewLabel" style="flex:1;" placeholder="Label">
+          <input type="color" class="cat-color-input" id="catSysNewColor" value="#8B949E">
+          <button type="button" class="btn btn-sm" onclick="catAdminAddSystem()">+ Add system</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div></div>
+      <button class="btn" onclick="closeCatalogAdmin('systems')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="catalogAdminVersionsOverlay">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <span class="modal-title">🏷️ Manage Versions</span>
+      <button class="modal-close" onclick="closeCatalogAdmin('versions')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="cat-admin-msg" id="catAdminMsgVersions"></div>
+      <div class="cat-panel" id="catPanelVersions">
+        <div class="list-editor" id="catVersionsList"></div>
+        <div class="tag-row" id="catVersionNewRow">
+          <select class="set-input" id="catVNewSystem" style="max-width:150px;"></select>
+          <input class="set-input" id="catVNewLabel" style="flex:1;" placeholder="Label">
+          <input type="color" class="cat-color-input" id="catVNewColor" value="#8B949E">
+          <button type="button" class="btn btn-sm" onclick="catAdminAddVersion()">+ Add version</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div></div>
+      <button class="btn" onclick="closeCatalogAdmin('versions')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="catalogAdminEnvironmentsOverlay">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <span class="modal-title">🌎 Manage Environments</span>
+      <button class="modal-close" onclick="closeCatalogAdmin('environments')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="cat-admin-msg" id="catAdminMsgEnvironments"></div>
+      <div class="cat-panel" id="catPanelEnvironments">
+        <div class="list-editor" id="catEnvironmentsList"></div>
+        <div class="tag-row" id="catEnvironmentNewRow">
+          <input class="set-input" id="catENewLabel" style="flex:1;" placeholder="Label">
+          <input type="color" class="cat-color-input" id="catENewColor" value="#8B949E">
+          <button type="button" class="btn btn-sm" onclick="catAdminAddEnvironment()">+ Add environment</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div></div>
+      <button class="btn" onclick="closeCatalogAdmin('environments')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="catalogAdminTopicsOverlay">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <span class="modal-title">📁 Manage Topics</span>
+      <button class="modal-close" onclick="closeCatalogAdmin('topics')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="cat-admin-msg" id="catAdminMsgTopics"></div>
+      <div class="cat-panel" id="catPanelTopics">
+        <div class="list-editor" id="catTopicsList"></div>
+        <div class="tag-row" id="catTopicNewRow">
+          <input class="set-input" id="catTNewLabel" style="flex:1;min-width:100px;" placeholder="Label">
+          <input class="set-input" id="catTNewSection" style="flex:1;min-width:140px;" placeholder="Section title">
+          <input type="color" class="cat-color-input" id="catTNewColor" value="#8B949E">
+          <button type="button" class="btn btn-sm" onclick="catAdminAddTopic()">+ Add topic</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div></div>
+      <button class="btn" onclick="closeCatalogAdmin('topics')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="catalogAdminParametersOverlay">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <span class="modal-title">🔧 Manage Parameters</span>
+      <button class="modal-close" onclick="closeCatalogAdmin('parameters')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="cat-admin-msg" id="catAdminMsgParameters"></div>
+      <div class="cat-panel" id="catPanelParameters">
+        <span class="set-hint">The key (used as {{key}} in commands) can never be changed after creation. Order sets the display position on the main commands screen.</span>
+        <div class="list-editor" id="catParametersList"></div>
+        <div class="tag-row" id="catParameterNewRow">
+          <input class="set-input" type="number" id="catPNewOrder" style="max-width:56px;" placeholder="Order">
+          <input class="set-input" id="catPNewKey" style="max-width:110px;" placeholder="Key (used as {{key}})">
+          <input class="set-input" id="catPNewLabel" style="flex:1;min-width:180px;" placeholder="Description">
+          <button type="button" class="btn btn-sm" onclick="catAdminAddParameter()">+ Add parameter</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div></div>
+      <button class="btn" onclick="closeCatalogAdmin('parameters')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CONFIRMATION MODAL (replaces native confirm() — doesn't expose the hostname, centered, theme colors) ══ -->
+<div class="modal-overlay" id="confirmOverlay">
+  <div class="modal-box modal-confirm">
+    <div class="modal-head">
+      <span class="modal-title" id="confirmTitle">Confirm action</span>
+      <button class="modal-close" onclick="closeConfirmModal(false)">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="confirm-msg" id="confirmMessage"></p>
+    </div>
+    <div class="modal-foot" style="justify-content:flex-end;">
+      <button class="btn" onclick="closeConfirmModal(false)">Cancel</button>
+      <button class="btn btn-danger" id="confirmOkBtn" onclick="closeConfirmModal(true)">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SELETOR DE COLUNAS — exibido ao clicar em "Exportar comandos", antes de gerar o
+     .csv (js/csv-export.js: openExportColumnsModal/confirmExportColumns). ══ -->
+<div class="modal-overlay" id="exportColumnsOverlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title" style="display:flex;align-items:center;gap:6px;">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 2v7.5M4.5 6.5L8 10l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Export commands</span>
+      </span>
+      <button class="modal-close" onclick="closeExportColumnsModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <span class="set-hint">Which commands do you want to export?</span>
+      <div class="seg ctb-seg" id="exportScopeSeg" style="margin-bottom:12px;">
+        <button type="button" class="seg-btn on" data-val="all" onclick="setExportScopeSeg('all')">All commands</button>
+        <button type="button" class="seg-btn" data-val="system" onclick="setExportScopeSeg('system')">System only</button>
+        <button type="button" class="seg-btn" data-val="user" onclick="setExportScopeSeg('user')">User only</button>
+      </div>
+      <span class="set-hint">Choose which columns to include in the .csv file.</span>
+      <div class="exp-col-grid" id="exportColumnsList"></div>
+    </div>
+    <div class="modal-foot">
+      <div class="cat-row-actions">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="exportColumnsSelectAll(true)">Select all</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="exportColumnsSelectAll(false)">Deselect all</button>
+      </div>
+      <button type="button" class="btn btn-primary" id="exportColumnsConfirmBtn" onclick="confirmExportColumns()" style="display:inline-flex;align-items:center;gap:5px;">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 2v7.5M4.5 6.5L8 10l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Export</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ IMPORTAR COMANDOS — botão "Import commands" na barra de ferramentas
+     (junto de "Add command"/"Export commands"). Fluxo: baixar o template
+     .csv, preencher, escolher o arquivo, revisar o resumo e confirmar (ver
+     js/csv-import.js: openImportCommandsModal/handleImportFileSelected/
+     runImportCommands). Todo comando importado é sempre criado como comando
+     do usuário atual (created_by = quem importou) — não existe mais opção de
+     importar "como System" (gesto Ctrl+Alt/Admin mode removido). ══ -->
+<div class="modal-overlay" id="importCommandsOverlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title" style="display:flex;align-items:center;gap:6px;">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 10.5V3M4.5 6.5L8 3l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Import commands</span>
+      </span>
+      <button class="modal-close" onclick="closeImportCommandsModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <span class="set-hint" id="importHint">
+        Bulk-create commands from a .csv file. Not sure how to fill it in? Download the template below —
+        it has the exact columns expected, with a filled-in example row. Vendor/System/Version/Environment/Topics
+        must match names already registered in this app (Manage → Vendors/Systems/Versions/Environments/Topics
+        in the sidebar) and each of these 5 columns requires at least one valid value — a row with none
+        recognised for any of them is rejected, not silently treated as "applies to all". Imported commands
+        are always created as your own (never as System) and can be edited/deleted normally afterwards.
+      </span>
+      <button type="button" class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="downloadImportTemplate()">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" style="margin-right:4px;vertical-align:-1px;"><path d="M8 2v7.5M4.5 6.5L8 10l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        Download template (.csv)
+      </button>
+      <div class="set-group" style="margin-top:14px;">
+        <span class="set-label">CSV file</span>
+        <input type="file" id="importCsvFile" accept=".csv,text/csv" onchange="handleImportFileSelected(this)">
+      </div>
+      <div id="importPreviewBox"></div>
+      <div id="importResultsBox"></div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" onclick="closeImportCommandsModal()">Close</button>
+      <button type="button" class="btn btn-primary" id="importConfirmBtn" onclick="runImportCommands()" disabled style="display:inline-flex;align-items:center;gap:5px;">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 10.5V3M4.5 6.5L8 3l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Import</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="ovl9x">
+  <div class="cg-mark-box">
+    <div class="cg-mark-txt" id="ovl9xTxt"></div>
+    <a class="cg-mark" href="https://cg-one.com" target="_blank" rel="noopener noreferrer"><b>CG</b><i><span></span><span></span></i><b>One</b></a>
+  </div>
+</div>
+
+<script src="js/user-sync.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/state.js"></script>
+<script src="js/catalogs.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/confirm-modal.js"></script>
+<script src="js/favorites.js"></script>
+<script src="js/settings-modal.js"></script>
+<script src="js/syntax-highlight.js"></script>
+<script src="js/terminal-renderer.js"></script>
+<script src="js/net-utils.js"></script>
+<script src="js/query-bar.js"></script>
+<script src="js/api-client.js"></script>
+<script src="js/csv-export.js"></script>
+<script src="js/csv-import.js"></script>
+<script src="js/db-render-engine.js"></script>
+<script src="js/render.js"></script>
+<script src="js/command-editor.js"></script>
+<script src="js/catalog-admin.js"></script>
+<script src="js/audit-log.js"></script>
+</body>
+</html>
