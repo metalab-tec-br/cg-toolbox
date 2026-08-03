@@ -557,8 +557,11 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
   display: flex; align-items: center; gap: 5px;
   /* font-size igual ao dos demais prefixos/linhas (.pr, .ln-image) — 12.5px,
      em vez do 10.5px anterior, para o texto da nota não ficar visualmente
-     menor que o resto do terminal. */
-  font-size: 12.5px; color: var(--muted); font-style: italic; font-family: var(--sans); margin-top: 1px;
+     menor que o resto do terminal. margin-top: 0 (era 1px) — a altura da
+     linha já vem só do line-height herdado de .term (1.9), igual às linhas
+     de comando; qualquer margin extra aqui desalinhava o espaçamento em
+     relação às demais linhas do terminal. */
+  font-size: 12.5px; color: var(--muted); font-style: italic; font-family: var(--sans); margin-top: 0;
 }
 .ln-note svg { flex-shrink: 0; }
 /* Prefixo "[Note]#" — mesmo padrão visual de .pr ("[Expert@FW]#") e
@@ -585,7 +588,11 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
      puro para sempre quebrar linha antes/depois, mesmo entre duas linhas
      de anotação seguidas (ex.: note + image, ou image + image). */
   display: flex; align-items: center; gap: 6px;
-  margin-top: 5px; cursor: pointer;
+  /* margin-top: 0 (era 5px) — mesma razão de .ln-note acima: o line-height
+     de .term (1.9) já dá o espaçamento entre linhas; manter margin aqui
+     deixava o espaço antes de uma linha de imagem maior que entre as
+     demais linhas do terminal. */
+  margin-top: 0; cursor: pointer;
 }
 .ln-image-prompt { color: var(--teal); font-weight: 700; font-style: normal; font-family: var(--mono); font-size: 12.5px; flex-shrink: 0; }
 /* Etiqueta (chip) do nome da imagem — cópia do estilo de .cpq-tag
