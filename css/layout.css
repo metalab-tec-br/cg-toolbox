@@ -104,7 +104,35 @@
 
 
 /* ─── SEARCH ─── */
-.cmd-search-wrap { padding: 10px 10px 8px; border-bottom: 1px solid var(--bdr); position: relative; }
+/* Linha do topo da sidebar: seta de ocultar (sbArrowToggle) + campo de
+   busca, lado a lado. O padding/borda que antes ficavam em .cmd-search-wrap
+   passam para cá, já que agora a seta também mora nessa faixa. */
+.sb-search-row { display: flex; align-items: center; gap: 6px; padding: 10px 10px 8px; border-bottom: 1px solid var(--bdr); }
+/* Botão de seta que oculta a sidebar (preferência 'showSidebar' — ver
+   toggleShowSidebar() em js/settings.js). Some junto com o resto da sidebar
+   quando ela é ocultada; o botão .sb-arrow-expand (fixo, fora da sidebar)
+   é quem traz ela de volta. */
+.sb-arrow-toggle {
+  width: 26px; height: 26px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--bdr); background: var(--surf2); border-radius: 6px;
+  color: var(--muted); cursor: pointer; transition: border-color .12s, color .12s;
+}
+.sb-arrow-toggle:hover { border-color: var(--teal); color: var(--teal); }
+/* Botão fixo para reabrir a sidebar quando ela está oculta — escondido por
+   padrão, só aparece com .app.sidebar-hidden (ver css/layout.css, regra da
+   sidebar acima, e applyShowSidebarSetting() em js/settings.js). Fica fora
+   de .sidebar (ver index.html, logo após </nav>) para não sumir junto com
+   ela; position: fixed não depende de onde está no fluxo do documento. */
+.sb-arrow-expand {
+  display: none; position: fixed; top: 58px; left: 8px; z-index: 60;
+  width: 26px; height: 26px; align-items: center; justify-content: center;
+  border: 1px solid var(--bdr); background: var(--surf); border-radius: 6px;
+  color: var(--muted); cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.18);
+  transition: border-color .12s, color .12s;
+}
+.sb-arrow-expand:hover { border-color: var(--teal); color: var(--teal); }
+.app.sidebar-hidden .sb-arrow-expand { display: flex; }
+.cmd-search-wrap { flex: 1; min-width: 0; position: relative; }
 .cmd-search {
   width: 100%; background: var(--surf2); border: 1px solid var(--bdr);
   border-radius: 6px; color: var(--text); font-family: var(--sans);

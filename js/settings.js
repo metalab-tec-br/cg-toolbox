@@ -227,9 +227,12 @@ function toggleModalShowImages() {
 // Mostra/oculta a barra lateral esquerda (nav.sidebar) — preferência
 // 'showSidebar', padrão true (visível). Quando desligada, aplica a classe
 // 'sidebar-hidden' em <div class="app"> (ver css/layout.css), que esconde
-// .sidebar e faz .main ocupar a largura toda. O botão de atalho no header
-// (hdrSidebarToggle, ver index.html) chama toggleShowSidebar() direto, sem
-// precisar abrir Configurações; há também um espelho em User preferences
+// .sidebar (incluindo o botão de seta sbArrowToggle, que fica na frente do
+// campo de busca — ver index.html/.sb-search-row) e faz .main ocupar a
+// largura toda. Como a seta some junto com a sidebar, um segundo botão fixo
+// (sbArrowExpand, seta apontando pro lado oposto) fica fora da sidebar e só
+// aparece via CSS quando .app.sidebar-hidden está ativa, pra poder trazer a
+// sidebar de volta. Há também um espelho em User preferences
 // (mShowSidebarToggle), mesmo padrão dos demais toggles desta seção.
 let SHOW_SIDEBAR = true;
 function applyShowSidebarSetting(show) {
@@ -238,8 +241,6 @@ function applyShowSidebarSetting(show) {
   if (app) app.classList.toggle('sidebar-hidden', !SHOW_SIDEBAR);
 }
 function syncShowSidebarToggleUI(show) {
-  const btn = document.getElementById('hdrSidebarToggle');
-  if (btn) btn.classList.toggle('on', !(show === true));
   const modal = document.getElementById('mShowSidebarToggle');
   if (modal) modal.classList.toggle('on', show === true);
 }
@@ -250,7 +251,8 @@ function setShowSidebar(show) {
   s.showSidebar = show === true;
   persistSettings(s);
 }
-// Botão de atalho no header — alterna mostrar/ocultar a sidebar.
+// Botões de seta (sbArrowToggle, dentro da sidebar; sbArrowExpand, fixo fora
+// dela) e espelho do modal — todos chamam a mesma função.
 function toggleShowSidebar() {
   setShowSidebar(!(loadSettings().showSidebar === true));
 }

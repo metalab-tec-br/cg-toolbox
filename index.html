@@ -37,16 +37,27 @@
 <!-- ══ SIDEBAR ══ -->
 <nav class="sidebar">
 
-  <div class="cmd-search-wrap">
-    <span class="cmd-search-icon" aria-hidden="true">🔍</span>
-    <input type="text" class="cmd-search" id="cmdSearch" placeholder="Search" oninput="onSearchInput()" onfocus="openCmdSearchHistoryPanel()" onblur="closeCmdSearchHistoryPanel()" autocomplete="off">
-    <button type="button" class="cmd-search-clear" id="cmdSearchClear" onclick="clearCommandSearch()" title="Clear search" style="display:none">✕</button>
-    <div class="cpq-panel" id="cmdSearchHistoryPanel">
-      <div class="cpq-history-head">
-        <span class="cpq-panel-label cpq-history-label" style="margin-bottom:0">History (last 7 days)</span>
-        <button type="button" class="cpq-history-clear" id="cmdSearchHistoryClearBtn" onmousedown="event.preventDefault()" onclick="clearCmdSearchHistory()">Clear history</button>
+  <div class="sb-search-row">
+    <!-- Atalho para ocultar a barra lateral (preferência 'showSidebar' — ver
+         toggleShowSidebar() em js/settings.js e .app.sidebar-hidden em
+         css/layout.css), no estilo seta, colado na frente do campo de busca.
+         Some junto com o resto da sidebar quando ela é ocultada; para trazer
+         de volta, ver o botão fixo .sb-arrow-expand logo após </nav>
+         (index.html), que só aparece enquanto a sidebar estiver oculta. -->
+    <button type="button" class="sb-arrow-toggle" id="sbArrowToggle" onclick="toggleShowSidebar()" title="Hide sidebar">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14 6 8 12 14 18"/></svg>
+    </button>
+    <div class="cmd-search-wrap">
+      <span class="cmd-search-icon" aria-hidden="true">🔍</span>
+      <input type="text" class="cmd-search" id="cmdSearch" placeholder="Search" oninput="onSearchInput()" onfocus="openCmdSearchHistoryPanel()" onblur="closeCmdSearchHistoryPanel()" autocomplete="off">
+      <button type="button" class="cmd-search-clear" id="cmdSearchClear" onclick="clearCommandSearch()" title="Clear search" style="display:none">✕</button>
+      <div class="cpq-panel" id="cmdSearchHistoryPanel">
+        <div class="cpq-history-head">
+          <span class="cpq-panel-label cpq-history-label" style="margin-bottom:0">History (last 7 days)</span>
+          <button type="button" class="cpq-history-clear" id="cmdSearchHistoryClearBtn" onmousedown="event.preventDefault()" onclick="clearCmdSearchHistory()">Clear history</button>
+        </div>
+        <div class="cpq-history-list" id="cmdSearchHistoryList"></div>
       </div>
-      <div class="cpq-history-list" id="cmdSearchHistoryList"></div>
     </div>
   </div>
 
@@ -192,6 +203,15 @@
   </a>
 
 </nav>
+
+<!-- Botão fixo para trazer a sidebar de volta quando ela está oculta (ver
+     .app.sidebar-hidden em css/layout.css) — escondido por padrão via CSS
+     (.sb-arrow-expand), só aparece quando .app tem a classe 'sidebar-hidden'.
+     Mesma preferência 'showSidebar' do sbArrowToggle acima (dentro da
+     sidebar) e do espelho mShowSidebarToggle em Configurações. -->
+<button type="button" class="sb-arrow-expand" id="sbArrowExpand" onclick="toggleShowSidebar()" title="Show sidebar">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="10 6 16 12 10 18"/></svg>
+</button>
 
 <!-- ══ MAIN ══ -->
 <div class="main">
