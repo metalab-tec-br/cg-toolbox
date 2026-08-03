@@ -18,7 +18,7 @@ function termRender(lines) {
       // direto). Sem imagem anexada ainda (linha criada mas nunca preenchida),
       // mostra o nome sem virar clicável.
       // Início da linha no mesmo formato das linhas de comando ("[Expert@FW]#
-      // <comando>"), mas com o prompt fixo "[Imagem]#" (ver .ln-image-prompt/
+      // <comando>"), mas com o prompt fixo "[Image]#" (ver .ln-image-prompt/
       // .pr em components.css — mesma cor/peso, só que sem o espaço reservado
       // pro botão de copiar), seguido do ícone de imagem (SVG de contorno,
       // mesmo estilo dos demais ícones do app) e do nome em seu próprio
@@ -26,9 +26,19 @@ function termRender(lines) {
       // padding à esquerda no CSS (.ln-image) para o "[" ficar alinhado com
       // o "[" das linhas de comando acima/abaixo.
       const icon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`;
-      return l.imageData
-        ? `<span class="ln-image" data-img="${l.imageData}" onclick="openImageLightbox(this)" role="button" tabindex="0" title="Click to view image"><span class="ln-image-prompt">[Imagem]#</span>${icon}<span class="ln-image-label">${label}</span></span>`
-        : `<span class="ln-image ln-image-missing" title="No image attached"><span class="ln-image-prompt">[Imagem]#</span>${icon}<span class="ln-image-label">${label}</span></span>`;
+      const badge = l.imageData
+        ? `<span class="ln-image" data-img="${l.imageData}" onclick="openImageLightbox(this)" role="button" tabindex="0" title="Click to view image"><span class="ln-image-prompt">[Image]#</span>${icon}<span class="ln-image-label">${label}</span></span>`
+        : `<span class="ln-image ln-image-missing" title="No image attached"><span class="ln-image-prompt">[Image]#</span>${icon}<span class="ln-image-label">${label}</span></span>`;
+      // Preferência 'Show images' (Settings → User preferences — ver
+      // SHOW_IMAGES/applyShowImagesSetting em js/settings.js): quando
+      // ligada, mostra a miniatura logo abaixo do badge, sem precisar
+      // clicar; data-img (mesmo atributo do badge) + onclick reaproveitam
+      // openImageLightbox() para abrir em tamanho maior também a partir da
+      // miniatura.
+      const inline = (typeof SHOW_IMAGES !== 'undefined' && SHOW_IMAGES && l.imageData)
+        ? `<img class="ln-image-inline" src="${l.imageData}" data-img="${l.imageData}" alt="${label}" onclick="openImageLightbox(this)" title="Click to view full size">`
+        : '';
+      return badge + inline;
     }
     const prompt = l.p || '[Expert@FW]#';
     // l.c pode conter os marcadores de variável (VAR_OPEN/VAR_CLOSE — ver

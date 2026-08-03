@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS = {
   showCardDetails: false,
   enableCommandEditing: false,
   exportEnabled: false,
+  showImages: false,
   groupBy: 'topic',
   // Só usado quando o usuário AINDA não tem preferência própria salva — nesse
   // caso o valor real vem do default do administrador (ver
@@ -182,6 +183,32 @@ function toggleModalExport() {
   setExportEnabled(!(loadSettings().exportEnabled === true));
 }
 
+// Mostra/oculta a miniatura das linhas do tipo 'image' direto no card (ver
+// .ln-image-inline em components.css e a renderização condicional em
+// termRender(), js/terminal-renderer.js), conforme a preferência
+// 'showImages'. Só existe em Settings → User preferences (sem espelho na
+// sidebar) — quando desligada (padrão), a imagem só aparece ao clicar no
+// badge "[Image]# ...", como já era antes desta preferência existir.
+let SHOW_IMAGES = false;
+function applyShowImagesSetting(show) {
+  SHOW_IMAGES = show === true;
+  if (typeof render === 'function') render();
+}
+function syncShowImagesToggleUI(show) {
+  const modal = document.getElementById('mShowImagesToggle');
+  if (modal) modal.classList.toggle('on', show === true);
+}
+function setShowImages(show) {
+  applyShowImagesSetting(show);
+  syncShowImagesToggleUI(show);
+  const s = loadSettings();
+  s.showImages = show === true;
+  persistSettings(s);
+}
+function toggleModalShowImages() {
+  setShowImages(!(loadSettings().showImages === true));
+}
+
 // ── Default do administrador para "System commands" (Settings modal, seção
 // Admin mode — ver GET/PUT /api/global-settings em server/index.js) ─────────
 // Só é aplicado a um usuário que AINDA não tem preferência própria salva
@@ -298,6 +325,8 @@ function applyDefaultsFromSettings() {
   syncShowSystemCommandsToggleUI(s.showSystemCommands !== false);
   applyExportSetting(s.exportEnabled === true);
   syncExportToggleUI(s.exportEnabled === true);
+  applyShowImagesSetting(s.showImages === true);
+  syncShowImagesToggleUI(s.showImages === true);
   // Admin mode removido — incluir/duplicar/editar comandos, catálogos e
   // import/export ficam sempre disponíveis, independente de qualquer
   // preferência salva (ver DEFAULT_SETTINGS acima e Configurações → System).

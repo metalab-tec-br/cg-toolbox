@@ -19,13 +19,6 @@
 [data-theme="light"] .hdr-logo-img.for-dark { display: none; }
 [data-theme="light"] .hdr-logo-img.for-light { display: block; }
 .hdr-gap { flex: 1; }
-.hdr-pill {
-  background: var(--surf2); border: 1px solid var(--bdr); border-radius: 20px;
-  padding: 3px 11px; font-family: var(--mono); font-size: 10px; color: var(--teal);
-  display: flex; align-items: center; gap: 6px;
-}
-.hdr-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--teal); animation: blink 2s ease-in-out infinite; }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
 /* Usuário identificado (login do Windows, via NTLM no servidor) — mostrado à
    esquerda do botão de Configurações. Vazio (sem preencher) até /api/me responder;
    fica oculto nesse meio-tempo para não mostrar um espaço vazio piscando. */

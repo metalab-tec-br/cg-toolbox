@@ -99,22 +99,13 @@ async function render() {
     combosTruncatedNote = `<div class="env-note" style="border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.06);color:var(--yellow);">⚠️ <span>Too many Version × Environment combinations checked — showing the first ${MAX_COMBOS}. Narrow the selection to see the rest.</span></div>`;
   }
 
-  // Rótulos de Ambiente/Tópico vêm do catálogo administrável (js/catalogs.js),
-  // não mais de mapas fixos aqui — assim um ambiente/tópico novo cadastrado no
-  // modo administrador aparece corretamente em qualquer lugar sem editar este arquivo.
+  // Rótulo de Ambiente vem do catálogo administrável (js/catalogs.js), não
+  // mais de mapas fixos aqui — assim um ambiente novo cadastrado aparece
+  // corretamente em qualquer lugar sem editar este arquivo.
   function envLabel(key) {
     const env = (CATALOGS.environments || []).find(x => x.key === key);
     return env ? env.label : key;
   }
-  function topicFullName(key) {
-    const tp = (CATALOGS.topics || []).find(x => x.key === key);
-    return tp ? tp.label : key;
-  }
-  const typeLabel = topicSel.length === 0 ? 'All' : topicSel.length === 1 ? topicFullName(topicSel[0]) : `${topicSel.length} types`;
-  const vBadgeLabel = versionSel.isAllMode ? 'All' : versionSel.values.length === 0 ? 'None' : versionSel.values.length === 1 ? versionSel.values[0] : `${versionSel.values.length} versions`;
-  const eBadgeLabel = envSel.isAllMode ? 'All' : envSel.values.length === 0 ? 'None' : envSel.values.length === 1 ? envLabel(envSel.values[0]) : `${envSel.values.length} environments`;
-  document.getElementById('hBadge').textContent = `${vBadgeLabel} · ${eBadgeLabel} · ${typeLabel}`;
-
   const show = tp => VIEW_FAVORITES || topicSel.length === 0 || topicSel.includes(tp);
 
   const envNotesText = {

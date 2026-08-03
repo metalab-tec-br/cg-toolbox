@@ -554,12 +554,12 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
    command_lines.image_data (schema.sql) e openImageLightbox()
    (terminal-renderer.js). Clicável/focável, abre a imagem em tamanho maior.
    Área colorida = 30% da largura do terminal (não a linha inteira); sem
-   padding à esquerda para o "[" de "[Imagem]#" ficar exatamente alinhado
+   padding à esquerda para o "[" de "[Image]#" ficar exatamente alinhado
    com o "[" de "[Expert@FW]#" das linhas de comando acima/abaixo (mesmo
    início de linha). Altura bem enxuta (padding vertical quase zero +
    line-height apertado) e letras do mesmo tamanho dos comandos (font-size =
    .term, sem mudar). Início da linha no mesmo formato de uma linha de
-   comando — "[Imagem]# <ícone> <nome>" — com o prompt na mesma cor/peso de
+   comando — "[Image]# <ícone> <nome>" — com o prompt na mesma cor/peso de
    .pr (ver termRender() tipo 'image' em terminal-renderer.js); só o prompt
    fica na cor de destaque, o ícone e o nome usam a cor normal de texto,
    igual ao restante do terminal. O rótulo trunca com "…" se não couber. */
@@ -575,6 +575,16 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .ln-image-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; text-align: left; }
 .ln-image:hover, .ln-image:focus { border-color: var(--teal); outline: none; }
 .ln-image.ln-image-missing { color: var(--muted); background: var(--surf2); cursor: default; }
+/* Miniatura exibida automaticamente logo abaixo do badge quando a
+   preferência 'Show images' (Settings → User preferences) está ligada — ver
+   SHOW_IMAGES em js/settings.js e a renderização condicional em
+   termRender() tipo 'image' (terminal-renderer.js). Clicável, abre o mesmo
+   lightbox do badge (openImageLightbox() lê o atributo data-img). */
+.ln-image-inline {
+  display: block; max-width: min(480px, 100%); max-height: 220px; object-fit: contain;
+  border: 1px solid var(--bdr); border-radius: 6px; background: var(--surf2);
+  margin: 4px 0 2px; cursor: zoom-in;
+}
 .ln-image.ln-image-missing .ln-image-prompt { color: var(--muted); }
 
 

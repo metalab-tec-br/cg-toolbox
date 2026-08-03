@@ -171,10 +171,12 @@ function restoreDefaultsModal() {
   if (typeof ccRefreshCascade === 'function') ccRefreshCascade();
   gvSet('mLogFile', DEFAULT_SETTINGS.logFile);
   setShowCardDetails(DEFAULT_SETTINGS.showCardDetails);
-  // "Default settings" (Dark mode/Details/Export/System commands) voltam
-  // todos para desabilitado — Details já estava aqui, Export e System
-  // commands faltavam (bug pré-existente: o botão não os restaurava).
+  // "Default settings" (Dark mode/Details/Export/Show images/System
+  // commands) voltam todos para desabilitado — Details já estava aqui,
+  // Export e System commands faltavam (bug pré-existente: o botão não os
+  // restaurava).
   setExportEnabled(DEFAULT_SETTINGS.exportEnabled);
+  setShowImages(DEFAULT_SETTINGS.showImages);
   setShowSystemCommands(DEFAULT_SETTINGS.showSystemCommands);
   setGroupBy(DEFAULT_SETTINGS.groupBy);
   applyTheme('light');
