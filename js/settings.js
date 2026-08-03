@@ -186,15 +186,20 @@ function toggleModalExport() {
 // Mostra/oculta a miniatura das linhas do tipo 'image' direto no card (ver
 // .ln-image-inline em components.css e a renderização condicional em
 // termRender(), js/terminal-renderer.js), conforme a preferência
-// 'showImages'. Só existe em Settings → User preferences (sem espelho na
-// sidebar) — quando desligada (padrão), a imagem só aparece ao clicar no
-// badge "[Image]# ...", como já era antes desta preferência existir.
+// 'showImages' — quando desligada (padrão), a imagem só aparece ao clicar
+// no badge "[Image]# ...", como já era antes desta preferência existir.
 let SHOW_IMAGES = false;
 function applyShowImagesSetting(show) {
   SHOW_IMAGES = show === true;
   if (typeof render === 'function') render();
 }
+// Reflete o estado atual no toggle da sidebar (tog-show-images, seção
+// Options) E no espelho do modal de Configurações (mShowImagesToggle) —
+// mesmo padrão de syncShowDetailsToggleUI/syncExportToggleUI/
+// syncShowSystemCommandsToggleUI acima.
 function syncShowImagesToggleUI(show) {
+  const side = document.getElementById('tog-show-images');
+  if (side) side.classList.toggle('on', show === true);
   const modal = document.getElementById('mShowImagesToggle');
   if (modal) modal.classList.toggle('on', show === true);
 }
@@ -205,6 +210,15 @@ function setShowImages(show) {
   s.showImages = show === true;
   persistSettings(s);
 }
+// Toggle da sidebar (Options) — mesma preferência do espelho no modal
+// (toggleModalShowImages), commit instantâneo igual aos demais toggles
+// desta seção (toggleShowCardDetails/toggleExportEnabled/
+// toggleShowSystemCommands).
+function toggleShowImages() {
+  setShowImages(!(loadSettings().showImages === true));
+}
+// Toggle compacto (Show images) do modal de Configurações — mesma
+// preferência pessoal do toggle "Show images" da sidebar (tog-show-images).
 function toggleModalShowImages() {
   setShowImages(!(loadSettings().showImages === true));
 }
