@@ -546,14 +546,21 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .k-var  { color: var(--teal);   font-weight: 600; }  /* resolved {{token}} value, or its <Label> hint */
 .k-env  { color: var(--green); }                      /* $VAR */
 
-.ln-note { display: block; font-size: 10.5px; color: var(--muted); font-style: italic; font-family: var(--sans); margin-top: 1px; }
+/* Layout igual ao badge de imagem (.ln-image: prompt + ícone + texto em
+   flex row), mas sem fundo/pill — a nota continua "solta" no terminal,
+   sem sombra/cor de fundo, só com o prefixo colorido e o ícone. */
+.ln-note {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10.5px; color: var(--muted); font-style: italic; font-family: var(--sans); margin-top: 1px;
+}
+.ln-note svg { flex-shrink: 0; }
 /* Prefixo "[Note]#" — mesmo padrão visual de .pr ("[Expert@FW]#") e
    .ln-image-prompt ("[Image]#"): cor de destaque, negrito, sem itálico (a
    nota em si continua itálica/muted, herdado de .ln-note acima). font-size
    e font-family também iguais aos outros dois prefixos (12.5px, monospace)
    — sem isso o prefixo herdava o tamanho/fonte da nota (10.5px, sans-serif),
    que rendia visualmente maior/desalinhado por causa da fonte diferente. */
-.ln-note-prompt { color: var(--teal); font-weight: 700; font-style: normal; font-size: 12.5px; font-family: var(--mono); }
+.ln-note-prompt { color: var(--teal); font-weight: 700; font-style: normal; font-size: 12.5px; font-family: var(--mono); flex-shrink: 0; }
 .ln-warn { display: block; font-size: 11px; font-family: var(--sans); color: var(--orange); background: var(--orange-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; font-weight: 600; }
 .ln-info { display: block; font-size: 11px; font-family: var(--sans); color: var(--blue); background: var(--blue-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; }
 .ln-ok   { display: block; font-size: 11px; font-family: var(--sans); color: var(--green); background: var(--green-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; font-weight: 600; }

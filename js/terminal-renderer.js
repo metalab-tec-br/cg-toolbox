@@ -8,11 +8,16 @@ function termRender(lines) {
   const rows = lines.map(l => {
     if (!l) return '';
     // Prefixo "[Note]#" no mesmo padrão de "[Expert@FW]#" (comando) e
-    // "[Image]#" (imagem) — ver .ln-note-prompt em components.css. Substitui
-    // o antigo marcador solto "# " (sem o resto do padrão de prompt); o
-    // texto da nota em si mantém o tamanho/estilo (itálico, cor muted) já
-    // existentes em .ln-note.
-    if (l.type === 'note') return `<span class="ln-note"><span class="ln-note-prompt">[Note]#</span> ${l.c}</span>`;
+    // "[Image]#" (imagem) — ver .ln-note-prompt em components.css. Ícone de
+    // nota (SVG de contorno) entre o prefixo e o texto, mesmo layout do
+    // badge de imagem (prompt + ícone + texto), mas SEM o fundo colorido
+    // (.ln-image tem background: var(--teal-bg); .ln-note continua sem
+    // fundo) — o texto da nota mantém o tamanho/estilo (itálico, cor muted)
+    // já existentes em .ln-note.
+    if (l.type === 'note') {
+      const noteIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M8 13h8M8 17h5"/></svg>`;
+      return `<span class="ln-note"><span class="ln-note-prompt">[Note]#</span>${noteIcon}<span class="ln-note-text">${l.c}</span></span>`;
+    }
     if (l.type === 'warn') return `<span class="ln-warn">⚠ ${l.c}</span>`;
     if (l.type === 'info') return `<span class="ln-info">ℹ ${l.c}</span>`;
     if (l.type === 'ok')   return `<span class="ln-ok">✔ ${l.c}</span>`;
