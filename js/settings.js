@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
   enableCommandEditing: false,
   exportEnabled: false,
   showImages: false,
+  showSidebar: true,
   groupBy: 'topic',
   // Só usado quando o usuário AINDA não tem preferência própria salva — nesse
   // caso o valor real vem do default do administrador (ver
@@ -223,6 +224,41 @@ function toggleModalShowImages() {
   setShowImages(!(loadSettings().showImages === true));
 }
 
+// Mostra/oculta a barra lateral esquerda (nav.sidebar) — preferência
+// 'showSidebar', padrão true (visível). Quando desligada, aplica a classe
+// 'sidebar-hidden' em <div class="app"> (ver css/layout.css), que esconde
+// .sidebar e faz .main ocupar a largura toda. O botão de atalho no header
+// (hdrSidebarToggle, ver index.html) chama toggleShowSidebar() direto, sem
+// precisar abrir Configurações; há também um espelho em User preferences
+// (mShowSidebarToggle), mesmo padrão dos demais toggles desta seção.
+let SHOW_SIDEBAR = true;
+function applyShowSidebarSetting(show) {
+  SHOW_SIDEBAR = show === true;
+  const app = document.querySelector('.app');
+  if (app) app.classList.toggle('sidebar-hidden', !SHOW_SIDEBAR);
+}
+function syncShowSidebarToggleUI(show) {
+  const btn = document.getElementById('hdrSidebarToggle');
+  if (btn) btn.classList.toggle('on', !(show === true));
+  const modal = document.getElementById('mShowSidebarToggle');
+  if (modal) modal.classList.toggle('on', show === true);
+}
+function setShowSidebar(show) {
+  applyShowSidebarSetting(show);
+  syncShowSidebarToggleUI(show);
+  const s = loadSettings();
+  s.showSidebar = show === true;
+  persistSettings(s);
+}
+// Botão de atalho no header — alterna mostrar/ocultar a sidebar.
+function toggleShowSidebar() {
+  setShowSidebar(!(loadSettings().showSidebar === true));
+}
+// Toggle espelho (Show sidebar) do modal de Configurações → User preferences.
+function toggleModalShowSidebar() {
+  setShowSidebar(!(loadSettings().showSidebar === true));
+}
+
 // ── Default do administrador para "System commands" (Settings modal, seção
 // Admin mode — ver GET/PUT /api/global-settings em server/index.js) ─────────
 // Só é aplicado a um usuário que AINDA não tem preferência própria salva
@@ -341,6 +377,8 @@ function applyDefaultsFromSettings() {
   syncExportToggleUI(s.exportEnabled === true);
   applyShowImagesSetting(s.showImages === true);
   syncShowImagesToggleUI(s.showImages === true);
+  applyShowSidebarSetting(s.showSidebar !== false);
+  syncShowSidebarToggleUI(s.showSidebar !== false);
   // Admin mode removido — incluir/duplicar/editar comandos, catálogos e
   // import/export ficam sempre disponíveis, independente de qualquer
   // preferência salva (ver DEFAULT_SETTINGS acima e Configurações → System).

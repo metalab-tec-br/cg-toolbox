@@ -177,6 +177,7 @@ function restoreDefaultsModal() {
   // restaurava).
   setExportEnabled(DEFAULT_SETTINGS.exportEnabled);
   setShowImages(DEFAULT_SETTINGS.showImages);
+  setShowSidebar(DEFAULT_SETTINGS.showSidebar);
   setShowSystemCommands(DEFAULT_SETTINGS.showSystemCommands);
   setGroupBy(DEFAULT_SETTINGS.groupBy);
   applyTheme('light');

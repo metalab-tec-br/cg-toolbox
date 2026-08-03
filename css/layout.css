@@ -23,11 +23,11 @@
    esquerda do botão de Configurações. Vazio (sem preencher) até /api/me responder;
    fica oculto nesse meio-tempo para não mostrar um espaço vazio piscando. */
 .hdr-user {
-  display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted);
+  display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted);
   font-family: var(--sans); max-width: 160px;
 }
 .hdr-user:empty, .hdr-user:has(#currentUserLabel:empty) { display: none; }
-.hdr-user-ico { font-size: 12px; opacity: .7; }
+.hdr-user-ico { font-size: 14px; opacity: .7; }
 #currentUserLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .theme-toggle {
   background: var(--surf2); border: 1px solid var(--bdr); border-radius: 6px;
@@ -40,6 +40,11 @@
 
 /* ─── LAYOUT ─── */
 .app { display: flex; flex: 1; overflow: hidden; }
+/* Preferência 'showSidebar' (ver toggleShowSidebar()/applyShowSidebarSetting()
+   em js/settings.js) — quando desligada, .app ganha esta classe e a sidebar
+   some; .main (flex: 1) ocupa a largura toda sozinho, sem precisar mexer em
+   mais nada no layout. */
+.app.sidebar-hidden .sidebar { display: none; }
 
 
 /* ─── SIDEBAR ─── */
