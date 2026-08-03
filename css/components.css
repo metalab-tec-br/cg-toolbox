@@ -555,15 +555,17 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
      (ex.: note logo antes de image) colam lado a lado na mesma linha, já
      que nenhuma delas é mais um bloco puro que force a quebra sozinha. */
   display: flex; align-items: center; gap: 5px;
-  font-size: 10.5px; color: var(--muted); font-style: italic; font-family: var(--sans); margin-top: 1px;
+  /* font-size igual ao dos demais prefixos/linhas (.pr, .ln-image) — 12.5px,
+     em vez do 10.5px anterior, para o texto da nota não ficar visualmente
+     menor que o resto do terminal. */
+  font-size: 12.5px; color: var(--muted); font-style: italic; font-family: var(--sans); margin-top: 1px;
 }
 .ln-note svg { flex-shrink: 0; }
 /* Prefixo "[Note]#" — mesmo padrão visual de .pr ("[Expert@FW]#") e
    .ln-image-prompt ("[Image]#"): cor de destaque, negrito, sem itálico (a
-   nota em si continua itálica/muted, herdado de .ln-note acima). font-size
-   e font-family também iguais aos outros dois prefixos (12.5px, monospace)
-   — sem isso o prefixo herdava o tamanho/fonte da nota (10.5px, sans-serif),
-   que rendia visualmente maior/desalinhado por causa da fonte diferente. */
+   nota em si continua itálica/muted, herdado de .ln-note acima). font-family
+   monospace igual aos outros dois prefixos — sem isso o prefixo herdava a
+   fonte da nota (sans-serif), que rendia visualmente desalinhado. */
 .ln-note-prompt { color: var(--teal); font-weight: 700; font-style: normal; font-size: 12.5px; font-family: var(--mono); flex-shrink: 0; }
 .ln-warn { display: block; font-size: 11px; font-family: var(--sans); color: var(--orange); background: var(--orange-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; font-weight: 600; }
 .ln-info { display: block; font-size: 11px; font-family: var(--sans); color: var(--blue); background: var(--blue-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; }
@@ -588,12 +590,15 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
      continua limitando a caixa a 30%, independente de display ser flex ou
      inline-flex. */
   display: flex; align-items: center; justify-content: flex-start; gap: 5px;
-  font-size: 12.5px; font-family: var(--mono); line-height: 1.2;
-  color: var(--text); background: var(--teal-bg); border: 1px solid transparent; border-radius: 4px;
+  /* Estilo do texto (itálico, cor muted, sans-serif) igual ao de .ln-note —
+     só o prefixo "[Image]#" continua em destaque/mono/normal, via
+     .ln-image-prompt logo abaixo, igual ao par .ln-note/.ln-note-prompt. */
+  font-size: 12.5px; font-family: var(--sans); font-style: italic; line-height: 1.2;
+  color: var(--muted); background: var(--teal-bg); border: 1px solid transparent; border-radius: 4px;
   width: 30%; min-width: 130px; max-width: 100%; box-sizing: border-box;
   padding: 1px 9px 1px 0; margin-top: 5px; cursor: pointer; transition: border-color .12s;
 }
-.ln-image-prompt { color: var(--teal); font-weight: 700; flex-shrink: 0; }
+.ln-image-prompt { color: var(--teal); font-weight: 700; font-style: normal; font-family: var(--mono); flex-shrink: 0; }
 .ln-image svg { flex-shrink: 0; }
 .ln-image-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; text-align: left; }
 .ln-image:hover, .ln-image:focus { border-color: var(--teal); outline: none; }
