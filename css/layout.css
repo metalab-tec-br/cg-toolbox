@@ -114,10 +114,10 @@
   font-size: 9px; font-weight: 800; letter-spacing: 1.1px; text-transform: uppercase;
   color: var(--dim); margin-bottom: 6px; padding-left: 6px;
 }
-/* Ícone de seção (Vendor/System/Version/Environment/Topic/Options), visível
-   só na barra colapsada — ver .sb-head-icon mais abaixo. Escondido por
-   padrão (sidebar fixa/expandida, onde só o texto .sb-head-txt aparece,
-   igual sempre foi). */
+/* Ícone de seção (Vendor/System/Version/Environment/Topic/Options) — não é
+   mais exibido em nenhum estado: na barra colapsada o bloco inteiro
+   (.sb-block-filter) some, e na sidebar fixa/expandida só o texto
+   .sb-head-txt aparece, como sempre foi. Mantido escondido por padrão. */
 .sb-head-icon { display: none; flex-shrink: 0; color: var(--dim); }
 /* Botões "Gerenciar ..." (sem ícone) — alinhados à esquerda, com o mesmo
    recuo inicial do rótulo .sb-head acima deles, em vez de centralizados.
@@ -191,7 +191,9 @@
    (flyout aberto, ver .sidebar-inner acima), nenhuma dessas regras mais
    bate no seletor, e o conteúdo volta sozinho ao layout normal (mesmas
    regras "sem prefixo" de sempre) — sem precisar de um bloco de "reverter"
-   escrito à parte. */
+   escrito à parte. Colapsada mostra só a lupa de busca e o ícone de
+   Favoritos; Vendor/System/Version/Environment/Topic/Clear filters/Options
+   (marcados com .sb-block-filter no HTML) somem por inteiro. */
 .app.sidebar-collapsed .sidebar:not(:hover) .sb-block { padding-left: 4px; padding-right: 4px; }
 /* Busca: unicamente o ícone, centralizado; campo/limpar/histórico somem. */
 .app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap {
@@ -205,27 +207,13 @@
    colapsada, senão poderiam aparecer por cima da barra estreita. */
 .app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cmd-search-clear { display: none !important; }
 .app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cpq-panel { display: none !important; }
-/* Favoritos: só o ícone da estrela, centralizado. */
+/* Favoritos: só o ícone da estrela, centralizado — o único item de
+   navegação que continua visível na barra colapsada. */
 .app.sidebar-collapsed .sidebar:not(:hover) #favNavRow { justify-content: center; padding: 6px 4px; }
 .app.sidebar-collapsed .sidebar:not(:hover) #favNavRow > span { display: none; }
-/* Cabeçalhos de seção (Vendor/System/Version/Environment/Topic/Options):
-   escondem o texto (.sb-head-txt) e mostram só o ícone (.sb-head-icon),
-   centralizado; o dropdown/lista inteiro de cada filtro some (só reaparece
-   no hover-flyout). */
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-head {
-  display: flex; align-items: center; justify-content: center; padding-left: 0; margin-bottom: 0;
-}
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-head-icon { display: flex; }
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-head-txt { display: none; }
-.app.sidebar-collapsed .sidebar:not(:hover) .dd { display: none; }
-/* Botão "Clear filters" some inteiro (ver .sb-block-clearfilters no HTML). */
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-clearfilters { display: none; }
-/* Toggles de Options: só o switch, centralizado; rótulo de texto some. O
-   campo de caminho do Export (.sb-file-wrap.show) também some — !important
-   pra vencer a classe .show, que tem a mesma prioridade "normal". */
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-toggle { justify-content: center; gap: 0; padding: 7px 4px; }
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-toggle > span { display: none; }
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-file-wrap.show { display: none !important; }
+/* Vendor/System/Version/Environment/Topic/Clear filters/Options somem por
+   inteiro (não só o texto) — só reaparecem no hover-flyout. */
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter { display: none; }
 /* Rodapé "Developed by CG One" some inteiro. */
 .app.sidebar-collapsed .sidebar:not(:hover) .sb-credit { display: none; }
 
