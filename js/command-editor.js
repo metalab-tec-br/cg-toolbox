@@ -16,6 +16,95 @@ let CMD_EDITOR_MODE = 'create'; // 'create' | 'edit'
 let CMD_EDITOR_ORIGINAL_ID = null;
 let CMD_EDITOR_RESOLVER = null; // placeholder_resolver of the row being edited (preserved as-is, never set by this UI)
 
+// ════════════════════════════════════════════════
+// WIZARD — 4 steps: 1) Identification, 2) Scope (Vendor/System/Version/
+// Environment/Topic), 3) Command lines, 4) Advanced (empty-state variant,
+// raw template, tags, diffs). Navigation is linear-with-validation: "Next"
+// only advances (and unlocks the step indicator button) once the CURRENT
+// step's required fields are filled; "Back" and clicking an already-unlocked
+// step in the indicator are always free. In edit/duplicate mode every step
+// starts unlocked (the command already has valid data everywhere), so you
+// can jump straight to whatever section needs a change instead of having to
+// re-walk the whole wizard — see openCommandEditor() below.
+// ════════════════════════════════════════════════
+const CMD_WIZ_TOTAL_STEPS = 4;
+let CMD_WIZ_STEP = 1;
+let CMD_WIZ_MAX_STEP = 1; // furthest step unlocked so far (indicator buttons beyond this are disabled)
+
+// Per-step blocking validation — mirrors (a subset of) the final check in
+// cmdEditorSave(), just split by which step each field lives in, so the user
+// can be told exactly what's missing without leaving the step it belongs to.
+function _ceValidateStep(step) {
+  if (step === 1) {
+    if (!_ce('cmdName').value.trim()) return 'Fill in the command Name before continuing.';
+    return null;
+  }
+  if (step === 2) {
+    const vendors = _ceGetMultiSeg('cmdVendorSeg');
+    const systems = _ceGetMultiSeg('cmdSysSeg');
+    const versions = _ceGetMultiSeg('cmdVersionsSeg');
+    const environments = _ceGetMultiSeg('cmdEnvSeg');
+    const topics = _ceGetMultiSeg('cmdTopicSeg');
+    if (!vendors.length || !systems.length || !versions.length || !environments.length || !topics.length) {
+      return 'Check at least one option in Vendor, Systems, Versions, Environments and Topic before continuing.';
+    }
+    return null;
+  }
+  return null; // steps 3 (lines) and 4 (advanced) have no blocking requirement today
+}
+
+function _ceRenderWizardState() {
+  document.querySelectorAll('.wiz-panel').forEach(p => {
+    p.style.display = (Number(p.dataset.step) === CMD_WIZ_STEP) ? '' : 'none';
+  });
+  document.querySelectorAll('.wiz-step').forEach(b => {
+    const s = Number(b.dataset.step);
+    b.classList.toggle('on', s === CMD_WIZ_STEP);
+    b.classList.toggle('done', s !== CMD_WIZ_STEP && s <= CMD_WIZ_MAX_STEP);
+    b.disabled = s > CMD_WIZ_MAX_STEP;
+  });
+  _ce('cmdWizBackBtn').style.display = CMD_WIZ_STEP > 1 ? '' : 'none';
+  _ce('cmdWizNextBtn').style.display = CMD_WIZ_STEP < CMD_WIZ_TOTAL_STEPS ? '' : 'none';
+  _ce('cmdWizSaveBtn').style.display = CMD_WIZ_STEP === CMD_WIZ_TOTAL_STEPS ? '' : 'none';
+}
+
+// Jump to an already-unlocked step (indicator click) — no-op if the target
+// step hasn't been unlocked yet (can't skip ahead of validation).
+function cmdWizGoTo(step) {
+  if (step === CMD_WIZ_STEP || step > CMD_WIZ_MAX_STEP) return;
+  CMD_WIZ_STEP = step;
+  _ceHideError();
+  _ceRenderWizardState();
+}
+function cmdWizNext() {
+  const err = _ceValidateStep(CMD_WIZ_STEP);
+  if (err) { _ceShowError(err); return; }
+  _ceHideError();
+  if (CMD_WIZ_STEP < CMD_WIZ_TOTAL_STEPS) CMD_WIZ_STEP += 1;
+  if (CMD_WIZ_STEP > CMD_WIZ_MAX_STEP) CMD_WIZ_MAX_STEP = CMD_WIZ_STEP;
+  _ceRenderWizardState();
+}
+function cmdWizBack() {
+  if (CMD_WIZ_STEP > 1) CMD_WIZ_STEP -= 1;
+  _ceHideError();
+  _ceRenderWizardState();
+}
+// Authoritative jump used by cmdEditorSave()'s final validation — unlike
+// cmdWizGoTo, this always navigates (and unlocks as needed), so a save-time
+// error can surface on whichever step actually has the problem even if the
+// user reached the last step by other means (e.g. edit mode starts fully
+// unlocked, so Next's per-step gate can be bypassed there).
+function _ceForceGoToStep(step) {
+  CMD_WIZ_STEP = step;
+  if (step > CMD_WIZ_MAX_STEP) CMD_WIZ_MAX_STEP = step;
+  _ceRenderWizardState();
+}
+function _ceResetWizard() {
+  CMD_WIZ_STEP = 1;
+  CMD_WIZ_MAX_STEP = 1;
+  _ceRenderWizardState();
+}
+
 function _ce(id) { return document.getElementById(id); }
 function _ceEscAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function _ceEscHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -407,6 +496,7 @@ function _ceResetForm() {
   _ce('cmdEditorResolverWarning').classList.remove('show');
   _ce('cmdEditorDeleteBtn').style.display = 'none';
   cmdEditorAddLine('cmdLinesDefaultList'); // one blank starter line, convenience only
+  _ceResetWizard(); // back to step 1, locked (create/duplicate walk the wizard step by step)
 }
 
 async function _cePopulateForm(id) {
@@ -488,6 +578,14 @@ async function openCommandEditor(mode, id, ev) {
     // (inclusive os de referência created_by='System') — ver terminal-
     // renderer.js (botão "Edit" agora sempre visível) e server/index.js (PUT
     // /api/commands/:id não bloqueia mais por created_by).
+
+    // Edit/duplicate start with EVERY wizard step unlocked — the command
+    // being loaded already has valid data in every step, so forcing the
+    // user to click "Next" through steps they don't need to touch would
+    // just be friction. The wizard's step-by-step gating is really about
+    // guiding someone through filling in a NEW command (mode === 'create').
+    CMD_WIZ_MAX_STEP = CMD_WIZ_TOTAL_STEPS;
+    _ceRenderWizardState();
   }
 
   if (isDuplicate) {
@@ -527,8 +625,19 @@ async function cmdEditorSave() {
   const topics = _ceGetMultiSeg('cmdTopicSeg'); // a command can have more than one Topic
   const name = _ce('cmdName').value.trim();
 
-  if (!vendors.length || !systems.length || !versions.length || !environments.length || !topics.length || !name) {
-    _ceShowError('Fill in the required fields: Vendor, System, Version, Environment, Topic, Name — each list needs at least one option checked ("All" is only a filter, not a value a command can be saved with).');
+  // Split by wizard step (Name lives in step 1, the 5 catalog lists in step
+  // 2) so a failure here — which can still happen in edit mode, where every
+  // step starts unlocked and this final check is the only remaining safety
+  // net — sends the user straight to the step that actually needs fixing,
+  // instead of just showing an error on whatever step they happen to be on.
+  if (!name) {
+    _ceForceGoToStep(1);
+    _ceShowError('Fill in the required field: Name.');
+    return;
+  }
+  if (!vendors.length || !systems.length || !versions.length || !environments.length || !topics.length) {
+    _ceForceGoToStep(2);
+    _ceShowError('Fill in the required fields: Vendor, System, Version, Environment, Topic — each list needs at least one option checked ("All" is only a filter, not a value a command can be saved with).');
     return;
   }
 
@@ -641,3 +750,4 @@ document.getElementById('cmdEditorOverlay').addEventListener('click', ev => {
 document.addEventListener('keydown', ev => {
   if (ev.key === 'Escape') closeCommandEditor();
 });
+_ceRenderWizardState(); // initial paint (step 1 visible, rest hidden) even before the modal is first opened

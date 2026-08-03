@@ -522,164 +522,194 @@
         <span>⚠️</span><span>⚠️ This command uses advanced code-driven logic (net-utils.js) to expand IP lists/ranges/CIDR — e.g. fw monitor, tcpdump, fw ctl zdebug, fw tab, ip route get, fwaccel conns, fw fetchlogs, fwm logexport. Editing the lines here only changes the display fallback shown when that logic does not apply — the actual computed behavior requires a code change, not just this data edit.</span>
       </div>
 
-      <!-- Form order (adjusted per user request): 1) Name, 2) Short
-           description, 3) Purpose, 4) When to use, 5) Note, 6) Vendor,
-           7) System, 8) Version, 9) Environment, 10) Topic, 11) Command
-           (terminal lines) — everything else (empty-state variants, toggle,
-           Raw template, Tags, Diffs) stays below, in its previous relative
-           order, until the user decides where each one goes. -->
-      <div class="set-group">
-        <span class="set-label">Name</span><input class="set-input" id="cmdName">
+      <!-- Wizard step indicator — 4 steps (Identification / Scope / Command
+           lines / Advanced). Clicking a step only works once it has been
+           unlocked (see CMD_WIZ_MAX_STEP in js/command-editor.js): in
+           create/duplicate mode steps unlock one at a time as Next validates
+           each one; in edit mode every step starts unlocked (the command
+           already has valid data everywhere), so you can jump straight to
+           whatever section you need to change. -->
+      <div class="wiz-steps" id="cmdWizSteps">
+        <button type="button" class="wiz-step" data-step="1" onclick="cmdWizGoTo(1)">
+          <span class="wiz-step-num">1</span><span class="wiz-step-label">Identification</span>
+        </button>
+        <span class="wiz-step-sep"></span>
+        <button type="button" class="wiz-step" data-step="2" onclick="cmdWizGoTo(2)">
+          <span class="wiz-step-num">2</span><span class="wiz-step-label">Scope</span>
+        </button>
+        <span class="wiz-step-sep"></span>
+        <button type="button" class="wiz-step" data-step="3" onclick="cmdWizGoTo(3)">
+          <span class="wiz-step-num">3</span><span class="wiz-step-label">Command lines</span>
+        </button>
+        <span class="wiz-step-sep"></span>
+        <button type="button" class="wiz-step" data-step="4" onclick="cmdWizGoTo(4)">
+          <span class="wiz-step-num">4</span><span class="wiz-step-label">Advanced</span>
+        </button>
       </div>
 
-      <div class="set-group">
-        <span class="set-label">Short description</span><input class="set-input" id="cmdDesc">
+      <!-- ═══ STEP 1 — Identification ═══ -->
+      <div class="wiz-panel" data-step="1">
+        <div class="set-group">
+          <span class="set-label">Name</span><input class="set-input" id="cmdName">
+        </div>
+
+        <div class="set-group">
+          <span class="set-label">Short description</span><input class="set-input" id="cmdDesc">
+        </div>
+
+        <div class="set-group">
+          <span class="set-label">Purpose</span><textarea class="set-input" id="cmdAboutPurpose"></textarea>
+        </div>
+        <div class="set-group">
+          <span class="set-label">When to use</span><textarea class="set-input" id="cmdAboutWhen"></textarea>
+        </div>
+        <div class="set-group">
+          <span class="set-label">Note</span><textarea class="set-input" id="cmdAboutObs"></textarea>
+        </div>
       </div>
 
-      <div class="set-group">
-        <span class="set-label">Purpose</span><textarea class="set-input" id="cmdAboutPurpose"></textarea>
-      </div>
-      <div class="set-group">
-        <span class="set-label">When to use</span><textarea class="set-input" id="cmdAboutWhen"></textarea>
-      </div>
-      <div class="set-group">
-        <span class="set-label">Note</span><textarea class="set-input" id="cmdAboutObs"></textarea>
-      </div>
+      <!-- ═══ STEP 2 — Scope (Vendor/System/Version/Environment/Topic) ═══ -->
+      <div class="wiz-panel" data-step="2">
+        <div class="set-group">
+          <span class="set-label">Vendor</span>
+          <span class="set-hint">Choose one — required (a command belongs to a single vendor; "All" is only a filter option, not a value a command can be saved with)</span>
+          <div class="dd" id="cmdVendorDD">
+            <button type="button" class="dd-btn" id="cmdVendorDDBtn" onclick="toggleDropdown('cmdVendorDD')">
+              <span class="dd-label">0</span><span class="dd-arrow">▾</span>
+            </button>
+            <div class="dd-panel seg" id="cmdVendorSeg">
+              <button type="button" class="seg-btn" data-val="check-point">Check Point</button>
+            </div>
+          </div>
+        </div>
 
-      <div class="set-group">
-        <span class="set-label">Vendor</span>
-        <span class="set-hint">Choose one — required (a command belongs to a single vendor; "All" is only a filter option, not a value a command can be saved with)</span>
-        <div class="dd" id="cmdVendorDD">
-          <button type="button" class="dd-btn" id="cmdVendorDDBtn" onclick="toggleDropdown('cmdVendorDD')">
-            <span class="dd-label">0</span><span class="dd-arrow">▾</span>
-          </button>
-          <div class="dd-panel seg" id="cmdVendorSeg">
-            <button type="button" class="seg-btn" data-val="check-point">Check Point</button>
+        <div class="set-group">
+          <span class="set-label">Systems</span>
+          <span class="set-hint">Check one or more — required ("All" is only a filter option, not a value a command can be saved with)</span>
+          <div class="dd" id="cmdSysDD">
+            <button type="button" class="dd-btn" id="cmdSysDDBtn" onclick="toggleDropdown('cmdSysDD')">
+              <span class="dd-label">0</span><span class="dd-arrow">▾</span>
+            </button>
+            <div class="dd-panel seg" id="cmdSysSeg">
+              <button type="button" class="seg-btn" data-val="gaia">Gaia</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="set-group">
+          <span class="set-label">Versions</span>
+          <span class="set-hint">Check one or more — required ("All" is only a filter option, not a value a command can be saved with)</span>
+          <div class="dd" id="cmdVersionsDD">
+            <button type="button" class="dd-btn" id="cmdVersionsDDBtn" onclick="toggleDropdown('cmdVersionsDD')">
+              <span class="dd-label">0</span><span class="dd-arrow">▾</span>
+            </button>
+            <div class="dd-panel seg" id="cmdVersionsSeg">
+              <button type="button" class="seg-btn" data-val="R81.10">R81.10</button>
+              <button type="button" class="seg-btn" data-val="R81.20">R81.20</button>
+              <button type="button" class="seg-btn" data-val="R82">R82</button>
+              <button type="button" class="seg-btn" data-val="R82.10">R82.10</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="set-group">
+          <span class="set-label">Environments</span>
+          <span class="set-hint">Check one or more — required ("All" is only a filter option, not a value a command can be saved with)</span>
+          <div class="dd" id="cmdEnvDD">
+            <button type="button" class="dd-btn" id="cmdEnvDDBtn" onclick="toggleDropdown('cmdEnvDD')">
+              <span class="dd-label">0</span><span class="dd-arrow">▾</span>
+            </button>
+            <div class="dd-panel seg" id="cmdEnvSeg">
+              <button type="button" class="seg-btn" data-val="standalone">Standalone</button>
+              <button type="button" class="seg-btn" data-val="cluster">Cluster HA</button>
+              <button type="button" class="seg-btn" data-val="vsx">VSX</button>
+              <button type="button" class="seg-btn" data-val="maestro">Maestro</button>
+              <button type="button" class="seg-btn" data-val="mds">MDS / MDM</button>
+              <button type="button" class="seg-btn" data-val="gaia">Gaia (Clish)</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="set-group">
+          <span class="set-label">Topic</span>
+          <span class="set-hint">Check one or more — a command can appear under several sections</span>
+          <div class="dd" id="cmdTopicDD">
+            <button type="button" class="dd-btn" id="cmdTopicDDBtn" onclick="toggleDropdown('cmdTopicDD')">
+              <span class="dd-label">Capture</span><span class="dd-arrow">▾</span>
+            </button>
+            <div class="dd-panel seg" id="cmdTopicSeg">
+              <button type="button" class="seg-btn on" data-val="capture">Capture</button>
+              <button type="button" class="seg-btn" data-val="carrier">Carrier Security</button>
+              <button type="button" class="seg-btn" data-val="debug">Debug &amp; Drops</button>
+              <button type="button" class="seg-btn" data-val="dlp">DLP</button>
+              <button type="button" class="seg-btn" data-val="identity">Identity Awareness</button>
+              <button type="button" class="seg-btn" data-val="ips">IPS</button>
+              <button type="button" class="seg-btn" data-val="license">Licenses</button>
+              <button type="button" class="seg-btn" data-val="logs">Logs</button>
+              <button type="button" class="seg-btn" data-val="management">Management</button>
+              <button type="button" class="seg-btn" data-val="mobile">Mobile Access</button>
+              <button type="button" class="seg-btn" data-val="policy">Policy</button>
+              <button type="button" class="seg-btn" data-val="qos">QoS</button>
+              <button type="button" class="seg-btn" data-val="routing">Routing</button>
+              <button type="button" class="seg-btn" data-val="securexl">SecureXL</button>
+              <button type="button" class="seg-btn" data-val="status">Status</button>
+              <button type="button" class="seg-btn" data-val="system">System</button>
+              <button type="button" class="seg-btn" data-val="tables">Kernel Tables</button>
+              <button type="button" class="seg-btn" data-val="vpn">VPN</button>
+              <button type="button" class="seg-btn" data-val="environment">🏗️ Environment (specific card)</button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="set-group">
-        <span class="set-label">Systems</span>
-        <span class="set-hint">Check one or more — required ("All" is only a filter option, not a value a command can be saved with)</span>
-        <div class="dd" id="cmdSysDD">
-          <button type="button" class="dd-btn" id="cmdSysDDBtn" onclick="toggleDropdown('cmdSysDD')">
-            <span class="dd-label">0</span><span class="dd-arrow">▾</span>
-          </button>
-          <div class="dd-panel seg" id="cmdSysSeg">
-            <button type="button" class="seg-btn" data-val="gaia">Gaia</button>
+      <!-- ═══ STEP 3 — Command lines ═══ -->
+      <div class="wiz-panel" data-step="3">
+        <div class="set-section-title">Command</div>
+        <span class="set-hint">Supports the tokens {{src_ip}}, {{dst_ip}}, {{src_port}}, {{dst_port}}, {{proto}}, {{iface}}, {{vsid}}, {{logFile}} — substituted at render time.</span>
+        <div class="list-editor" id="cmdLinesDefaultList"></div>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="cmdEditorAddLine('cmdLinesDefaultList')">+ Add line</button>
+      </div>
+
+      <!-- ═══ STEP 4 — Advanced (empty-state variant, raw template, tags, diffs) ═══ -->
+      <div class="wiz-panel" data-step="4">
+        <div class="set-group">
+          <div class="sb-toggle" id="cmdRequiresIpsToggle" onclick="cmdEditorToggleRequiresIps()">
+            <div class="tog-track"><div class="tog-knob"></div></div><span>This command changes content when SRC/DST are empty</span>
           </div>
         </div>
-      </div>
 
-      <div class="set-group">
-        <span class="set-label">Versions</span>
-        <span class="set-hint">Check one or more — required ("All" is only a filter option, not a value a command can be saved with)</span>
-        <div class="dd" id="cmdVersionsDD">
-          <button type="button" class="dd-btn" id="cmdVersionsDDBtn" onclick="toggleDropdown('cmdVersionsDD')">
-            <span class="dd-label">0</span><span class="dd-arrow">▾</span>
-          </button>
-          <div class="dd-panel seg" id="cmdVersionsSeg">
-            <button type="button" class="seg-btn" data-val="R81.10">R81.10</button>
-            <button type="button" class="seg-btn" data-val="R81.20">R81.20</button>
-            <button type="button" class="seg-btn" data-val="R82">R82</button>
-            <button type="button" class="seg-btn" data-val="R82.10">R82.10</button>
+        <div class="set-group" id="cmdEmptyNameRow" style="display:none;">
+          <span class="set-label">Name when SRC/DST are empty</span><input class="set-input" id="cmdNameEmpty">
+        </div>
+
+        <div class="set-group" id="cmdEmptyDescRow" style="display:none;">
+          <span class="set-label">Description when SRC/DST are empty</span><input class="set-input" id="cmdDescEmpty">
+        </div>
+
+        <div id="cmdLinesEmptySection" style="display:none;">
+          <div class="set-section-title">Lines when SRC/DST are empty</div>
+          <div class="list-editor" id="cmdLinesEmptyList"></div>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="cmdEditorAddLine('cmdLinesEmptyList')">+ Add line</button>
+        </div>
+
+        <div class="set-group">
+          <span class="set-label">Raw template (copy button)</span>
+          <input class="set-input" id="cmdRawTemplate">
+          <span class="set-hint">Technical text copied by the copy button — not translated. Accepts the same {{...}} tokens as the lines below.</span>
+        </div>
+
+        <div class="set-section-title">Header tags</div>
+        <div class="list-editor" id="cmdTagsList"></div>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="cmdEditorAddTag()">+ Add tag</button>
+
+        <div>
+          <div class="disclosure-hd" id="cmdDiffsDisclosureHd" onclick="cmdEditorToggleDiffsDisclosure()">
+            <span>▸ Differences by version (advanced)</span>
           </div>
-        </div>
-      </div>
-
-      <div class="set-group">
-        <span class="set-label">Environments</span>
-        <span class="set-hint">Check one or more — required ("All" is only a filter option, not a value a command can be saved with)</span>
-        <div class="dd" id="cmdEnvDD">
-          <button type="button" class="dd-btn" id="cmdEnvDDBtn" onclick="toggleDropdown('cmdEnvDD')">
-            <span class="dd-label">0</span><span class="dd-arrow">▾</span>
-          </button>
-          <div class="dd-panel seg" id="cmdEnvSeg">
-            <button type="button" class="seg-btn" data-val="standalone">Standalone</button>
-            <button type="button" class="seg-btn" data-val="cluster">Cluster HA</button>
-            <button type="button" class="seg-btn" data-val="vsx">VSX</button>
-            <button type="button" class="seg-btn" data-val="maestro">Maestro</button>
-            <button type="button" class="seg-btn" data-val="mds">MDS / MDM</button>
-            <button type="button" class="seg-btn" data-val="gaia">Gaia (Clish)</button>
+          <div class="disclosure-body" id="cmdDiffsDisclosureBody">
+            <div class="list-editor" id="cmdDiffsList"></div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="cmdEditorAddDiff()">+ Add difference</button>
           </div>
-        </div>
-      </div>
-
-      <div class="set-group">
-        <span class="set-label">Topic</span>
-        <span class="set-hint">Check one or more — a command can appear under several sections</span>
-        <div class="dd" id="cmdTopicDD">
-          <button type="button" class="dd-btn" id="cmdTopicDDBtn" onclick="toggleDropdown('cmdTopicDD')">
-            <span class="dd-label">Capture</span><span class="dd-arrow">▾</span>
-          </button>
-          <div class="dd-panel seg" id="cmdTopicSeg">
-            <button type="button" class="seg-btn on" data-val="capture">Capture</button>
-            <button type="button" class="seg-btn" data-val="carrier">Carrier Security</button>
-            <button type="button" class="seg-btn" data-val="debug">Debug &amp; Drops</button>
-            <button type="button" class="seg-btn" data-val="dlp">DLP</button>
-            <button type="button" class="seg-btn" data-val="identity">Identity Awareness</button>
-            <button type="button" class="seg-btn" data-val="ips">IPS</button>
-            <button type="button" class="seg-btn" data-val="license">Licenses</button>
-            <button type="button" class="seg-btn" data-val="logs">Logs</button>
-            <button type="button" class="seg-btn" data-val="management">Management</button>
-            <button type="button" class="seg-btn" data-val="mobile">Mobile Access</button>
-            <button type="button" class="seg-btn" data-val="policy">Policy</button>
-            <button type="button" class="seg-btn" data-val="qos">QoS</button>
-            <button type="button" class="seg-btn" data-val="routing">Routing</button>
-            <button type="button" class="seg-btn" data-val="securexl">SecureXL</button>
-            <button type="button" class="seg-btn" data-val="status">Status</button>
-            <button type="button" class="seg-btn" data-val="system">System</button>
-            <button type="button" class="seg-btn" data-val="tables">Kernel Tables</button>
-            <button type="button" class="seg-btn" data-val="vpn">VPN</button>
-            <button type="button" class="seg-btn" data-val="environment">🏗️ Environment (specific card)</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="set-section-title">Command</div>
-      <span class="set-hint">Supports the tokens {{src_ip}}, {{dst_ip}}, {{src_port}}, {{dst_port}}, {{proto}}, {{iface}}, {{vsid}}, {{logFile}} — substituted at render time.</span>
-      <div class="list-editor" id="cmdLinesDefaultList"></div>
-      <button type="button" class="btn btn-ghost btn-sm" onclick="cmdEditorAddLine('cmdLinesDefaultList')">+ Add line</button>
-
-      <!-- ── Demais campos (posição a definir) ── -->
-      <div class="set-group" id="cmdEmptyDescRow" style="display:none;">
-        <span class="set-label">Description when SRC/DST are empty</span><input class="set-input" id="cmdDescEmpty">
-      </div>
-
-      <div id="cmdLinesEmptySection" style="display:none;">
-        <div class="set-section-title">Lines when SRC/DST are empty</div>
-        <div class="list-editor" id="cmdLinesEmptyList"></div>
-        <button type="button" class="btn btn-ghost btn-sm" onclick="cmdEditorAddLine('cmdLinesEmptyList')">+ Add line</button>
-      </div>
-
-      <div class="set-group">
-        <div class="sb-toggle" id="cmdRequiresIpsToggle" onclick="cmdEditorToggleRequiresIps()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>This command changes content when SRC/DST are empty</span>
-        </div>
-      </div>
-
-      <div class="set-group" id="cmdEmptyNameRow" style="display:none;">
-        <span class="set-label">Name when SRC/DST are empty</span><input class="set-input" id="cmdNameEmpty">
-      </div>
-
-      <div class="set-group">
-        <span class="set-label">Raw template (copy button)</span>
-        <input class="set-input" id="cmdRawTemplate">
-        <span class="set-hint">Technical text copied by the copy button — not translated. Accepts the same {{...}} tokens as the lines below.</span>
-      </div>
-
-      <div class="set-section-title">Header tags</div>
-      <div class="list-editor" id="cmdTagsList"></div>
-      <button type="button" class="btn btn-ghost btn-sm" onclick="cmdEditorAddTag()">+ Add tag</button>
-
-      <div>
-        <div class="disclosure-hd" id="cmdDiffsDisclosureHd" onclick="cmdEditorToggleDiffsDisclosure()">
-          <span>▸ Differences by version (advanced)</span>
-        </div>
-        <div class="disclosure-body" id="cmdDiffsDisclosureBody">
-          <div class="list-editor" id="cmdDiffsList"></div>
-          <button type="button" class="btn btn-ghost btn-sm" onclick="cmdEditorAddDiff()">+ Add difference</button>
         </div>
       </div>
     </div>
@@ -687,7 +717,9 @@
       <button class="btn btn-ghost" id="cmdEditorDeleteBtn" style="display:none;color:var(--red);" onclick="cmdEditorDelete()">🗑️ Delete command</button>
       <div style="display:flex;gap:8px;">
         <button class="btn" onclick="closeCommandEditor()">Cancel</button>
-        <button class="btn btn-primary" onclick="cmdEditorSave()">Save</button>
+        <button class="btn" id="cmdWizBackBtn" onclick="cmdWizBack()" style="display:none;">← Back</button>
+        <button class="btn btn-primary" id="cmdWizNextBtn" onclick="cmdWizNext()">Next →</button>
+        <button class="btn btn-primary" id="cmdWizSaveBtn" onclick="cmdEditorSave()" style="display:none;">Save</button>
       </div>
     </div>
   </div>

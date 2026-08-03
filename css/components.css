@@ -207,6 +207,33 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .cmd-editor-error.show { display: block; }
 .chk-group { display: flex; flex-wrap: wrap; gap: 8px; }
 
+/* ─── COMMAND EDITOR WIZARD (step indicator + step panels) ───
+   Turns the "Add/Edit command" form into a 4-step guided flow (Identification
+   / Scope / Command lines / Advanced) — see js/command-editor.js
+   (CMD_WIZ_STEP/CMD_WIZ_MAX_STEP, cmdWizGoTo/cmdWizNext/cmdWizBack). Only one
+   .wiz-panel is visible at a time (toggled via inline style by JS); the step
+   indicator buttons are disabled until unlocked. */
+.wiz-steps { display: flex; align-items: center; padding-bottom: 2px; }
+.wiz-step {
+  display: flex; align-items: center; gap: 7px; background: none; border: none;
+  padding: 4px 2px; cursor: pointer; font-family: var(--sans); color: var(--dim);
+  transition: color .12s;
+}
+.wiz-step:disabled { cursor: not-allowed; opacity: .5; }
+.wiz-step:not(:disabled):hover { color: var(--text); }
+.wiz-step-num {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 21px; height: 21px; border-radius: 50%; border: 1.5px solid var(--bdr);
+  background: var(--surf2); font-size: 10.5px; font-weight: 800; color: var(--muted);
+  transition: all .12s;
+}
+.wiz-step-label { font-size: 11px; font-weight: 700; white-space: nowrap; }
+.wiz-step.on { color: var(--text); }
+.wiz-step.on .wiz-step-num { border-color: var(--teal); background: var(--teal); color: #0D1117; }
+.wiz-step.done:not(.on) .wiz-step-num { border-color: var(--teal); background: var(--teal-bg); color: var(--teal); }
+.wiz-step-sep { flex: 1 1 20px; height: 1.5px; background: var(--bdr); margin: 0 6px; min-width: 8px; }
+.wiz-panel { display: flex; flex-direction: column; gap: 15px; }
+
 
 /* ─── OVERLAY AUX ─── */
 .cg-mark-box {
