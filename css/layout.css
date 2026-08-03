@@ -182,6 +182,51 @@
 .cmd-search-clear:hover { color: var(--text); background: var(--surf3, rgba(128,128,128,.15)); }
 
 
+/* ─── SIDEBAR COLAPSADA (barra de ícones) ─── */
+/* Todas as regras abaixo usam ":not(:hover)" — só valem quando a sidebar
+   está colapsada E o mouse não está em cima dela. Assim que o hover começa
+   (flyout aberto, ver .sidebar-inner acima), nenhuma dessas regras mais
+   bate no seletor, e o conteúdo volta sozinho ao layout normal (mesmas
+   regras "sem prefixo" de sempre) — sem precisar de um bloco de "reverter"
+   escrito à parte. */
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-block { padding-left: 4px; padding-right: 4px; }
+/* Busca: unicamente o ícone, centralizado; campo/limpar/histórico somem. */
+.app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap {
+  display: flex; align-items: center; justify-content: center; padding: 10px 0 8px;
+}
+.app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cmd-search-icon { position: static; }
+.app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cmd-search { display: none; }
+/* !important: .cmd-search-clear/.cpq-panel têm display controlado via
+   estilo inline por JS (updateSearchClearBtn() em favorites.js, e o painel
+   de histórico abre/fecha via classe .open) — precisa vencer isso enquanto
+   colapsada, senão poderiam aparecer por cima da barra estreita. */
+.app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cmd-search-clear { display: none !important; }
+.app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cpq-panel { display: none !important; }
+/* Favoritos: só o ícone da estrela, centralizado. */
+.app.sidebar-collapsed .sidebar:not(:hover) #favNavRow { justify-content: center; padding: 6px 4px; }
+.app.sidebar-collapsed .sidebar:not(:hover) #favNavRow > span { display: none; }
+/* Cabeçalhos de seção (Vendor/System/Version/Environment/Topic/Options):
+   escondem o texto (.sb-head-txt) e mostram só o ícone (.sb-head-icon),
+   centralizado; o dropdown/lista inteiro de cada filtro some (só reaparece
+   no hover-flyout). */
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-head {
+  display: flex; align-items: center; justify-content: center; padding-left: 0; margin-bottom: 0;
+}
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-head-icon { display: flex; }
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-head-txt { display: none; }
+.app.sidebar-collapsed .sidebar:not(:hover) .dd { display: none; }
+/* Botão "Clear filters" some inteiro (ver .sb-block-clearfilters no HTML). */
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-clearfilters { display: none; }
+/* Toggles de Options: só o switch, centralizado; rótulo de texto some. O
+   campo de caminho do Export (.sb-file-wrap.show) também some — !important
+   pra vencer a classe .show, que tem a mesma prioridade "normal". */
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-toggle { justify-content: center; gap: 0; padding: 7px 4px; }
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-toggle > span { display: none; }
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-file-wrap.show { display: none !important; }
+/* Rodapé "Developed by CG One" some inteiro. */
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-credit { display: none; }
+
+
 /* ─── MAIN ─── */
 .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; min-width: 0; }
 

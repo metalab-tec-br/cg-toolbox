@@ -35,7 +35,12 @@
 <div class="app">
 
 <!-- ══ SIDEBAR ══ -->
+<!-- .sidebar só reserva a largura no layout (fixa ou colapsada — ver
+     css/layout.css); todo o conteúdo visual mora em .sidebar-inner, que é
+     quem realmente muda de largura/vira flyout no hover (ver comentários em
+     css/layout.css, seção LAYOUT/SIDEBAR). -->
 <nav class="sidebar">
+<div class="sidebar-inner">
 
   <div class="cmd-search-wrap">
     <span class="cmd-search-icon" aria-hidden="true">🔍</span>
@@ -60,7 +65,9 @@
   </div>
 
   <div class="sb-block">
-    <div class="sb-head">Vendor</div>
+    <!-- Ícone de seção (.sb-head-icon), visível só quando a sidebar está
+         colapsada (barra estreita) — ver css/layout.css. -->
+    <div class="sb-head"><span class="sb-head-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="3" y1="12" x2="21" y2="12"/></svg></span><span class="sb-head-txt">Vendor</span></div>
     <div class="dd" id="vendorDD">
       <button type="button" class="dd-btn" id="vendorDDBtn" onclick="toggleDropdown('vendorDD')">
         <span class="sb-pip" style="background:#8B949E"></span><span class="dd-label">All</span><span class="dd-arrow">▾</span>
@@ -73,7 +80,7 @@
   </div>
 
   <div class="sb-block">
-    <div class="sb-head">System</div>
+    <div class="sb-head"><span class="sb-head-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><line x1="7" y1="7" x2="7.01" y2="7"/><line x1="7" y1="17" x2="7.01" y2="17"/></svg></span><span class="sb-head-txt">System</span></div>
     <div class="dd" id="sysDD">
       <button type="button" class="dd-btn" id="sysDDBtn" onclick="toggleDropdown('sysDD')">
         <span class="sb-pip" style="background:#8B949E"></span><span class="dd-label">All</span><span class="dd-arrow">▾</span>
@@ -86,7 +93,7 @@
   </div>
 
   <div class="sb-block">
-    <div class="sb-head">Version</div>
+    <div class="sb-head"><span class="sb-head-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H4a2 2 0 0 0-2 2v8a2 2 0 0 0 .59 1.41l9 9a2 2 0 0 0 2.82 0l8-8a2 2 0 0 0 0-2.82l-9-9A2 2 0 0 0 12 2z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span><span class="sb-head-txt">Version</span></div>
     <div class="dd" id="vDD">
       <button type="button" class="dd-btn" id="vDDBtn" onclick="toggleDropdown('vDD')">
         <span class="sb-pip" style="background:#8B949E"></span><span class="dd-label">All</span><span class="dd-arrow">▾</span>
@@ -102,7 +109,7 @@
   </div>
 
   <div class="sb-block">
-    <div class="sb-head">Environment</div>
+    <div class="sb-head"><span class="sb-head-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span><span class="sb-head-txt">Environment</span></div>
     <div class="dd" id="eDD">
       <button type="button" class="dd-btn" id="eDDBtn" onclick="toggleDropdown('eDD')">
         <span class="sb-pip" style="background:#8B949E"></span><span class="dd-label">All</span><span class="dd-arrow">▾</span>
@@ -120,7 +127,7 @@
   </div>
 
   <div class="sb-block">
-    <div class="sb-head">Topic</div>
+    <div class="sb-head"><span class="sb-head-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span><span class="sb-head-txt">Topic</span></div>
     <div class="dd" id="tDD">
       <button type="button" class="dd-btn" id="tDDBtn" onclick="toggleDropdown('tDD')">
         <span class="sb-pip" style="background:#8B949E"></span><span class="dd-label">All</span><span class="dd-arrow">▾</span>
@@ -149,12 +156,14 @@
     </div>
   </div>
 
-  <div class="sb-block">
+  <!-- Escondido inteiro na barra colapsada (sb-block-clearfilters, ver
+       css/layout.css) — reaparece junto com o resto no hover-flyout. -->
+  <div class="sb-block sb-block-clearfilters">
     <button type="button" class="btn btn-ghost sb-clear-filters-btn" style="width:100%; font-size:11px;" onclick="clearAllSidebarFilters()">Clear filters</button>
   </div>
 
   <div class="sb-block">
-    <div class="sb-head">Options</div>
+    <div class="sb-head"><span class="sb-head-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="18" r="2"/></svg></span><span class="sb-head-txt">Options</span></div>
     <div class="sb-toggle" id="tog-details" onclick="toggleShowCardDetails()">
       <div class="tog-track"><div class="tog-knob"></div></div><span>Details</span>
     </div>
@@ -192,18 +201,22 @@
     <img class="sb-credit-img for-light" src="img/cg-one-navy.png?v=1" alt="CG One">
   </a>
 
+</div>
 </nav>
 
-<!-- Botão único de ocultar/exibir a sidebar (preferência 'showSidebar' — ver
+<!-- Botão único de fixar/colapsar a sidebar (preferência 'showSidebar' — ver
      toggleShowSidebar() em js/settings.js), sentado bem em cima da linha de
      divisão entre a sidebar e o conteúdo principal, no estilo comum em
      vários sistemas (ex.: VS Code). position: fixed, então continua visível
-     mesmo com a sidebar oculta (.app.sidebar-hidden em css/layout.css só
-     reposiciona o botão para a borda esquerda da tela, não o esconde). Os
-     dois ícones (seta p/ esquerda = ocultar, seta p/ direita = exibir) ficam
-     no mesmo botão; qual deles aparece é decidido só por CSS, a partir da
-     classe 'sidebar-hidden' em .app (ver .sb-divider-toggle). -->
-<button type="button" class="sb-divider-toggle" id="sbDividerToggle" onclick="toggleShowSidebar()" title="Hide/show sidebar">
+     mesmo com a sidebar colapsada (.app.sidebar-collapsed em css/layout.css
+     só reposiciona o botão para a borda da barra estreita, nunca some).
+     Colapsada = barra estreita só com ícones por seção; passar o mouse
+     expande tudo por cima do conteúdo (flyout) e recolhe ao tirar o mouse,
+     sem ficar fixa aberta. Os dois ícones (seta p/ esquerda = colapsar,
+     seta p/ direita = fixar de novo) ficam no mesmo botão; qual deles
+     aparece é decidido só por CSS, a partir da classe 'sidebar-collapsed'
+     em .app (ver .sb-divider-toggle). -->
+<button type="button" class="sb-divider-toggle" id="sbDividerToggle" onclick="toggleShowSidebar()" title="Pin/collapse sidebar">
   <svg class="icon-collapse" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14 6 8 12 14 18"/></svg>
   <svg class="icon-expand" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="10 6 16 12 10 18"/></svg>
 </button>

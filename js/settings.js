@@ -224,10 +224,13 @@ function toggleModalShowImages() {
   setShowImages(!(loadSettings().showImages === true));
 }
 
-// Mostra/oculta a barra lateral esquerda (nav.sidebar) — preferência
-// 'showSidebar', padrão true (visível). Quando desligada, aplica a classe
-// 'sidebar-hidden' em <div class="app"> (ver css/layout.css), que esconde
-// .sidebar e faz .main ocupar a largura toda. Acionada só pelo botão único
+// Fixa ou colapsa a barra lateral esquerda (nav.sidebar) — preferência
+// 'showSidebar': true = fixa (pinned, largura normal, como sempre foi);
+// false = COLAPSADA numa barra estreita só com ícones por seção (ver
+// .sb-head-icon em css/layout.css), que expande por cima do conteúdo ao
+// passar o mouse (flyout, ver .sidebar-inner) e recolhe ao tirar o mouse,
+// sem ficar fixa aberta. Aplica/remove a classe 'sidebar-collapsed' em
+// <div class="app"> (ver css/layout.css). Acionada só pelo botão único
 // #sbDividerToggle (ver index.html/.sb-divider-toggle em css/layout.css),
 // sentado em cima da linha de divisão entre sidebar e conteúdo — não tem
 // espelho no modal de Configurações (removido a pedido do usuário: não fazia
@@ -236,7 +239,7 @@ let SHOW_SIDEBAR = true;
 function applyShowSidebarSetting(show) {
   SHOW_SIDEBAR = show === true;
   const app = document.querySelector('.app');
-  if (app) app.classList.toggle('sidebar-hidden', !SHOW_SIDEBAR);
+  if (app) app.classList.toggle('sidebar-collapsed', !SHOW_SIDEBAR);
 }
 function setShowSidebar(show) {
   applyShowSidebarSetting(show);
