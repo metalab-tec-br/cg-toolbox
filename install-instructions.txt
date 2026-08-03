@@ -1,0 +1,136 @@
+COMO INSTALAR O CG TOOLBOX A PARTIR DO GITHUB
+================================================
+
+Repositório: https://github.com/metalab-tec-br/downloads
+Servidor: Linux (Ubuntu/Debian), com acesso root/sudo.
+
+
+1) PRÉ-REQUISITOS
+------------------
+- Acesso root ou sudo no servidor.
+- git instalado (se não tiver: sudo apt-get install -y git).
+
+
+2) CLONAR O REPOSITÓRIO
+------------------------
+Evite clonar dentro do home de um usuário (ex.: /home/usuario/...) — isso
+costuma bloquear o serviço depois por permissão de pasta. Prefira um local
+neutro, como /opt:
+
+    sudo git clone https://github.com/metalab-tec-br/downloads.git /opt/cg-toolbox
+    cd /opt/cg-toolbox
+
+Se o git reclamar de "dubious ownership", rode:
+
+    git config --global --add safe.directory /opt/cg-toolbox
+
+
+3) INSTALAR
+-----------
+    chmod +x install-cgtoolbox.sh
+    sudo ./install-cgtoolbox.sh
+
+Isso, sozinho, já faz tudo:
+  - instala o Node.js 20 (se não estiver instalado);
+  - instala as dependências da aplicação (server/npm install);
+  - cria um usuário de sistema dedicado ("cgtoolbox"), sem login, só para
+    rodar o serviço;
+  - registra e inicia um serviço systemd (reinicia sozinho se cair, sobe
+    junto com o servidor);
+  - libera as portas no firewall (ufw/firewalld), se algum estiver ativo.
+
+Por padrão, o app fica disponível em DUAS portas ao mesmo tempo, sem
+redirecionamento entre elas:
+  - http://<ip-do-servidor>        (porta 80)
+  - http://<ip-do-servidor>:443    (porta 443, também em HTTP até um
+    certificado ser configurado — ver item 5)
+
+
+4) FLAGS OPCIONAIS
+-------------------
+    sudo ./install-cgtoolbox.sh --http-port 8080 --https-port 8443
+        # usa outras portas em vez de 80/443
+
+    sudo ./install-cgtoolbox.sh --user cgtoolbox
+        # nome do usuário de sistema que roda o serviço
+
+    sudo ./install-cgtoolbox.sh --ntlm-disabled
+        # desliga a identificação automática de usuário via NTLM (login
+        # do Windows). Sem isso, se o servidor não estiver em domínio
+        # Windows, ou se acessarem de fora da rede/domínio confiável, o
+        # navegador mostra uma caixa pedindo usuário/senha. Com essa
+        # flag, ninguém recebe esse prompt, mas favoritos/preferências/
+        # auditoria por usuário deixam de identificar cada pessoa.
+
+    sudo ./install-cgtoolbox.sh --skip-node-install
+        # não mexe no Node.js (use se já tiver a versão que quer instalada)
+
+    sudo ./install-cgtoolbox.sh --uninstall
+        # para e remove o serviço (não apaga os arquivos nem o banco de
+        # dados server/commands.db)
+
+
+5) HTTPS COM CERTIFICADO (opcional)
+-------------------------------------
+Para habilitar HTTPS de verdade na porta 443 (em vez de HTTP puro),
+primeiro gere (ou obtenha) um certificado. Exemplo com autoassinado, para
+testar enquanto o certificado definitivo não chega:
+
+    sudo mkdir -p /etc/cg-toolbox/tls
+    sudo openssl req -x509 -nodes -newkey rsa:2048 -days 365 \
+      -keyout /etc/cg-toolbox/tls/key.pem \
+      -out /etc/cg-toolbox/tls/cert.pem \
+      -subj "/CN=<ip-ou-hostname-do-servidor>"
+    sudo chmod 600 /etc/cg-toolbox/tls/key.pem
+
+Depois, rode (ou re-rode) o instalador apontando para os arquivos:
+
+    sudo ./install-cgtoolbox.sh --tls-cert /etc/cg-toolbox/tls/cert.pem --tls-key /etc/cg-toolbox/tls/key.pem
+
+O navegador vai mostrar aviso de segurança enquanto for autoassinado —
+normal. Quando tiver o certificado definitivo (emitido pela CA da empresa
+ou Let's Encrypt), é só sobrescrever os dois arquivos em
+/etc/cg-toolbox/tls/ e reiniciar o serviço (sudo systemctl restart
+cg-toolbox), sem precisar rodar o instalador de novo.
+
+
+6) VERIFICAR A INSTALAÇÃO
+---------------------------
+    sudo systemctl status cg-toolbox
+    curl -I http://localhost
+    curl -k -I https://localhost   (se HTTPS estiver configurado)
+
+
+7) ATUALIZAR DEPOIS
+---------------------
+Dentro da pasta do projeto:
+
+    git pull
+    sudo ./install-cgtoolbox.sh
+
+É seguro rodar de novo quantas vezes precisar — ele trata como
+atualização (para o serviço, reinstala dependências, reinicia) e nunca
+mexe no banco de dados (server/commands.db).
+
+
+8) PROBLEMAS COMUNS
+----------------------
+- "npm: command not found" após instalar:
+      sudo apt-get install -y npm
+
+- Serviço em loop de reinício com erro "status=200/CHDIR" no
+  journalctl (comum quando o projeto foi clonado dentro do home de outro
+  usuário): dê permissão de trânsito na pasta pai, ex.:
+      sudo chmod o+x /home/<usuario>
+  (o instalador já detecta e avisa isso antes de tentar subir o serviço)
+
+- Erro "EACCES: permission denied" ao ler o certificado/chave TLS:
+  geralmente porque o arquivo foi criado com sudo (dono root) e o usuário
+  de serviço não consegue ler. Corrija com:
+      sudo chown cgtoolbox:cgtoolbox /etc/cg-toolbox/tls/key.pem /etc/cg-toolbox/tls/cert.pem
+  (o instalador também já confere isso antes de subir o serviço e avisa
+  na hora, com o comando exato para corrigir)
+
+- Ver logs detalhados do serviço:
+      sudo journalctl -u cg-toolbox -n 50 --no-pager
+      sudo journalctl -u cg-toolbox -f      (acompanhar em tempo real)
