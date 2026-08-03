@@ -570,39 +570,39 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .ln-warn { display: block; font-size: 11px; font-family: var(--sans); color: var(--orange); background: var(--orange-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; font-weight: 600; }
 .ln-info { display: block; font-size: 11px; font-family: var(--sans); color: var(--blue); background: var(--blue-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; }
 .ln-ok   { display: block; font-size: 11px; font-family: var(--sans); color: var(--green); background: var(--green-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; font-weight: 600; }
-/* Badge da linha do tipo 'image' (screenshot de configuração) — ver
+/* Linha do tipo 'image' (screenshot de configuração) — ver
    command_lines.image_data (schema.sql) e openImageLightbox()
    (terminal-renderer.js). Clicável/focável, abre a imagem em tamanho maior.
-   Área colorida = 30% da largura do terminal (não a linha inteira); sem
-   padding à esquerda para o "[" de "[Image]#" ficar exatamente alinhado
-   com o "[" de "[Expert@FW]#" das linhas de comando acima/abaixo (mesmo
-   início de linha). Altura bem enxuta (padding vertical quase zero +
-   line-height apertado) e letras do mesmo tamanho dos comandos (font-size =
-   .term, sem mudar). Início da linha no mesmo formato de uma linha de
-   comando — "[Image]# <ícone> <nome>" — com o prompt na mesma cor/peso de
-   .pr (ver termRender() tipo 'image' em terminal-renderer.js); só o prompt
-   fica na cor de destaque, o ícone e o nome usam a cor normal de texto,
-   igual ao restante do terminal. O rótulo trunca com "…" se não couber. */
+   Início da linha no mesmo formato de uma linha de comando — "[Image]#
+   <etiqueta>" — com o prompt na mesma cor/peso de .pr (ver termRender() tipo
+   'image' em terminal-renderer.js). O nome da imagem (ícone + texto) vem em
+   uma etiqueta (.ln-image-tag) com o MESMO estilo visual das etiquetas de
+   parâmetro da busca (.cpq-tag em css/layout.css: fundo teal-bg, borda fina
+   teal, texto teal, mono, sem sombra) — só o "[Image]#" fica fora da
+   etiqueta, sem fundo, igual aos demais prefixos. */
 .ln-image {
   /* display:flex (não inline-flex) pelo mesmo motivo de .ln-note — bloco
      puro para sempre quebrar linha antes/depois, mesmo entre duas linhas
-     de anotação seguidas (ex.: note + image, ou image + image). width
-     continua limitando a caixa a 30%, independente de display ser flex ou
-     inline-flex. */
-  display: flex; align-items: center; justify-content: flex-start; gap: 5px;
-  /* Estilo do texto (itálico, cor muted, sans-serif) igual ao de .ln-note —
-     só o prefixo "[Image]#" continua em destaque/mono/normal, via
-     .ln-image-prompt logo abaixo, igual ao par .ln-note/.ln-note-prompt. */
-  font-size: 12.5px; font-family: var(--sans); font-style: italic; line-height: 1.2;
-  color: var(--muted); background: var(--teal-bg); border: 1px solid transparent; border-radius: 4px;
-  width: 30%; min-width: 130px; max-width: 100%; box-sizing: border-box;
-  padding: 1px 9px 1px 0; margin-top: 5px; cursor: pointer; transition: border-color .12s;
+     de anotação seguidas (ex.: note + image, ou image + image). */
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 5px; cursor: pointer;
 }
-.ln-image-prompt { color: var(--teal); font-weight: 700; font-style: normal; font-family: var(--mono); flex-shrink: 0; }
-.ln-image svg { flex-shrink: 0; }
+.ln-image-prompt { color: var(--teal); font-weight: 700; font-style: normal; font-family: var(--mono); font-size: 12.5px; flex-shrink: 0; }
+/* Etiqueta (chip) do nome da imagem — cópia do estilo de .cpq-tag
+   (css/layout.css), sem sombra, largura ajustada ao conteúdo (não mais 30%
+   fixo da linha inteira). */
+.ln-image-tag {
+  display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%;
+  background: var(--teal-bg); border: 1px solid var(--teal); color: var(--teal);
+  border-radius: 4px; padding: 2px 7px; font-family: var(--mono); font-size: 11px; line-height: 1.5;
+  box-sizing: border-box;
+}
+.ln-image-tag svg { flex-shrink: 0; }
 .ln-image-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; text-align: left; }
-.ln-image:hover, .ln-image:focus { border-color: var(--teal); outline: none; }
-.ln-image.ln-image-missing { color: var(--muted); background: var(--surf2); cursor: default; }
+.ln-image:focus { outline: none; }
+.ln-image:focus .ln-image-tag { border-color: var(--teal); }
+.ln-image.ln-image-missing { cursor: default; }
+.ln-image.ln-image-missing .ln-image-tag { color: var(--muted); background: var(--surf2); border-color: var(--bdr); }
 /* Miniatura exibida automaticamente logo abaixo do badge quando a
    preferência 'Show images' (Settings → User preferences) está ligada — ver
    SHOW_IMAGES em js/settings.js e a renderização condicional em

@@ -30,15 +30,16 @@ function termRender(lines) {
       // Início da linha no mesmo formato das linhas de comando ("[Expert@FW]#
       // <comando>"), mas com o prompt fixo "[Image]#" (ver .ln-image-prompt/
       // .pr em components.css — mesma cor/peso, só que sem o espaço reservado
-      // pro botão de copiar), seguido do ícone de imagem (SVG de contorno,
-      // mesmo estilo dos demais ícones do app) e do nome em seu próprio
-      // <span> para permitir truncar com "…" (ver .ln-image-label). Sem
-      // padding à esquerda no CSS (.ln-image) para o "[" ficar alinhado com
-      // o "[" das linhas de comando acima/abaixo.
+      // pro botão de copiar), seguido de uma etiqueta (chip) com o ícone +
+      // nome da imagem — mesmo estilo visual das etiquetas de parâmetro da
+      // busca (.cpq-tag em css/layout.css: fundo teal-bg, borda teal, texto
+      // teal, mono), sem sombra, em vez do preenchimento full-width usado
+      // antes. O nome fica em seu próprio <span> pra truncar com "…" (ver
+      // .ln-image-label).
       const icon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`;
       const badge = l.imageData
-        ? `<span class="ln-image" data-img="${l.imageData}" onclick="openImageLightbox(this)" role="button" tabindex="0" title="Click to view image"><span class="ln-image-prompt">[Image]#</span>${icon}<span class="ln-image-label">${label}</span></span>`
-        : `<span class="ln-image ln-image-missing" title="No image attached"><span class="ln-image-prompt">[Image]#</span>${icon}<span class="ln-image-label">${label}</span></span>`;
+        ? `<span class="ln-image" data-img="${l.imageData}" onclick="openImageLightbox(this)" role="button" tabindex="0" title="Click to view image"><span class="ln-image-prompt">[Image]#</span><span class="ln-image-tag">${icon}<span class="ln-image-label">${label}</span></span></span>`
+        : `<span class="ln-image ln-image-missing" title="No image attached"><span class="ln-image-prompt">[Image]#</span><span class="ln-image-tag">${icon}<span class="ln-image-label">${label}</span></span></span>`;
       // Preferência 'Show images' (Settings → User preferences — ver
       // SHOW_IMAGES/applyShowImagesSetting em js/settings.js): quando
       // ligada, mostra a miniatura logo abaixo do badge, sem precisar
