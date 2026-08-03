@@ -7,7 +7,12 @@ let _uid = 0;
 function termRender(lines) {
   const rows = lines.map(l => {
     if (!l) return '';
-    if (l.type === 'note') return `<span class="ln-note"># ${l.c}</span>`;
+    // Prefixo "[Note]#" no mesmo padrão de "[Expert@FW]#" (comando) e
+    // "[Image]#" (imagem) — ver .ln-note-prompt em components.css. Substitui
+    // o antigo marcador solto "# " (sem o resto do padrão de prompt); o
+    // texto da nota em si mantém o tamanho/estilo (itálico, cor muted) já
+    // existentes em .ln-note.
+    if (l.type === 'note') return `<span class="ln-note"><span class="ln-note-prompt">[Note]#</span> ${l.c}</span>`;
     if (l.type === 'warn') return `<span class="ln-warn">⚠ ${l.c}</span>`;
     if (l.type === 'info') return `<span class="ln-info">ℹ ${l.c}</span>`;
     if (l.type === 'ok')   return `<span class="ln-ok">✔ ${l.c}</span>`;
