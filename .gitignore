@@ -13,6 +13,12 @@ server/node_modules/
 *.db-wal
 *.db-shm
 
+# Backups do banco de dados (manuais ou agendados — ver server/index.js,
+# GET/POST /api/backups). Ficam só no disco do servidor, ao lado do
+# commands.db; nunca versionados.
+server/backup/
+/backup/
+
 # Lixo comum de SO/editor
 .DS_Store
 Thumbs.db

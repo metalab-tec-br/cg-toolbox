@@ -17,7 +17,7 @@ const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const express = require('express');
-const { db } = require('./db');
+const { db, DB_PATH } = require('./db');
 
 const app = express();
 const FRONTEND_ROOT = path.join(__dirname, '..');
@@ -1240,6 +1240,201 @@ app.delete('/api/parameters/:key', (req, res) => {
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
+
+// ════════════════════════════════════════════════
+// Backup e restauração do banco de dados (menu Configurações → "Backup &
+// Restore" — ver js/backup.js). Os arquivos ficam numa pasta "backup" ao
+// lado do commands.db (server/backup/ por padrão; ou {DB_PATH}/../backup no
+// Docker, já dentro do volume persistente cg-toolbox-data — sobrevive a
+// rebuild/restart). Cada arquivo é uma cópia .db completa e consistente,
+// gerada com Database#backup() do better-sqlite3 (backup "a quente", sem
+// precisar parar o servidor).
+//
+// O agendamento (diário/semanal/mensal + horário) é guardado nas MESMAS
+// chaves de /api/global-settings (tabela user_data, username sentinela
+// GLOBAL_SETTINGS_USER) — reaproveita a infra já existente em vez de criar
+// tabela/arquivo novo. Isso também significa que restaurar um backup antigo
+// pode trazer de volta uma configuração de agendamento antiga — aceitável,
+// pois é parte do mesmo "estado do sistema" sendo restaurado.
+// ════════════════════════════════════════════════
+const BACKUP_DIR = path.join(path.dirname(DB_PATH), 'backup');
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function backupTimestamp(d = new Date()) {
+  return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+}
+
+async function performBackup(prefix = 'backup') {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  const filename = `${prefix}-${backupTimestamp()}.db`;
+  await db.backup(path.join(BACKUP_DIR, filename));
+  return filename;
+}
+
+function listBackupFiles() {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  return fs.readdirSync(BACKUP_DIR)
+    .filter(f => f.endsWith('.db'))
+    .map(f => {
+      const st = fs.statSync(path.join(BACKUP_DIR, f));
+      return { filename: f, sizeBytes: st.size, createdAt: st.mtime.toISOString() };
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+// Só aceita um nome de arquivo puro (sem separadores/"..") que já exista
+// dentro de BACKUP_DIR — impede path traversal via parâmetro de rota.
+function resolveBackupPath(filename) {
+  const base = path.basename(String(filename || ''));
+  if (!base || base !== filename) return null;
+  const full = path.join(BACKUP_DIR, base);
+  if (!fs.existsSync(full)) return null;
+  return full;
+}
+
+function readGlobalSetting(key, fallback) {
+  const row = db.prepare('SELECT value FROM user_data WHERE username = ? AND data_key = ?').get(GLOBAL_SETTINGS_USER, key);
+  return row ? row.value : fallback;
+}
+
+function writeGlobalSetting(key, value) {
+  db.prepare(`
+    INSERT INTO user_data (username, data_key, value, updated_at) VALUES (?, ?, ?, datetime('now'))
+    ON CONFLICT(username, data_key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `).run(GLOBAL_SETTINGS_USER, key, String(value));
+}
+
+app.get('/api/backups', (req, res) => {
+  try {
+    res.json(listBackupFiles());
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+app.post('/api/backups', async (req, res) => {
+  try {
+    const filename = await performBackup('backup');
+    res.status(201).json({ filename });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+app.get('/api/backups/:filename/download', (req, res) => {
+  const full = resolveBackupPath(req.params.filename);
+  if (!full) return res.status(404).json({ error: 'not_found' });
+  res.download(full, req.params.filename);
+});
+
+app.delete('/api/backups/:filename', (req, res) => {
+  const full = resolveBackupPath(req.params.filename);
+  if (!full) return res.status(404).json({ error: 'not_found' });
+  try {
+    fs.unlinkSync(full);
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// Restaura um backup existente. Por segurança, tira uma foto do banco ATUAL
+// antes de sobrescrever (prefixo "pre-restore-"), para permitir desfazer.
+// Depois de trocar o arquivo, o processo encerra de propósito — o systemd
+// (ou o "restart: unless-stopped" do Docker) sobe o serviço de novo sozinho,
+// já lendo o arquivo restaurado (evita ter que "hot-swap" a conexão
+// better-sqlite3 em uso pelo resto deste arquivo).
+app.post('/api/backups/:filename/restore', async (req, res) => {
+  const full = resolveBackupPath(req.params.filename);
+  if (!full) return res.status(404).json({ error: 'not_found' });
+  try {
+    await performBackup('pre-restore');
+    db.close();
+    fs.copyFileSync(full, DB_PATH);
+    res.json({ ok: true, message: 'Restore concluído. O serviço vai reiniciar em instantes — recarregue a página em alguns segundos.' });
+    setTimeout(() => process.exit(0), 400);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+app.get('/api/backup-schedule', (req, res) => {
+  try {
+    res.json({
+      enabled: readGlobalSetting('backupScheduleEnabled', '0') === '1',
+      frequency: readGlobalSetting('backupScheduleFrequency', 'daily'),
+      weeklyDays: (readGlobalSetting('backupScheduleWeeklyDays', '') || '').split(',').map(s => s.trim()).filter(Boolean).map(Number),
+      monthlyDay: parseInt(readGlobalSetting('backupScheduleMonthlyDay', '1'), 10) || 1,
+      time: readGlobalSetting('backupScheduleTime', '02:00'),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+app.put('/api/backup-schedule', (req, res) => {
+  try {
+    const body = req.body || {};
+    const frequency = ['daily', 'weekly', 'monthly'].includes(body.frequency) ? body.frequency : 'daily';
+    const weeklyDays = Array.isArray(body.weeklyDays) ? body.weeklyDays.map(Number).filter(n => n >= 0 && n <= 6) : [];
+    const monthlyDay = Math.min(31, Math.max(1, parseInt(body.monthlyDay, 10) || 1));
+    const time = /^\d{2}:\d{2}$/.test(body.time) ? body.time : '02:00';
+    writeGlobalSetting('backupScheduleEnabled', body.enabled ? '1' : '0');
+    writeGlobalSetting('backupScheduleFrequency', frequency);
+    writeGlobalSetting('backupScheduleWeeklyDays', weeklyDays.join(','));
+    writeGlobalSetting('backupScheduleMonthlyDay', String(monthlyDay));
+    writeGlobalSetting('backupScheduleTime', time);
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// Checagem a cada minuto — dispara o backup automático quando o horário
+// configurado bate com o horário atual, respeitando a frequência (diário
+// sempre; semanal só nos dias da semana marcados — 0=domingo..6=sábado;
+// mensal só no dia do mês configurado, com ajuste para meses mais curtos,
+// ex.: dia 31 configurado roda no último dia de fevereiro/abril/etc.).
+// backupScheduleLastRunDate evita rodar mais de uma vez no mesmo dia.
+function checkScheduledBackup() {
+  try {
+    if (readGlobalSetting('backupScheduleEnabled', '0') !== '1') return;
+    const time = readGlobalSetting('backupScheduleTime', '02:00');
+    const now = new Date();
+    if (`${pad2(now.getHours())}:${pad2(now.getMinutes())}` !== time) return;
+
+    const todayKey = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+    if (readGlobalSetting('backupScheduleLastRunDate', '') === todayKey) return;
+
+    const frequency = readGlobalSetting('backupScheduleFrequency', 'daily');
+    if (frequency === 'weekly') {
+      const days = (readGlobalSetting('backupScheduleWeeklyDays', '') || '').split(',').map(s => s.trim()).filter(Boolean).map(Number);
+      if (!days.includes(now.getDay())) return;
+    } else if (frequency === 'monthly') {
+      const configuredDay = parseInt(readGlobalSetting('backupScheduleMonthlyDay', '1'), 10) || 1;
+      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      if (now.getDate() !== Math.min(configuredDay, lastDayOfMonth)) return;
+    }
+
+    performBackup('scheduled')
+      .then(filename => {
+        writeGlobalSetting('backupScheduleLastRunDate', todayKey);
+        console.log(`[backup] Backup agendado criado: ${filename}`);
+      })
+      .catch(err => console.error('[backup] Falha ao criar backup agendado:', err));
+  } catch (err) {
+    console.error('[backup] Erro ao checar agendamento de backup:', err);
+  }
+}
+setInterval(checkScheduledBackup, 60 * 1000);
+checkScheduledBackup();
 
 function startPlainHttp(port, extraLabel) {
   http.createServer(app).listen(port, () => {

@@ -578,6 +578,7 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 body.hide-command-editing #addCommandBlock { display: none; }
 body.hide-command-editing #adminDefaultsBlock { display: none; }
 body.hide-command-editing #cmdActionsAdminOnly { display: none; }
+body.hide-command-editing #backupManagerBtn { display: none; }
 
 /* ─── AUDIT LOG MODAL (Settings → View audit log, see js/audit-log.js) ─── */
 .audit-log-wrap { max-height: 55vh; overflow-y: auto; border: 1px solid var(--bdr); border-radius: 8px; }

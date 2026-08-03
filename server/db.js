@@ -34,4 +34,4 @@ db.pragma('foreign_keys = ON');
 const schemaSql = fs.readFileSync(SCHEMA_PATH, 'utf8');
 db.exec(schemaSql);
 
-module.exports = { db };
+module.exports = { db, DB_PATH };
