@@ -227,37 +227,25 @@ function toggleModalShowImages() {
 // Mostra/oculta a barra lateral esquerda (nav.sidebar) — preferência
 // 'showSidebar', padrão true (visível). Quando desligada, aplica a classe
 // 'sidebar-hidden' em <div class="app"> (ver css/layout.css), que esconde
-// .sidebar (incluindo o botão de seta sbArrowToggle, que fica na frente do
-// campo de busca — ver index.html/.sb-search-row) e faz .main ocupar a
-// largura toda. Como a seta some junto com a sidebar, um segundo botão fixo
-// (sbArrowExpand, seta apontando pro lado oposto) fica fora da sidebar e só
-// aparece via CSS quando .app.sidebar-hidden está ativa, pra poder trazer a
-// sidebar de volta. Há também um espelho em User preferences
-// (mShowSidebarToggle), mesmo padrão dos demais toggles desta seção.
+// .sidebar e faz .main ocupar a largura toda. Acionada só pelo botão único
+// #sbDividerToggle (ver index.html/.sb-divider-toggle em css/layout.css),
+// sentado em cima da linha de divisão entre sidebar e conteúdo — não tem
+// espelho no modal de Configurações (removido a pedido do usuário: não fazia
+// sentido duplicar um controle que já é sempre visível e de um clique só).
 let SHOW_SIDEBAR = true;
 function applyShowSidebarSetting(show) {
   SHOW_SIDEBAR = show === true;
   const app = document.querySelector('.app');
   if (app) app.classList.toggle('sidebar-hidden', !SHOW_SIDEBAR);
 }
-function syncShowSidebarToggleUI(show) {
-  const modal = document.getElementById('mShowSidebarToggle');
-  if (modal) modal.classList.toggle('on', show === true);
-}
 function setShowSidebar(show) {
   applyShowSidebarSetting(show);
-  syncShowSidebarToggleUI(show);
   const s = loadSettings();
   s.showSidebar = show === true;
   persistSettings(s);
 }
-// Botões de seta (sbArrowToggle, dentro da sidebar; sbArrowExpand, fixo fora
-// dela) e espelho do modal — todos chamam a mesma função.
+// Botão único #sbDividerToggle chama isto direto (ver index.html).
 function toggleShowSidebar() {
-  setShowSidebar(!(loadSettings().showSidebar === true));
-}
-// Toggle espelho (Show sidebar) do modal de Configurações → User preferences.
-function toggleModalShowSidebar() {
   setShowSidebar(!(loadSettings().showSidebar === true));
 }
 
@@ -380,7 +368,6 @@ function applyDefaultsFromSettings() {
   applyShowImagesSetting(s.showImages === true);
   syncShowImagesToggleUI(s.showImages === true);
   applyShowSidebarSetting(s.showSidebar !== false);
-  syncShowSidebarToggleUI(s.showSidebar !== false);
   // Admin mode removido — incluir/duplicar/editar comandos, catálogos e
   // import/export ficam sempre disponíveis, independente de qualquer
   // preferência salva (ver DEFAULT_SETTINGS acima e Configurações → System).

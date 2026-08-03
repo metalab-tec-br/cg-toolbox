@@ -41,24 +41,81 @@
 /* ─── LAYOUT ─── */
 .app { display: flex; flex: 1; overflow: hidden; }
 /* Preferência 'showSidebar' (ver toggleShowSidebar()/applyShowSidebarSetting()
-   em js/settings.js) — quando desligada, .app ganha esta classe e a sidebar
-   some; .main (flex: 1) ocupa a largura toda sozinho, sem precisar mexer em
-   mais nada no layout. */
-.app.sidebar-hidden .sidebar { display: none; }
+   em js/settings.js): true = sidebar fixa (pinned, largura normal, como
+   sempre foi); false = sidebar COLAPSADA numa barra estreita só com ícones
+   (um por seção — Vendor/System/Version/Environment/Topic/Options), que
+   expande por cima do conteúdo ao passar o mouse (flyout, ver
+   .sidebar-inner abaixo) e recolhe de volta ao tirar o mouse, sem ficar
+   fixa aberta — só o botão .sb-divider-toggle alterna entre os dois modos. */
+.app.sidebar-collapsed .sidebar { width: var(--sidebar-collapsed-w); }
+.app.sidebar-collapsed .sidebar-inner { width: var(--sidebar-collapsed-w); }
+/* Botão de fixar/colapsar a sidebar (#sbDividerToggle, ver index.html) — um
+   círculo pequeno sentado bem em cima da linha de divisão entre a sidebar
+   e o conteúdo, no estilo comum em vários sistemas (ex.: VS Code), em vez
+   de morar dentro da sidebar ou do header. position: fixed (independe de
+   onde está no DOM) alinhado à altura do campo de busca; "left" acompanha a
+   borda real da sidebar em cada estado (fixa, colapsada, ou colapsada com o
+   flyout aberto no hover). Os dois ícones internos (.icon-collapse/
+   .icon-expand) alternam via CSS, sem JS. z-index bem alto pra nunca ficar
+   escondido atrás do flyout (.sidebar-inner em hover, z-index: 90). */
+.sb-divider-toggle {
+  position: fixed; top: 60px; left: calc(var(--sidebar-w) - 10px); z-index: 95;
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--bdr); background: var(--surf); color: var(--muted);
+  cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.18); padding: 0;
+  transition: left .15s, border-color .12s, color .12s;
+}
+.sb-divider-toggle:hover { border-color: var(--teal); color: var(--teal); }
+.sb-divider-toggle .icon-expand { display: none; }
+.app.sidebar-collapsed .sb-divider-toggle { left: calc(var(--sidebar-collapsed-w) - 10px); }
+.app.sidebar-collapsed .sb-divider-toggle .icon-collapse { display: none; }
+.app.sidebar-collapsed .sb-divider-toggle .icon-expand { display: block; }
+/* Enquanto o flyout está aberto (mouse em cima da sidebar colapsada), o
+   botão acompanha a borda do flyout — mesma posição de quando está fixa. */
+.app.sidebar-collapsed .sidebar:hover ~ .sb-divider-toggle { left: calc(var(--sidebar-w) - 10px); }
 
 
 /* ─── SIDEBAR ─── */
+/* .sidebar (nav) só controla a largura reservada no layout (flex row com
+   .main) e fica com overflow: visible — necessário para o .sidebar-inner
+   "vazar" por cima do conteúdo durante o flyout (hover), sem que .main
+   precise saber disso ou mudar de tamanho. Todo o conteúdo visual (fundo,
+   scroll, flex-direction) mora em .sidebar-inner. */
 .sidebar {
   width: var(--sidebar-w); flex-shrink: 0;
-  background: var(--surf); border-right: 1px solid var(--bdr);
-  overflow-y: auto; display: flex; flex-direction: column;
+  border-right: 1px solid var(--bdr);
+  overflow: visible;
   position: sticky; top: 48px; height: calc(100vh - 48px);
+  transition: width .15s ease;
+}
+.sidebar-inner {
+  width: 100%; height: 100%; background: var(--surf);
+  overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column;
+  transition: width .15s ease;
+}
+/* Flyout: com a sidebar colapsada, passar o mouse em cima expande só o
+   .sidebar-inner (não o .sidebar/.main, que mantêm a largura estreita
+   reservada no layout) para a largura normal, virando um painel flutuante
+   por cima do conteúdo — ver regras de ":not(:hover)" mais abaixo, que
+   escondem rótulos/dropdowns/toggles só quando NÃO está em hover; ao
+   entrar em hover essas regras deixam de valer e o conteúdo volta ao
+   normal automaticamente, sem precisar de um bloco de "reverter" à parte. */
+.app.sidebar-collapsed .sidebar:hover .sidebar-inner {
+  position: absolute; top: 0; left: 0; width: var(--sidebar-w); height: 100%;
+  box-shadow: 2px 0 20px rgba(0,0,0,.32); z-index: 90;
 }
 .sb-block { padding: 6px 10px 4px; }
 .sb-head {
   font-size: 9px; font-weight: 800; letter-spacing: 1.1px; text-transform: uppercase;
   color: var(--dim); margin-bottom: 6px; padding-left: 6px;
 }
+/* Ícone de seção (Vendor/System/Version/Environment/Topic/Options), visível
+   só na barra colapsada — ver .sb-head-icon mais abaixo. Escondido por
+   padrão (sidebar fixa/expandida, onde só o texto .sb-head-txt aparece,
+   igual sempre foi). */
+.sb-head-icon { display: none; flex-shrink: 0; color: var(--dim); }
 /* Botões "Gerenciar ..." (sem ícone) — alinhados à esquerda, com o mesmo
    recuo inicial do rótulo .sb-head acima deles, em vez de centralizados.
    Seletor com duas classes: precisa vencer o padding do shorthand ".btn"
@@ -104,35 +161,7 @@
 
 
 /* ─── SEARCH ─── */
-/* Linha do topo da sidebar: seta de ocultar (sbArrowToggle) + campo de
-   busca, lado a lado. O padding/borda que antes ficavam em .cmd-search-wrap
-   passam para cá, já que agora a seta também mora nessa faixa. */
-.sb-search-row { display: flex; align-items: center; gap: 6px; padding: 10px 10px 8px; border-bottom: 1px solid var(--bdr); }
-/* Botão de seta que oculta a sidebar (preferência 'showSidebar' — ver
-   toggleShowSidebar() em js/settings.js). Some junto com o resto da sidebar
-   quando ela é ocultada; o botão .sb-arrow-expand (fixo, fora da sidebar)
-   é quem traz ela de volta. */
-.sb-arrow-toggle {
-  width: 26px; height: 26px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-  border: 1px solid var(--bdr); background: var(--surf2); border-radius: 6px;
-  color: var(--muted); cursor: pointer; transition: border-color .12s, color .12s;
-}
-.sb-arrow-toggle:hover { border-color: var(--teal); color: var(--teal); }
-/* Botão fixo para reabrir a sidebar quando ela está oculta — escondido por
-   padrão, só aparece com .app.sidebar-hidden (ver css/layout.css, regra da
-   sidebar acima, e applyShowSidebarSetting() em js/settings.js). Fica fora
-   de .sidebar (ver index.html, logo após </nav>) para não sumir junto com
-   ela; position: fixed não depende de onde está no fluxo do documento. */
-.sb-arrow-expand {
-  display: none; position: fixed; top: 58px; left: 8px; z-index: 60;
-  width: 26px; height: 26px; align-items: center; justify-content: center;
-  border: 1px solid var(--bdr); background: var(--surf); border-radius: 6px;
-  color: var(--muted); cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.18);
-  transition: border-color .12s, color .12s;
-}
-.sb-arrow-expand:hover { border-color: var(--teal); color: var(--teal); }
-.app.sidebar-hidden .sb-arrow-expand { display: flex; }
-.cmd-search-wrap { flex: 1; min-width: 0; position: relative; }
+.cmd-search-wrap { padding: 10px 10px 8px; border-bottom: 1px solid var(--bdr); position: relative; }
 .cmd-search {
   width: 100%; background: var(--surf2); border: 1px solid var(--bdr);
   border-radius: 6px; color: var(--text); font-family: var(--sans);

@@ -28,6 +28,9 @@
   --mono: 'JetBrains Mono', monospace;
   --sans: 'Inter', sans-serif;
   --sidebar-w: 210px;
+  /* Largura da sidebar colapsada (barra estreita só com ícones por seção —
+     ver .app.sidebar-collapsed em css/layout.css). */
+  --sidebar-collapsed-w: 52px;
 }
 
 /* ─── LIGHT THEME ─── */

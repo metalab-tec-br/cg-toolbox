@@ -37,27 +37,16 @@
 <!-- ══ SIDEBAR ══ -->
 <nav class="sidebar">
 
-  <div class="sb-search-row">
-    <!-- Atalho para ocultar a barra lateral (preferência 'showSidebar' — ver
-         toggleShowSidebar() em js/settings.js e .app.sidebar-hidden em
-         css/layout.css), no estilo seta, colado na frente do campo de busca.
-         Some junto com o resto da sidebar quando ela é ocultada; para trazer
-         de volta, ver o botão fixo .sb-arrow-expand logo após </nav>
-         (index.html), que só aparece enquanto a sidebar estiver oculta. -->
-    <button type="button" class="sb-arrow-toggle" id="sbArrowToggle" onclick="toggleShowSidebar()" title="Hide sidebar">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14 6 8 12 14 18"/></svg>
-    </button>
-    <div class="cmd-search-wrap">
-      <span class="cmd-search-icon" aria-hidden="true">🔍</span>
-      <input type="text" class="cmd-search" id="cmdSearch" placeholder="Search" oninput="onSearchInput()" onfocus="openCmdSearchHistoryPanel()" onblur="closeCmdSearchHistoryPanel()" autocomplete="off">
-      <button type="button" class="cmd-search-clear" id="cmdSearchClear" onclick="clearCommandSearch()" title="Clear search" style="display:none">✕</button>
-      <div class="cpq-panel" id="cmdSearchHistoryPanel">
-        <div class="cpq-history-head">
-          <span class="cpq-panel-label cpq-history-label" style="margin-bottom:0">History (last 7 days)</span>
-          <button type="button" class="cpq-history-clear" id="cmdSearchHistoryClearBtn" onmousedown="event.preventDefault()" onclick="clearCmdSearchHistory()">Clear history</button>
-        </div>
-        <div class="cpq-history-list" id="cmdSearchHistoryList"></div>
+  <div class="cmd-search-wrap">
+    <span class="cmd-search-icon" aria-hidden="true">🔍</span>
+    <input type="text" class="cmd-search" id="cmdSearch" placeholder="Search" oninput="onSearchInput()" onfocus="openCmdSearchHistoryPanel()" onblur="closeCmdSearchHistoryPanel()" autocomplete="off">
+    <button type="button" class="cmd-search-clear" id="cmdSearchClear" onclick="clearCommandSearch()" title="Clear search" style="display:none">✕</button>
+    <div class="cpq-panel" id="cmdSearchHistoryPanel">
+      <div class="cpq-history-head">
+        <span class="cpq-panel-label cpq-history-label" style="margin-bottom:0">History (last 7 days)</span>
+        <button type="button" class="cpq-history-clear" id="cmdSearchHistoryClearBtn" onmousedown="event.preventDefault()" onclick="clearCmdSearchHistory()">Clear history</button>
       </div>
+      <div class="cpq-history-list" id="cmdSearchHistoryList"></div>
     </div>
   </div>
 
@@ -175,9 +164,6 @@
     <div class="sb-file-wrap" id="fw-log">
       <input class="sb-file" id="f-log" value="/tmp/fw_export.txt" oninput="render()">
     </div>
-    <div class="sb-toggle" id="tog-system-commands" onclick="toggleShowSystemCommands()">
-      <div class="tog-track"><div class="tog-knob"></div></div><span>System commands</span>
-    </div>
     <!-- Mesma preferência pessoal espelhada em Configurações → User
          preferences (mShowImagesToggle) — ver toggleShowImages()/
          syncShowImagesToggleUI() em js/settings.js. Quando ligada, a
@@ -185,6 +171,10 @@
          precisar clicar no badge "[Image]# ...". -->
     <div class="sb-toggle" id="tog-show-images" onclick="toggleShowImages()">
       <div class="tog-track"><div class="tog-knob"></div></div><span>Show images</span>
+    </div>
+    <!-- Ordem alfabética (Details, Export, Show images, System commands). -->
+    <div class="sb-toggle" id="tog-system-commands" onclick="toggleShowSystemCommands()">
+      <div class="tog-track"><div class="tog-knob"></div></div><span>System commands</span>
     </div>
   </div>
 
@@ -204,13 +194,18 @@
 
 </nav>
 
-<!-- Botão fixo para trazer a sidebar de volta quando ela está oculta (ver
-     .app.sidebar-hidden em css/layout.css) — escondido por padrão via CSS
-     (.sb-arrow-expand), só aparece quando .app tem a classe 'sidebar-hidden'.
-     Mesma preferência 'showSidebar' do sbArrowToggle acima (dentro da
-     sidebar) e do espelho mShowSidebarToggle em Configurações. -->
-<button type="button" class="sb-arrow-expand" id="sbArrowExpand" onclick="toggleShowSidebar()" title="Show sidebar">
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="10 6 16 12 10 18"/></svg>
+<!-- Botão único de ocultar/exibir a sidebar (preferência 'showSidebar' — ver
+     toggleShowSidebar() em js/settings.js), sentado bem em cima da linha de
+     divisão entre a sidebar e o conteúdo principal, no estilo comum em
+     vários sistemas (ex.: VS Code). position: fixed, então continua visível
+     mesmo com a sidebar oculta (.app.sidebar-hidden em css/layout.css só
+     reposiciona o botão para a borda esquerda da tela, não o esconde). Os
+     dois ícones (seta p/ esquerda = ocultar, seta p/ direita = exibir) ficam
+     no mesmo botão; qual deles aparece é decidido só por CSS, a partir da
+     classe 'sidebar-hidden' em .app (ver .sb-divider-toggle). -->
+<button type="button" class="sb-divider-toggle" id="sbDividerToggle" onclick="toggleShowSidebar()" title="Hide/show sidebar">
+  <svg class="icon-collapse" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14 6 8 12 14 18"/></svg>
+  <svg class="icon-expand" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="10 6 16 12 10 18"/></svg>
 </button>
 
 <!-- ══ MAIN ══ -->
@@ -338,18 +333,9 @@
         <div class="sb-toggle" id="mDescToggle" onclick="toggleModalDesc()">
           <div class="tog-track"><div class="tog-knob"></div></div><span>Details</span>
         </div>
-        <!-- Mesma preferência pessoal do toggle "System commands" da sidebar
-             (Options) — só um espelho aqui no modal, igual ao par
-             tog-details/mDescToggle acima (ver syncShowSystemCommandsToggleUI
-             em js/settings.js). Não confundir com o "Admin default" abaixo,
-             que é o valor herdado por quem ainda não mexeu neste toggle. -->
-        <div class="sb-toggle" id="mSystemCommandsToggle" onclick="toggleModalSystemCommands()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>System commands</span>
-        </div>
         <!-- Mesma preferência pessoal do toggle "Export" da sidebar (Options)
              — só um espelho aqui no modal, igual ao par tog-details/mDescToggle
-             e tog-system-commands/mSystemCommandsToggle acima (ver
-             syncExportToggleUI em js/settings.js). -->
+             acima (ver syncExportToggleUI em js/settings.js). -->
         <div class="sb-toggle" id="mExportToggle" onclick="toggleModalExport()">
           <div class="tog-track"><div class="tog-knob"></div></div><span>Export</span>
         </div>
@@ -364,13 +350,15 @@
         <div class="sb-toggle" id="mShowImagesToggle" onclick="toggleModalShowImages()">
           <div class="tog-track"><div class="tog-knob"></div></div><span>Show images</span>
         </div>
-        <!-- Mesma preferência pessoal do botão de atalho no header
-             (hdrSidebarToggle) — só um espelho aqui no modal, igual aos
-             demais pares desta seção (ver syncShowSidebarToggleUI em
-             js/settings.js). Ligada = sidebar visível (padrão); desligada =
-             sidebar oculta (.app.sidebar-hidden, ver css/layout.css). -->
-        <div class="sb-toggle" id="mShowSidebarToggle" onclick="toggleModalShowSidebar()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>Show sidebar</span>
+        <!-- Mesma preferência pessoal do toggle "System commands" da sidebar
+             (Options) — só um espelho aqui no modal, igual ao par
+             tog-details/mDescToggle acima (ver syncShowSystemCommandsToggleUI
+             em js/settings.js). Não confundir com o "Admin default" abaixo,
+             que é o valor herdado por quem ainda não mexeu neste toggle.
+             Ordem alfabética (Details, Export, Show images, System
+             commands). -->
+        <div class="sb-toggle" id="mSystemCommandsToggle" onclick="toggleModalSystemCommands()">
+          <div class="tog-track"><div class="tog-knob"></div></div><span>System commands</span>
         </div>
       </div>
       <div class="set-group set-group-row">
