@@ -422,6 +422,9 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 }
 .copy-btn:hover { border-color: var(--teal); color: var(--teal); }
 .copy-btn.ok { background: var(--teal-bg); border-color: var(--teal); color: var(--teal); }
+/* Falha ao copiar (ambos os métodos — Clipboard API e execCommand — não
+   funcionaram); ver _copyToClipboard em js/terminal-renderer.js. */
+.copy-btn.err { background: var(--red-bg); border-color: var(--red); color: var(--red); }
 .copy-btn-inline {
   display: inline-flex; vertical-align: middle; margin-left: 8px;
   padding: 2px 5px;

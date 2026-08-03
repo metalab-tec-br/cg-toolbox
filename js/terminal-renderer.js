@@ -32,12 +32,50 @@ const COPY_BTN_ICON_OK = `<svg width="10" height="10" fill="none" viewBox="0 0 1
       <path d="M2 8.5l3.5 3.5L14 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
 const COPY_BTN_FEEDBACK_MS = 1400;
+const COPY_BTN_ICON_ERR = `<svg width="10" height="10" fill="none" viewBox="0 0 16 16">
+      <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>`;
+
+// navigator.clipboard (Clipboard API assíncrona) só existe em "contexto
+// seguro" — HTTPS ou localhost. Enquanto o servidor estiver em HTTP puro
+// (antes de um certificado TLS ser configurado — ver install-cgtoolbox.sh
+// --tls-cert/--tls-key), navigator.clipboard normalmente é undefined no
+// navegador, e chamar .writeText direto quebra silenciosamente (o clique
+// nem chega a copiar nada). Aqui tentamos a API moderna primeiro e, se não
+// existir ou falhar, caímos no método clássico (textarea temporário +
+// document.execCommand('copy')), que funciona em HTTP também — assim o
+// botão continua funcionando mesmo antes do HTTPS estar configurado.
+function _copyToClipboard(text) {
+  if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise((resolve, reject) => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '-9999px';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) resolve(); else reject(new Error('execCommand(\'copy\') returned false'));
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
 
 // Botão de copiar compacto, posicionado no final de cada linha de comando.
 // Ao clicar: troca o ícone pelo "check" e mostra o texto "Copied" por
 // COPY_BTN_FEEDBACK_MS, depois volta ao estado normal — mesma mecânica de
 // timeout que já existia para a classe .ok (só a coloração), agora também
-// trocando o conteúdo do botão para dar um feedback bem mais visível.
+// trocando o conteúdo do botão para dar um feedback bem mais visível. Em
+// caso de falha (raríssimo — nenhum dos dois métodos de cópia funcionou),
+// mostra um "X" vermelho no lugar, para não falhar em silêncio.
 function copyBtn(text) {
   const id = 'c' + (++_uid);
   const btn = `<button class="copy-btn copy-btn-inline" id="${id}" title="Copy">${COPY_BTN_ICON}</button>`;
@@ -47,13 +85,26 @@ function copyBtn(text) {
     if (!el) return;
     el._copyText = text;
     el.addEventListener('click', () => {
-      navigator.clipboard.writeText(el._copyText || '').then(() => {
+      _copyToClipboard(el._copyText || '').then(() => {
         clearTimeout(el._copyRevertTimer); // clique repetido não deixa dois timers concorrendo
+        el.classList.remove('err');
         el.classList.add('ok');
         el.innerHTML = `${COPY_BTN_ICON_OK}<span>Copied</span>`;
         el.title = 'Copied!';
         el._copyRevertTimer = setTimeout(() => {
           el.classList.remove('ok');
+          el.innerHTML = COPY_BTN_ICON;
+          el.title = 'Copy';
+        }, COPY_BTN_FEEDBACK_MS);
+      }).catch(err => {
+        console.error('Copy failed', err);
+        clearTimeout(el._copyRevertTimer);
+        el.classList.remove('ok');
+        el.classList.add('err');
+        el.innerHTML = `${COPY_BTN_ICON_ERR}<span>Failed</span>`;
+        el.title = 'Copy failed — select and copy manually';
+        el._copyRevertTimer = setTimeout(() => {
+          el.classList.remove('err');
           el.innerHTML = COPY_BTN_ICON;
           el.title = 'Copy';
         }, COPY_BTN_FEEDBACK_MS);
