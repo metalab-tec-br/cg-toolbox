@@ -594,7 +594,11 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .ln-image-tag {
   display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%;
   background: var(--teal-bg); border: 1px solid var(--teal); color: var(--teal);
-  border-radius: 4px; padding: 2px 7px; font-family: var(--mono); font-size: 11px; line-height: 1.5;
+  /* Padding vertical e line-height bem enxutos (font-size inalterado) — sem
+     isso a etiqueta ficava mais alta que uma linha de texto normal do
+     terminal, deixando o espaçamento entre linhas desigual (ver .term
+     line-height: 1.9, herdado pelas demais linhas). */
+  border-radius: 4px; padding: 0 7px; font-family: var(--mono); font-size: 11px; line-height: 1.2;
   box-sizing: border-box;
 }
 .ln-image-tag svg { flex-shrink: 0; }
