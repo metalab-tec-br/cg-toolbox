@@ -647,13 +647,13 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 /* Modo compacto: oculta descrição curta, bloco 'about' e tags do cabeçalho do card
    (preferência 'Exibir detalhes dos cards' em Configurações). As tags de escopo
    (Vendor/Sistema/Versão/Ambiente, ver .scope-tag acima) ficam de fora dessa regra
-   de propósito — devem aparecer sempre, independente dessa preferência. */
+   de propósito — devem aparecer sempre, independente dessa preferência. As notas
+   (# ..., linhas do tipo 'note') também ficam de fora: sempre visíveis, na posição
+   exata em que foram cadastradas entre as linhas do comando (dbLinesToTerm/
+   termRender preservam a ordem de cadastro; nada aqui reordena ou filtra por tipo). */
 .compact-cards .card-desc,
 .compact-cards .card-about,
 .compact-cards .tag:not(.scope-tag) { display: none; }
-/* Comentários (# ...) sob a linha de comando — mesma preferência 'Exibir descrição':
-   ficam ocultos por padrão (compact-cards) e só aparecem quando habilitada. */
-.compact-cards .ln-note { display: none; }
 
 /* O antigo "Admin mode" (body.hide-command-editing) foi removido — incluir/
    duplicar/editar comandos, import/export em massa, gerenciamento de
