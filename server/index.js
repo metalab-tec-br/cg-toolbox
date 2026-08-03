@@ -37,7 +37,11 @@ const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 const TLS_CERT_PATH = process.env.TLS_CERT_PATH;
 const TLS_KEY_PATH = process.env.TLS_KEY_PATH;
 
-app.use(express.json({ limit: '5mb' }));
+// Limite maior que o padrão do Express (100kb) para caber o payload de um
+// comando com uma ou mais linhas de imagem (screenshots de configuração,
+// ver command_lines.image_data em schema.sql) — a imagem viaja em base64
+// dentro do JSON, ~33% maior que o arquivo original.
+app.use(express.json({ limit: '15mb' }));
 
 // ════════════════════════════════════════════════
 // Identificação do usuário (multiusuário — servidor central compartilhado)
@@ -194,7 +198,7 @@ function shapeCommand(row) {
   ).all(row.id).map(f => f.username);
 
   const lineRows = db.prepare(
-    'SELECT variant, sort_order, line_type, prompt, content, supports_export FROM command_lines WHERE command_id = ? ORDER BY variant, sort_order, id'
+    'SELECT variant, sort_order, line_type, prompt, content, supports_export, image_data FROM command_lines WHERE command_id = ? ORDER BY variant, sort_order, id'
   ).all(row.id);
 
   const shapeLine = l => ({
@@ -202,6 +206,7 @@ function shapeCommand(row) {
     prompt: l.prompt,
     content: l.content,
     supports_export: !!l.supports_export,
+    image_data: l.image_data || null,
   });
 
   const lines = {
@@ -613,8 +618,8 @@ function insertChildren(id, body) {
   (body.environments || []).forEach(e => envStmt.run(id, e));
 
   const lineStmt = db.prepare(
-    `INSERT INTO command_lines (command_id, variant, sort_order, line_type, prompt, content, supports_export)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO command_lines (command_id, variant, sort_order, line_type, prompt, content, supports_export, image_data)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   );
   (body.lines || []).forEach((line, i) => {
     lineStmt.run(
@@ -624,7 +629,8 @@ function insertChildren(id, body) {
       line.line_type || 'cmd',
       line.prompt || null,
       line.content || '',
-      line.supports_export ? 1 : 0
+      line.supports_export ? 1 : 0,
+      line.line_type === 'image' ? (line.image_data || null) : null
     );
   });
 

@@ -81,6 +81,12 @@ function dbLineToTerm(line, values) {
     }
     return { p: resolveTokens(line.prompt, values), c: content };
   }
+  if (line.line_type === 'image') {
+    // c = nome exibido no lugar do comando; imageData = data URI base64
+    // (command_lines.image_data) mostrada em tamanho maior ao clicar (ver
+    // openImageLightbox em terminal-renderer.js).
+    return { type: 'image', c: resolveTokens(line.content, values), imageData: line.image_data || null };
+  }
   // Linhas de anotação (note/warn/info/ok) não passam por safeHL — ver
   // termRender() em terminal-renderer.js — então usam a resolução "limpa"
   // (sem marcadores de variável, que apareceriam como caracteres de controle

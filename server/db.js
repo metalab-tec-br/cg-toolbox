@@ -34,4 +34,23 @@ db.pragma('foreign_keys = ON');
 const schemaSql = fs.readFileSync(SCHEMA_PATH, 'utf8');
 db.exec(schemaSql);
 
+// ════════════════════════════════════════════════
+// Migrações leves pós-schema — CREATE TABLE IF NOT EXISTS (acima) não
+// adiciona colunas novas a uma tabela que já existe de uma instalação
+// anterior, então colunas acrescentadas depois do lançamento inicial de uma
+// tabela entram aqui, uma vez cada, checando antes se já existem (idempotente
+// — seguro rodar a cada boot do servidor, inclusive sem nenhuma mudança
+// pendente). Evita depender de rodar um script de migração à parte no
+// servidor de produção (que só é acessado via git pull + restart do serviço).
+// ════════════════════════════════════════════════
+function ensureColumn(table, column, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+  if (!cols.includes(column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
+}
+// image_data (command_lines): suporte à linha de tipo 'image' (nome exibido
+// + captura de tela colada/enviada) — ver schema.sql e js/command-editor.js.
+ensureColumn('command_lines', 'image_data', 'image_data TEXT');
+
 module.exports = { db, DB_PATH };

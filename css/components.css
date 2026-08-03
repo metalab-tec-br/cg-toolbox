@@ -187,6 +187,18 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .ln-drag-handle:hover { color: var(--text); background: var(--surf); }
 .ln-drag-handle:active { cursor: grabbing; }
 .line-row.dragging { opacity: .45; }
+/* Linha do tipo 'image' no editor de comandos (ver _ceBuildLineRow em
+   command-editor.js) — caixa clicável (upload) que também aceita colar
+   (Ctrl+V) uma captura de tela enquanto estiver com foco. */
+.ln-image-dropzone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; min-height: 90px; border: 1px dashed var(--bdr2); border-radius: 6px;
+  background: var(--surf); cursor: pointer; padding: 10px; transition: border-color .12s;
+}
+.ln-image-dropzone:hover, .ln-image-dropzone:focus { border-color: var(--teal); outline: none; }
+.ln-image-placeholder { font-size: 11px; color: var(--muted); text-align: center; }
+.ln-image-preview { max-width: 100%; max-height: 160px; border-radius: 4px; object-fit: contain; }
+.ln-image-actions { display: flex; }
 .diff-lines-wrap { display: flex; flex-direction: column; gap: 6px; padding-left: 10px; border-left: 2px solid var(--bdr); }
 .disclosure-hd {
   cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px;
@@ -500,6 +512,16 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .ln-warn { display: block; font-size: 11px; font-family: var(--sans); color: var(--orange); background: var(--orange-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; font-weight: 600; }
 .ln-info { display: block; font-size: 11px; font-family: var(--sans); color: var(--blue); background: var(--blue-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; }
 .ln-ok   { display: block; font-size: 11px; font-family: var(--sans); color: var(--green); background: var(--green-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; font-weight: 600; }
+/* Badge da linha do tipo 'image' (screenshot de configuração) — ver
+   command_lines.image_data (schema.sql) e openImageLightbox()
+   (terminal-renderer.js). Clicável/focável, abre a imagem em tamanho maior. */
+.ln-image {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-family: var(--sans);
+  color: var(--teal); background: var(--teal-bg); border: 1px solid transparent; border-radius: 4px;
+  padding: 4px 9px; margin-top: 5px; font-weight: 600; cursor: pointer; transition: border-color .12s;
+}
+.ln-image:hover, .ln-image:focus { border-color: var(--teal); outline: none; }
+.ln-image.ln-image-missing { color: var(--muted); background: var(--surf2); cursor: default; }
 
 
 /* ─── DIFF BLOCK ─── */
@@ -598,3 +620,16 @@ body.hide-command-editing #backupManagerBtn { display: none; }
 .audit-action-create { background: rgba(74,222,128,.15); color: #22C55E; }
 .audit-action-update { background: rgba(96,165,250,.15); color: #3B82F6; }
 .audit-action-delete { background: rgba(248,113,113,.15); color: var(--red); }
+
+/* ─── IMAGE LIGHTBOX (badge .ln-image do card → imagem em tamanho maior) ─── */
+.image-lightbox-overlay { background: rgba(0,0,0,.8); padding: 30px; }
+.image-lightbox-box { position: relative; max-width: 92vw; max-height: 92vh; display: flex; }
+.image-lightbox-box img {
+  max-width: 92vw; max-height: 92vh; border-radius: 6px; object-fit: contain;
+  box-shadow: 0 20px 60px rgba(0,0,0,.6); background: var(--surf);
+}
+.image-lightbox-close {
+  position: absolute; top: -14px; right: -14px; background: var(--surf);
+  border: 1px solid var(--bdr); border-radius: 50%; width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+}

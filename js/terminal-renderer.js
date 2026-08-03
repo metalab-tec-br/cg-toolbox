@@ -11,6 +11,16 @@ function termRender(lines) {
     if (l.type === 'warn') return `<span class="ln-warn">⚠ ${l.c}</span>`;
     if (l.type === 'info') return `<span class="ln-info">ℹ ${l.c}</span>`;
     if (l.type === 'ok')   return `<span class="ln-ok">✔ ${l.c}</span>`;
+    if (l.type === 'image') {
+      const label = l.c || 'Configuration image';
+      // imageData = data URI base64 (command_lines.image_data) — guardado no
+      // atributo data-img (base64 nunca contém aspas, então é seguro embutir
+      // direto). Sem imagem anexada ainda (linha criada mas nunca preenchida),
+      // mostra o nome sem virar clicável.
+      return l.imageData
+        ? `<span class="ln-image" data-img="${l.imageData}" onclick="openImageLightbox(this)" role="button" tabindex="0" title="Click to view image">🖼️ ${label}</span>`
+        : `<span class="ln-image ln-image-missing" title="No image attached">🖼️ ${label}</span>`;
+    }
     const prompt = l.p || '[Expert@FW]#';
     // l.c pode conter os marcadores de variável (VAR_OPEN/VAR_CLOSE — ver
     // markVar() em db-render-engine.js) usados só para colorir o trecho no
@@ -340,4 +350,42 @@ function toggleDiff(id) {
   body.classList.toggle('open');
   hd.classList.toggle('open');
 }
+
+// ════════════════════════════════════════════════
+// IMAGE LIGHTBOX — abre em tamanho maior a imagem de uma linha do tipo
+// 'image' (screenshot de configuração, ver command_lines.image_data e
+// termRender() acima). O base64 fica só no atributo data-img do badge
+// clicado; só é copiado para o <img> do lightbox no momento do clique
+// (e removido ao fechar), para não manter uma cópia extra na memória.
+// ════════════════════════════════════════════════
+function openImageLightbox(el) {
+  const src = el.getAttribute('data-img');
+  if (!src) return;
+  const overlay = document.getElementById('imageLightboxOverlay');
+  const img = document.getElementById('imageLightboxImg');
+  if (!overlay || !img) return;
+  img.src = src;
+  overlay.classList.add('show');
+}
+function closeImageLightbox() {
+  const overlay = document.getElementById('imageLightboxOverlay');
+  const img = document.getElementById('imageLightboxImg');
+  if (overlay) overlay.classList.remove('show');
+  if (img) img.src = '';
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const overlay = document.getElementById('imageLightboxOverlay');
+  if (overlay) overlay.addEventListener('click', ev => { if (ev.target.id === 'imageLightboxOverlay') closeImageLightbox(); });
+});
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape') closeImageLightbox();
+});
+// Acessibilidade: o badge da imagem é focável (tabindex) e tem role="button"
+// (ver termRender acima) — Enter/Espaço ativam igual a um clique.
+document.addEventListener('keydown', ev => {
+  if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList && ev.target.classList.contains('ln-image')) {
+    ev.preventDefault();
+    openImageLightbox(ev.target);
+  }
+});
 

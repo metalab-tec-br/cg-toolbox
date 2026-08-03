@@ -263,10 +263,10 @@ CREATE TABLE IF NOT EXISTS command_lines (
   command_id     TEXT NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
   variant        TEXT NOT NULL DEFAULT 'default',  -- 'default' | 'empty'
   sort_order     INTEGER NOT NULL DEFAULT 0,
-  line_type      TEXT NOT NULL DEFAULT 'cmd',      -- cmd | note | warn | info | ok
-  prompt         TEXT,                              -- ex.: '[Expert@FW]#' (NULL para note/warn/info/ok)
-  content        TEXT NOT NULL DEFAULT '',
-  supports_export INTEGER NOT NULL DEFAULT 0        -- 1 = linha 'cmd' de leitura cujo output pode ser
+  line_type      TEXT NOT NULL DEFAULT 'cmd',      -- cmd | note | warn | info | ok | image
+  prompt         TEXT,                              -- ex.: '[Expert@FW]#' (NULL para note/warn/info/ok/image)
+  content        TEXT NOT NULL DEFAULT '',          -- para line_type='image', guarda o NOME exibido no lugar do comando
+  supports_export INTEGER NOT NULL DEFAULT 0,       -- 1 = linha 'cmd' de leitura cujo output pode ser
                                                      -- redirecionado a um arquivo; quando o toggle da
                                                      -- sidebar "Exportar para arquivo" está ligado, o
                                                      -- motor de render (db-render-engine.js) anexa
@@ -274,6 +274,14 @@ CREATE TABLE IF NOT EXISTS command_lines (
                                                      -- comandos com placeholder_resolver (fw monitor,
                                                      -- tcpdump, zdebug, fw log/logexport), que já
                                                      -- controlam seu próprio redirecionamento.
+  image_data     TEXT                               -- só para line_type='image': a imagem em si, como
+                                                     -- data URI base64 (ex.: 'data:image/png;base64,...'),
+                                                     -- enviada por upload de arquivo ou colada (Ctrl+V) no
+                                                     -- editor de comandos (ver js/command-editor.js). Clicar
+                                                     -- no nome/ícone no card abre a imagem em tamanho maior
+                                                     -- (ver js/terminal-renderer.js: openImageLightbox). Não
+                                                     -- suportado dentro de command_diff_lines (só nas linhas
+                                                     -- principais do comando) — mantém o schema de diffs simples.
 );
 
 -- Bloco expansível "Diferenças por versão / plataforma".

@@ -300,11 +300,17 @@ function _ceReadTags() {
   }));
 }
 
-function _ceBuildLineRow(data) {
-  data = data || { line_type: 'cmd', prompt: '[Expert@FW]#', content: '', supports_export: false };
+// opts.allowImage (default true) controls whether the 'image' line type is
+// offered at all — used to keep it OFF inside version/platform diffs (see
+// _ceBuildDiffRow below), so command_diff_lines (which has no image_data
+// column, by design — see schema.sql) never needs to carry one.
+function _ceBuildLineRow(data, opts) {
+  data = data || { line_type: 'cmd', prompt: '[Expert@FW]#', content: '', supports_export: false, image_data: '' };
+  const allowImage = !opts || opts.allowImage !== false;
+  const availableTypes = allowImage ? CMD_EDITOR_LINE_TYPES.concat('image') : CMD_EDITOR_LINE_TYPES;
   const row = document.createElement('div');
   row.className = 'line-row';
-  const typeOptions = CMD_EDITOR_LINE_TYPES.map(lt => `<option value="${lt}"${lt === data.line_type ? ' selected' : ''}>${lt}</option>`).join('');
+  const typeOptions = availableTypes.map(lt => `<option value="${lt}"${lt === data.line_type ? ' selected' : ''}>${lt}</option>`).join('');
   row.innerHTML = `
     <div class="row-head">
       <span class="ln-drag-handle" title="Drag to reorder" onmousedown="_ceArmLineDrag(this)">
@@ -333,23 +339,106 @@ function _ceBuildLineRow(data) {
         <textarea class="set-input ln-content">${_ceEscHtml(data.content)}</textarea>
       </div>
     </div>
+    <div class="set-row ln-image-controls" style="display:none;">
+      <div class="set-group" style="flex:1;">
+        <span class="set-label">Configuration image</span>
+        <span class="set-hint">Upload a file, or click the box and paste (Ctrl+V) a screenshot from your clipboard.</span>
+        <div class="ln-image-dropzone" tabindex="0" onclick="_ceOpenImageFilePicker(this)">
+          <img class="ln-image-preview" style="display:none;" alt="">
+          <span class="ln-image-placeholder">📷 Click to upload, or paste an image here</span>
+        </div>
+        <input type="file" class="ln-image-file" accept="image/*" style="display:none;" onchange="_ceHandleImageFileInput(this)">
+        <input type="hidden" class="ln-image-data">
+        <div class="ln-image-actions" style="display:none;">
+          <button type="button" class="btn btn-ghost btn-sm ln-image-remove-btn" onclick="_ceRemoveLineImage(this)">✕ Remove image</button>
+        </div>
+      </div>
+    </div>
   `;
   row.querySelector('.row-remove-btn').addEventListener('click', () => row.remove());
   const typeSel = row.querySelector('.ln-type');
   const promptInput = row.querySelector('.ln-prompt');
   const exportLabel = row.querySelector('.ln-export-label');
   const varDD = row.querySelector('.ln-var-dd');
+  const imageControls = row.querySelector('.ln-image-controls');
+  const contentLabel = row.querySelector('.ln-content-label');
+  const contentTextarea = row.querySelector('.ln-content');
   const syncPromptVisibility = () => {
     const isCmd = typeSel.value === 'cmd';
+    const isImage = typeSel.value === 'image';
     promptInput.style.display = isCmd ? '' : 'none';
     exportLabel.style.display = isCmd ? '' : 'none';
     varDD.style.display = isCmd ? '' : 'none';
+    imageControls.style.display = isImage ? '' : 'none';
+    contentLabel.textContent = isImage ? 'Name' : 'Content';
+    contentTextarea.placeholder = isImage ? 'Name shown instead of the command, e.g. "VPN tunnel configuration"' : '';
   };
   typeSel.addEventListener('change', syncPromptVisibility);
   syncPromptVisibility();
+  // Preenche a imagem já salva (modo edição) sem precisar reconstruir o HTML
+  // com o base64 embutido — evita gerar/escapar uma string potencialmente
+  // grande na montagem do template acima.
+  if (data.image_data) _ceSetImagePreview(row, data.image_data);
   return row;
 }
-function cmdEditorAddLine(containerId, data) { _ce(containerId).appendChild(_ceBuildLineRow(data)); }
+function cmdEditorAddLine(containerId, data, opts) { _ce(containerId).appendChild(_ceBuildLineRow(data, opts)); }
+
+// ── Linha de imagem (screenshot de configuração) ───────────────────────
+// A imagem é guardada como data URI base64 (command_lines.image_data — ver
+// schema.sql) e viaja dentro do JSON do comando, sem endpoint de upload
+// separado. Duas formas de preenchê-la: escolher um arquivo (input file
+// disparado pelo clique na caixa) ou colar (Ctrl+V) com a caixa focada.
+function _ceOpenImageFilePicker(dropzoneEl) {
+  const row = dropzoneEl.closest('.line-row');
+  const input = row && row.querySelector('.ln-image-file');
+  if (input) input.click();
+}
+function _ceHandleImageFileInput(input) {
+  const row = input.closest('.line-row');
+  const file = input.files && input.files[0];
+  if (row && file) _ceLoadImageFile(row, file);
+  input.value = ''; // permite selecionar o mesmo arquivo de novo depois
+}
+function _ceLoadImageFile(row, file) {
+  if (!row || !file) return;
+  const reader = new FileReader();
+  reader.onload = () => _ceSetImagePreview(row, reader.result);
+  reader.readAsDataURL(file);
+}
+function _ceSetImagePreview(row, dataUrl) {
+  const hidden = row.querySelector('.ln-image-data');
+  const img = row.querySelector('.ln-image-preview');
+  const placeholder = row.querySelector('.ln-image-placeholder');
+  const actions = row.querySelector('.ln-image-actions');
+  if (hidden) hidden.value = dataUrl || '';
+  if (img) { img.src = dataUrl || ''; img.style.display = dataUrl ? '' : 'none'; }
+  if (placeholder) placeholder.style.display = dataUrl ? 'none' : '';
+  if (actions) actions.style.display = dataUrl ? '' : 'none';
+}
+function _ceRemoveLineImage(btn) {
+  const row = btn.closest('.line-row');
+  if (row) _ceSetImagePreview(row, '');
+}
+// Listener único a nível de documento (mesmo padrão do drag-to-reorder logo
+// abaixo) — o evento 'paste' é despachado para o elemento focado; checamos
+// se é (ou está dentro de) uma caixa de imagem antes de agir, para não
+// interferir com colar texto em outros campos do formulário.
+document.addEventListener('paste', ev => {
+  const active = document.activeElement;
+  const dropzone = active && active.closest && active.closest('.ln-image-dropzone');
+  if (!dropzone) return;
+  const items = (ev.clipboardData && ev.clipboardData.items) || [];
+  for (const item of items) {
+    if (item.type && item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file) {
+        _ceLoadImageFile(dropzone.closest('.line-row'), file);
+        ev.preventDefault();
+      }
+      break;
+    }
+  }
+});
 // "Insert variable" panel: lists the parameters registered in the catalog
 // (CATALOGS.parameters) and inserts {{key}} into the command content
 // textarea at the cursor position.
@@ -430,12 +519,14 @@ document.addEventListener('dragend', ev => {
 function _ceReadLinesFrom(containerEl) {
   return [...containerEl.querySelectorAll('.line-row')].map((row, i) => {
     const lineType = row.querySelector('.ln-type').value;
+    const imageDataInput = row.querySelector('.ln-image-data'); // ausente nas linhas de diff (allowImage:false)
     return {
       sort_order: i,
       line_type: lineType,
       prompt: lineType === 'cmd' ? (row.querySelector('.ln-prompt').value || null) : null,
-      content: row.querySelector('.ln-content').value || '',
+      content: row.querySelector('.ln-content').value || '', // para line_type='image', é o Nome exibido
       supports_export: lineType === 'cmd' ? row.querySelector('.ln-export').checked : false,
+      image_data: lineType === 'image' && imageDataInput ? (imageDataInput.value || null) : null,
     };
   });
 }
@@ -458,8 +549,10 @@ function _ceBuildDiffRow(data) {
   `;
   row.querySelector('.row-remove-btn').addEventListener('click', () => row.remove());
   const linesWrap = row.querySelector('.diff-lines-wrap');
-  (data.lines || []).forEach(l => linesWrap.appendChild(_ceBuildLineRow(l)));
-  row.querySelector('.diff-add-line-btn').addEventListener('click', () => linesWrap.appendChild(_ceBuildLineRow()));
+  // allowImage:false — diffs não suportam linha de imagem (command_diff_lines
+  // não tem coluna image_data; ver comentário em schema.sql e _ceBuildLineRow).
+  (data.lines || []).forEach(l => linesWrap.appendChild(_ceBuildLineRow(l, { allowImage: false })));
+  row.querySelector('.diff-add-line-btn').addEventListener('click', () => linesWrap.appendChild(_ceBuildLineRow(null, { allowImage: false })));
   return row;
 }
 function cmdEditorAddDiff(data) { _ce('cmdDiffsList').appendChild(_ceBuildDiffRow(data)); }
@@ -528,12 +621,12 @@ async function _cePopulateForm(id) {
 
   _ce('cmdLinesDefaultList').innerHTML = '';
   ((row.lines && row.lines.default) || []).forEach(l => {
-    cmdEditorAddLine('cmdLinesDefaultList', { line_type: l.line_type, prompt: l.prompt, content: l.content, supports_export: !!l.supports_export });
+    cmdEditorAddLine('cmdLinesDefaultList', { line_type: l.line_type, prompt: l.prompt, content: l.content, supports_export: !!l.supports_export, image_data: l.image_data || '' });
   });
 
   _ce('cmdLinesEmptyList').innerHTML = '';
   ((row.lines && row.lines.empty) || []).forEach(l => {
-    cmdEditorAddLine('cmdLinesEmptyList', { line_type: l.line_type, prompt: l.prompt, content: l.content, supports_export: !!l.supports_export });
+    cmdEditorAddLine('cmdLinesEmptyList', { line_type: l.line_type, prompt: l.prompt, content: l.content, supports_export: !!l.supports_export, image_data: l.image_data || '' });
   });
 
   _ce('cmdDiffsList').innerHTML = '';

@@ -821,6 +821,17 @@
   </div>
 </div>
 
+<!-- ══ IMAGE LIGHTBOX — abre em tamanho maior uma linha de comando do tipo
+     'image' (screenshot de configuração colada/enviada no editor de
+     comandos). Ver js/terminal-renderer.js: openImageLightbox/closeImageLightbox,
+     e termRender() (span.ln-image, atributo data-img). ══ -->
+<div class="modal-overlay image-lightbox-overlay" id="imageLightboxOverlay">
+  <div class="image-lightbox-box">
+    <button class="modal-close image-lightbox-close" onclick="closeImageLightbox()">✕</button>
+    <img id="imageLightboxImg" alt="Configuration image">
+  </div>
+</div>
+
 <!-- ══ CATALOG ADMIN MODALS — create/edit/delete for Versions, Environments, Topics
      and Parameters (admin mode). One separate screen per item (per user
      request) instead of the old single tabbed modal — each "Manage..." button
