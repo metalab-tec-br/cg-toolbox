@@ -21,15 +21,26 @@ function termRender(lines) {
   return `<div class="term">${rows}</div>`;
 }
 
-// Botão de copiar compacto (somente ícone), posicionado no final de cada linha de comando.
-function copyBtn(text) {
-  const id = 'c' + (++_uid);
-  const btn = `<button class="copy-btn copy-btn-inline" id="${id}" title="copy">
-    <svg width="10" height="10" fill="none" viewBox="0 0 16 16">
+// Ícones do botão de copiar — o normal (dois retângulos sobrepostos) e o de
+// confirmação (um "check"), trocados via innerHTML no momento do clique (ver
+// copyBtn abaixo) e restaurados depois de COPY_BTN_FEEDBACK_MS.
+const COPY_BTN_ICON = `<svg width="10" height="10" fill="none" viewBox="0 0 16 16">
       <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
       <path d="M3 10H2a1 1 0 01-1-1V2a1 1 0 011-1h7a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.5"/>
-    </svg>
-  </button>`;
+    </svg>`;
+const COPY_BTN_ICON_OK = `<svg width="10" height="10" fill="none" viewBox="0 0 16 16">
+      <path d="M2 8.5l3.5 3.5L14 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+const COPY_BTN_FEEDBACK_MS = 1400;
+
+// Botão de copiar compacto, posicionado no final de cada linha de comando.
+// Ao clicar: troca o ícone pelo "check" e mostra o texto "Copied" por
+// COPY_BTN_FEEDBACK_MS, depois volta ao estado normal — mesma mecânica de
+// timeout que já existia para a classe .ok (só a coloração), agora também
+// trocando o conteúdo do botão para dar um feedback bem mais visível.
+function copyBtn(text) {
+  const id = 'c' + (++_uid);
+  const btn = `<button class="copy-btn copy-btn-inline" id="${id}" title="Copy">${COPY_BTN_ICON}</button>`;
   // store text via JS after insert
   setTimeout(() => {
     const el = document.getElementById(id);
@@ -37,8 +48,15 @@ function copyBtn(text) {
     el._copyText = text;
     el.addEventListener('click', () => {
       navigator.clipboard.writeText(el._copyText || '').then(() => {
+        clearTimeout(el._copyRevertTimer); // clique repetido não deixa dois timers concorrendo
         el.classList.add('ok');
-        setTimeout(() => el.classList.remove('ok'), 1000);
+        el.innerHTML = `${COPY_BTN_ICON_OK}<span>Copied</span>`;
+        el.title = 'Copied!';
+        el._copyRevertTimer = setTimeout(() => {
+          el.classList.remove('ok');
+          el.innerHTML = COPY_BTN_ICON;
+          el.title = 'Copy';
+        }, COPY_BTN_FEEDBACK_MS);
       });
     });
   }, 0);
