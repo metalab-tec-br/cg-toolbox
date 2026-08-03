@@ -67,7 +67,10 @@
   transition: left .15s, border-color .12s, color .12s;
 }
 .sb-divider-toggle:hover { border-color: var(--teal); color: var(--teal); }
-.sb-divider-toggle .icon-expand { display: none; }
+/* Ícone "desafixado" (colapsado): mesmo alfinete, mas sem preenchimento e
+   levemente inclinado — convenção comum p/ indicar "solto" (clique fixa
+   de novo). */
+.sb-divider-toggle .icon-expand { display: none; transform: rotate(28deg); transform-origin: 50% 45%; }
 .app.sidebar-collapsed .sb-divider-toggle { left: calc(var(--sidebar-collapsed-w) - 10px); }
 .app.sidebar-collapsed .sb-divider-toggle .icon-collapse { display: none; }
 .app.sidebar-collapsed .sb-divider-toggle .icon-expand { display: block; }

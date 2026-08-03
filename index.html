@@ -212,13 +212,15 @@
      só reposiciona o botão para a borda da barra estreita, nunca some).
      Colapsada = barra estreita só com ícones por seção; passar o mouse
      expande tudo por cima do conteúdo (flyout) e recolhe ao tirar o mouse,
-     sem ficar fixa aberta. Os dois ícones (seta p/ esquerda = colapsar,
-     seta p/ direita = fixar de novo) ficam no mesmo botão; qual deles
-     aparece é decidido só por CSS, a partir da classe 'sidebar-collapsed'
-     em .app (ver .sb-divider-toggle). -->
-<button type="button" class="sb-divider-toggle" id="sbDividerToggle" onclick="toggleShowSidebar()" title="Pin/collapse sidebar">
-  <svg class="icon-collapse" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14 6 8 12 14 18"/></svg>
-  <svg class="icon-expand" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="10 6 16 12 10 18"/></svg>
+     sem ficar fixa aberta. Ícone de alfinete/pin (estilo "fixar"): sólido e
+     reto (.icon-collapse) = sidebar fixa, clique colapsa; contorno e
+     inclinado (.icon-expand, gira via CSS) = sidebar colapsada/solta,
+     clique fixa de novo. Os dois ficam no mesmo botão; qual aparece é
+     decidido só por CSS, a partir da classe 'sidebar-collapsed' em .app
+     (ver .sb-divider-toggle). -->
+<button type="button" class="sb-divider-toggle" id="sbDividerToggle" onclick="toggleShowSidebar()" title="Pin/unpin sidebar">
+  <svg class="icon-collapse" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.6" r="3.1" fill="currentColor" stroke="none"/><line x1="12" y1="10.8" x2="12" y2="19.5"/></svg>
+  <svg class="icon-expand" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.6" r="3.1"/><line x1="12" y1="10.8" x2="12" y2="19.5"/></svg>
 </button>
 
 <!-- ══ MAIN ══ -->
