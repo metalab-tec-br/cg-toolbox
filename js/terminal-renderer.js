@@ -17,9 +17,14 @@ function termRender(lines) {
       // atributo data-img (base64 nunca contém aspas, então é seguro embutir
       // direto). Sem imagem anexada ainda (linha criada mas nunca preenchida),
       // mostra o nome sem virar clicável.
+      // Ícone SVG (contorno, mesmo estilo dos demais ícones do app — ver
+      // tasks #177-181) no lugar do emoji 🖼️; o rótulo fica em seu próprio
+      // <span> para permitir truncar com "…" (ver .ln-image-label em
+      // components.css) sem afetar o ícone.
+      const icon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`;
       return l.imageData
-        ? `<span class="ln-image" data-img="${l.imageData}" onclick="openImageLightbox(this)" role="button" tabindex="0" title="Click to view image">🖼️ ${label}</span>`
-        : `<span class="ln-image ln-image-missing" title="No image attached">🖼️ ${label}</span>`;
+        ? `<span class="ln-image" data-img="${l.imageData}" onclick="openImageLightbox(this)" role="button" tabindex="0" title="Click to view image">${icon}<span class="ln-image-label">${label}</span></span>`
+        : `<span class="ln-image ln-image-missing" title="No image attached">${icon}<span class="ln-image-label">${label}</span></span>`;
     }
     const prompt = l.p || '[Expert@FW]#';
     // l.c pode conter os marcadores de variável (VAR_OPEN/VAR_CLOSE — ver

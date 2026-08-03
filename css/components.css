@@ -81,22 +81,60 @@
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn:disabled:hover { border-color: var(--bdr); }
 .btn-sm { padding: 4px 9px; font-size: 11px; }
-/* Realce "modo administrador" — mesmo tratamento visual do item ativo da
-   sidebar (#favNavRow.on: fundo var(--teal-bg) + borda/texto var(--teal),
-   que hoje aparece rosa/magenta — cor da marca). Aplicado nos botões que só
-   existem com o Modo administrador habilitado (Adicionar comando/Exportar
-   CSV na barra de ferramentas, e os 4 botões "Gerenciar..." na sidebar) para
-   sinalizar visualmente que são controles de administração. Seletor com duas
-   classes (".btn.admin-highlight") para vencer ".btn-ghost" (fundo
-   transparente) com folga de especificidade. */
+/* Realce visual (fundo/borda/texto na cor de destaque) — mesmo tratamento do
+   item ativo da sidebar (#favNavRow.on). Puramente estético: sinaliza os
+   botões de "ações em lote"/gestão (Adicionar comando, Import/Export
+   commands, os 6 atalhos de cadastro em Configurações → Registration), sem
+   nenhuma relação com controle de acesso (o antigo "Admin mode" foi
+   removido — estes recursos ficam sempre disponíveis a qualquer usuário).
+   Seletor com duas classes (".btn.admin-highlight") para vencer
+   ".btn-ghost" (fundo transparente) com folga de especificidade. */
 .btn.admin-highlight { background: var(--teal-bg); border-color: var(--teal); color: var(--teal); }
 .btn.admin-highlight:hover { filter: brightness(1.05); border-color: var(--teal); }
 
-/* Modal de Configurações: maior e com espaçamento mais compacto para caber
-   sem precisar rolar na maioria das telas. */
-#settingsOverlay .modal-box { max-height: 96vh; width: min(520px, 100%); }
-#settingsOverlay .modal-body { padding: 12px 16px; gap: 9px; }
+/* Modal de Configurações: layout de 2 colunas (nav lateral + conteúdo por
+   aba), por isso mais largo que os modais padrão. */
+#settingsOverlay .modal-box { max-height: 92vh; width: min(760px, 100%); overflow: hidden; }
 #settingsOverlay .set-group { gap: 4px; }
+
+/* ─── Configurações: layout em abas (nav lateral + painel de conteúdo) ───
+   Ver switchSettingsPane() em js/settings-modal.js. Três abas: "prefs"
+   (User preferences, antigas Default settings), "catalog" (Registration —
+   cadastros compartilhados) e "system" (audit log, backup, import/export de
+   comandos, default org-wide). flex:1 + min-height:0 no wrapper permite que
+   .settings-content role internamente sem que a nav lateral se mova. */
+.settings-layout { display: flex; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.settings-nav {
+  display: flex; flex-direction: column; gap: 2px; flex-shrink: 0;
+  width: 176px; padding: 10px 8px; border-right: 1px solid var(--bdr);
+  overflow-y: auto;
+}
+.settings-nav-btn {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 8px 10px; border: none; border-radius: 6px; background: transparent;
+  color: var(--muted); font-size: 12px; font-weight: 700; font-family: var(--sans);
+  text-align: left; cursor: pointer; transition: all .12s;
+}
+.settings-nav-btn svg { flex-shrink: 0; opacity: .85; }
+.settings-nav-btn:hover { background: var(--surf2); color: var(--text); }
+.settings-nav-btn.on { background: var(--teal-bg); color: var(--teal); }
+.settings-nav-btn.on svg { opacity: 1; }
+.settings-content {
+  flex: 1 1 auto; min-width: 0; overflow-y: auto;
+  padding: 16px; display: flex; flex-direction: column; gap: 15px;
+}
+.settings-pane { display: flex; flex-direction: column; gap: 15px; }
+.settings-catalog-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.settings-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 7px; padding: 18px 10px; border: 1px solid var(--bdr); border-radius: 8px;
+  background: var(--surf2); color: var(--text); font-size: 11.5px; font-weight: 700;
+  font-family: var(--sans); cursor: pointer; transition: all .12s;
+}
+.settings-tile svg { opacity: .85; transition: opacity .12s; }
+.settings-tile:hover { border-color: var(--teal); color: var(--teal); }
+.settings-tile:hover svg { opacity: 1; }
+.settings-action-row { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* Modal de confirmação genérico (substitui o confirm() nativo do navegador —
    fica centralizado na tela e segue as cores do tema, sem exibir o host). */
@@ -514,12 +552,21 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .ln-ok   { display: block; font-size: 11px; font-family: var(--sans); color: var(--green); background: var(--green-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; font-weight: 600; }
 /* Badge da linha do tipo 'image' (screenshot de configuração) — ver
    command_lines.image_data (schema.sql) e openImageLightbox()
-   (terminal-renderer.js). Clicável/focável, abre a imagem em tamanho maior. */
+   (terminal-renderer.js). Clicável/focável, abre a imagem em tamanho maior.
+   Área colorida = 30% da largura do terminal (não a linha inteira), nome
+   sempre alinhado à esquerda (justify-content:flex-start), altura reduzida
+   (padding vertical menor que ln-warn/ln-info/ln-ok) e letras do mesmo
+   tamanho dos comandos (font-size = .term). Ícone SVG (não emoji) fixo à
+   esquerda, sem encolher; o rótulo trunca com "…" se não couber nos 30%. */
 .ln-image {
-  display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-family: var(--sans);
+  display: inline-flex; align-items: center; justify-content: flex-start; gap: 5px;
+  font-size: 12.5px; font-family: var(--sans);
   color: var(--teal); background: var(--teal-bg); border: 1px solid transparent; border-radius: 4px;
-  padding: 4px 9px; margin-top: 5px; font-weight: 600; cursor: pointer; transition: border-color .12s;
+  width: 30%; min-width: 130px; max-width: 100%; box-sizing: border-box;
+  padding: 3px 9px; margin-top: 5px; font-weight: 600; cursor: pointer; transition: border-color .12s;
 }
+.ln-image svg { flex-shrink: 0; }
+.ln-image-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; text-align: left; }
 .ln-image:hover, .ln-image:focus { border-color: var(--teal); outline: none; }
 .ln-image.ln-image-missing { color: var(--muted); background: var(--surf2); cursor: default; }
 
@@ -591,16 +638,11 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
    ficam ocultos por padrão (compact-cards) e só aparecem quando habilitada. */
 .compact-cards .ln-note { display: none; }
 
-/* Incluir/duplicar/editar (botão 'Add command', editar/duplicar do card)
-   ficam sempre visíveis para todos os usuários — não dependem de 'Admin
-   mode'. Import/Export em massa (#cmdActionsAdminOnly), o gerenciamento de
-   catálogos (Ambientes/Parâmetros/Tópicos/Versões, #addCommandBlock) e o
-   default org-wide de System commands (#adminDefaultsBlock) continuam
-   restritos a 'Admin mode' em Configurações. */
-body.hide-command-editing #addCommandBlock { display: none; }
-body.hide-command-editing #adminDefaultsBlock { display: none; }
-body.hide-command-editing #cmdActionsAdminOnly { display: none; }
-body.hide-command-editing #backupManagerBtn { display: none; }
+/* O antigo "Admin mode" (body.hide-command-editing) foi removido — incluir/
+   duplicar/editar comandos, import/export em massa, gerenciamento de
+   catálogos (Vendors/Systems/Versions/Environments/Topics/Parameters,
+   Configurações → Registration) e o default org-wide de System commands
+   (Configurações → System) ficam sempre disponíveis para qualquer usuário. */
 
 /* ─── AUDIT LOG MODAL (Settings → View audit log, see js/audit-log.js) ─── */
 .audit-log-wrap { max-height: 55vh; overflow-y: auto; border: 1px solid var(--bdr); border-radius: 8px; }

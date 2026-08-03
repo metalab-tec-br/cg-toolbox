@@ -20,7 +20,10 @@ const DEFAULT_SETTINGS = {
 
 // Ligado/desligado ao vivo por terminal-renderer.js (card()) para decidir se mostra o
 // ícone de editar em cada card — atualizado só por applyCommandEditingSetting().
-let COMMAND_EDITING_ENABLED = false;
+// O antigo toggle "Admin mode" foi removido: este flag agora é sempre `true`
+// (ver applyDefaultsFromSettings() mais abaixo), mantido só para não quebrar
+// a checagem defensiva já existente em js/catalog-admin.js (openCatalogAdmin).
+let COMMAND_EDITING_ENABLED = true;
 
 // Lido por render.js para decidir a unidade de agrupamento recolhível: 'topic' (padrão —
 // uma seção por Tópico, comportamento de sempre) ou 'version' (um bloco recolhível por
@@ -221,27 +224,15 @@ function toggleModalSystemCommandsDefault() {
   saveGlobalSettings({ showSystemCommandsDefault: String(next) }).catch(e => console.warn('Failed to save admin default', e));
 }
 
-// Mostra/oculta o botão '+ Adicionar comando' da sidebar e o ícone de editar de cada
-// card, conforme a preferência 'enableCommandEditing' (fica escondido por padrão para
-// não poluir a tela do usuário comum — só aparece quando habilitado em Configurações).
+// Botão '+ Adicionar comando' e o ícone de editar de cada card ficam sempre
+// visíveis para todo usuário — o antigo toggle "Admin mode" que controlava
+// isso (enableCommandEditing) foi removido; esta função é chamada uma única
+// vez no boot (ver applyDefaultsFromSettings()) só para manter
+// COMMAND_EDITING_ENABLED coerente com a classe do body.
 function applyCommandEditingSetting(enabled) {
   COMMAND_EDITING_ENABLED = !!enabled;
   document.body.classList.toggle('hide-command-editing', !enabled);
   if (typeof render === 'function') render(); // reconstrói os cards para (des)aparecer o lápis de editar
-}
-function syncCommandEditingToggleUI(enabled) {
-  const modal = document.getElementById('mEnableEditingToggle');
-  if (modal) modal.classList.toggle('on', enabled);
-}
-function setEnableCommandEditing(enabled) {
-  applyCommandEditingSetting(enabled);
-  syncCommandEditingToggleUI(enabled);
-  const s = loadSettings();
-  s.enableCommandEditing = enabled;
-  persistSettings(s);
-}
-function toggleModalEnableEditing() {
-  setEnableCommandEditing(!(loadSettings().enableCommandEditing === true));
 }
 
 // Agrupamento do resultado: 'topic' (uma seção recolhível por Tópico — padrão),
@@ -307,8 +298,10 @@ function applyDefaultsFromSettings() {
   syncShowSystemCommandsToggleUI(s.showSystemCommands !== false);
   applyExportSetting(s.exportEnabled === true);
   syncExportToggleUI(s.exportEnabled === true);
-  applyCommandEditingSetting(s.enableCommandEditing === true);
-  syncCommandEditingToggleUI(s.enableCommandEditing === true);
+  // Admin mode removido — incluir/duplicar/editar comandos, catálogos e
+  // import/export ficam sempre disponíveis, independente de qualquer
+  // preferência salva (ver DEFAULT_SETTINGS acima e Configurações → System).
+  applyCommandEditingSetting(true);
   GROUP_BY = normalizeGroupBy(s.groupBy); // sem render() aqui — render() inicial ainda vai rodar
   syncGroupByToggleUI(GROUP_BY);
 }

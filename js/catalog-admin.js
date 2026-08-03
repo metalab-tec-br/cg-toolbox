@@ -4,10 +4,10 @@
 // tabbed modal — see #catalogAdminVersionsOverlay, #catalogAdminEnvironmentsOverlay,
 // #catalogAdminTopicsOverlay, #catalogAdminParametersOverlay in index.html).
 // ════════════════════════════════════════════════
-// Only reachable via "Admin mode" (same enableCommandEditing toggle already
-// used for commands — the buttons that open these screens live at the end of
-// the sidebar, inside #addCommandBlock, hidden by the same
-// body.hide-command-editing CSS rule).
+// Reachable by any user via Settings → Registration (see index.html,
+// .settings-pane[data-pane="catalog"]) — the old "Admin mode" gate was
+// removed; COMMAND_EDITING_ENABLED (js/settings.js) is now always true, kept
+// only as a harmless defensive check below.
 //
 // Each item (version/environment/topic) has a stable `key` — the same one
 // used in command_versions/command_environments/command_topics — which can

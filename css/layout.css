@@ -269,14 +269,13 @@
   cursor: pointer; transition: border-color .12s, color .12s;
 }
 .icon-btn:hover { border-color: var(--teal); color: var(--teal); }
-/* "Importar"/"Exportar"/"Adicionar comando" — movidos da sidebar para cá;
-   margin-left:auto empurra o grupo para a ponta direita da barra, junto do
-   resto dos controles de agrupar/recolher. "Gerenciar Versões/Ambientes/
-   Tópicos" continua na sidebar. Import/Export ficam num wrapper à parte
-   (#cmdActionsAdminOnly) escondido fora do Admin mode — ver
-   body.hide-command-editing abaixo; Add command fica fora dele, sempre visível. */
+/* "Add command" — o único botão de ação em massa que continua na barra de
+   ferramentas; margin-left:auto empurra o grupo para a ponta direita, junto
+   do resto dos controles de agrupar/recolher. Import/Export commands e o
+   gerenciamento de catálogos (Vendors/Systems/Versions/Environments/Topics/
+   Parameters) foram movidos para o modal de Configurações (abas Registration
+   e System) — o antigo "Admin mode" que os escondia foi removido. */
 .ctb-cmd-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-.ctb-cmd-actions-admin { display: flex; align-items: center; gap: 6px; }
 /* Seletor com duas classes (maior especificidade que ".btn" sozinho em
    components.css, carregado depois) — sem isso o tamanho da base .btn
    (padding 7px 14px / font-size 12px) vencia e os botões saíam grandes.

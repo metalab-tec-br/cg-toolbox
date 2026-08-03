@@ -170,19 +170,10 @@
     </div>
   </div>
 
-  <div class="sb-block" id="addCommandBlock">
-    <div class="sb-head">Manage</div>
-    <!-- One button per item, in hierarchy order (Vendor → System → Version →
-         Environment → Topic), with Parameters last since it's unrelated to
-         that chain — each opens the catalog modal already on the
-         corresponding tab. -->
-    <button type="button" class="btn btn-ghost sb-manage-btn admin-highlight" style="width:100%; font-size:11px;" onclick="openCatalogAdmin('vendors')">Vendors</button>
-    <button type="button" class="btn btn-ghost sb-manage-btn admin-highlight" style="width:100%; font-size:11px; margin-top:6px;" onclick="openCatalogAdmin('systems')">Systems</button>
-    <button type="button" class="btn btn-ghost sb-manage-btn admin-highlight" style="width:100%; font-size:11px; margin-top:6px;" onclick="openCatalogAdmin('versions')">Versions</button>
-    <button type="button" class="btn btn-ghost sb-manage-btn admin-highlight" style="width:100%; font-size:11px; margin-top:6px;" onclick="openCatalogAdmin('environments')">Environments</button>
-    <button type="button" class="btn btn-ghost sb-manage-btn admin-highlight" style="width:100%; font-size:11px; margin-top:6px;" onclick="openCatalogAdmin('topics')">Topics</button>
-    <button type="button" class="btn btn-ghost sb-manage-btn admin-highlight" style="width:100%; font-size:11px; margin-top:6px;" onclick="openCatalogAdmin('parameters')">Parameters</button>
-  </div>
+  <!-- Manage Vendors/Systems/Versions/Environments/Topics/Parameters moved
+       into the Settings modal → "Registration" tab (see #settingsOverlay,
+       .settings-pane[data-pane="catalog"]) — no longer gated behind Admin
+       mode, which was removed entirely. -->
 
   <a class="sb-credit" href="https://cg-one.com" target="_blank" rel="noopener noreferrer">
     <span class="sb-credit-txt">Developed by</span>
@@ -249,24 +240,11 @@
     <button type="button" class="icon-btn" onclick="collapseAllSections()" title="Collapse all">
       <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 10.5l6-5 6 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 14.5l6-5 6 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
-    <!-- "Import"/"Export"/"Add command" — moved here from the sidebar; "Manage
-         Versions/Environments/Topics" stays in the sidebar (see the
-         #addCommandBlock block below, before the footer). Import/Export are
-         bulk operations wrapped in #cmdActionsAdminOnly, hidden outside Admin
-         mode (body.hide-command-editing #cmdActionsAdminOnly); "Add command"
-         sits outside that wrapper and is always visible to every user (see
-         task that lifted the Admin-mode gate from add/duplicate/edit). -->
+    <!-- "Add command" stays here in the toolbar. Import/Export commands moved
+         into the Settings modal → "System" tab (see #settingsOverlay,
+         .settings-pane[data-pane="system"]) — no longer gated behind Admin
+         mode, which was removed entirely. -->
     <div class="ctb-cmd-actions" id="cmdActionsBlock">
-      <span class="ctb-cmd-actions-admin" id="cmdActionsAdminOnly">
-        <button type="button" class="btn ctb-cmd-btn admin-highlight" onclick="openImportCommandsModal(event)" title="Bulk-create commands from a .csv file.">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 10.5V3M4.5 6.5L8 3l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-          <span>Import commands</span>
-        </button>
-        <button type="button" class="btn ctb-cmd-btn admin-highlight" id="exportCsvBtn" onclick="openExportColumnsModal()" title="Exports the command catalog (current language) as a .csv file — you choose the columns">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 2v7.5M4.5 6.5L8 10l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-          <span>Export commands</span>
-        </button>
-      </span>
       <button type="button" class="btn ctb-cmd-btn admin-highlight" onclick="openCommandEditor('create')">
         <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         <span>Add command</span>
@@ -277,24 +255,41 @@
 </div>
 </div><!-- .app -->
 
-<!-- ══ SETTINGS MODAL ══ -->
+<!-- ══ SETTINGS MODAL ══
+     Reestruturado em 3 abas (nav lateral + conteúdo), padrão comum a
+     configurações de apps modernos (Slack/VS Code/Notion): "User
+     preferences" (as antigas Default settings), "Registration" (cadastros
+     Vendors/Systems/Versions/Environments/Topics/Parameters, antes na
+     sidebar) e "System" (audit log, backup, import/export de comandos,
+     default org-wide de System commands — antes espalhados e atrás do toggle
+     Admin mode). O Admin mode foi removido: tudo abaixo é permanentemente
+     acessível a qualquer usuário via este menu, sem gate. ══ -->
 <div class="modal-overlay" id="settingsOverlay">
-  <div class="modal-box">
+  <div class="modal-box settings-modal-box">
     <div class="modal-head">
       <span class="modal-title" style="display:flex;align-items:center;gap:6px;">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8a4 4 0 100 8 4 4 0 000-8z"/><path d="M19.4 13a7.97 7.97 0 000-2l2.1-1.6-2-3.4-2.5 1a8.1 8.1 0 00-1.7-1L14.9 3h-4l-.4 2.9a8.1 8.1 0 00-1.7 1l-2.5-1-2 3.4L6.6 11a7.97 7.97 0 000 2l-2.1 1.6 2 3.4 2.5-1c.5.4 1.1.8 1.7 1l.4 2.9h4l.4-2.9c.6-.2 1.2-.6 1.7-1l2.5 1 2-3.4L19.4 13z"/></svg>
         <span>Settings</span>
       </span>
-      <!-- Admin mode fica no cabeçalho do modal (ao lado do título), não mais
-           no rodapé — é um toggle de modo/permissão, não uma preferência de
-           exibição do grupo 'Default settings' (ver toggleModalEnableEditing
-           em js/settings.js). -->
-      <div class="sb-toggle sb-toggle-head" id="mEnableEditingToggle" onclick="toggleModalEnableEditing()">
-        <div class="tog-track"><div class="tog-knob"></div></div><span>Admin mode</span>
-      </div>
       <button class="modal-close" onclick="closeSettingsModal()">✕</button>
     </div>
-    <div class="modal-body">
+    <div class="settings-layout">
+      <nav class="settings-nav">
+        <button type="button" class="settings-nav-btn on" data-pane="prefs" onclick="switchSettingsPane('prefs')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
+          <span>User preferences</span>
+        </button>
+        <button type="button" class="settings-nav-btn" data-pane="catalog" onclick="switchSettingsPane('catalog')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="18" height="4" rx="1"/></svg>
+          <span>Registration</span>
+        </button>
+        <button type="button" class="settings-nav-btn" data-pane="system" onclick="switchSettingsPane('system')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6l7-3z"/></svg>
+          <span>System</span>
+        </button>
+      </nav>
+      <div class="settings-content">
+      <div class="settings-pane" data-pane="prefs">
       <div class="set-group" id="settingsToggleGroup">
         <span class="set-label">Default settings</span>
         <div class="sb-toggle" id="mThemeToggle" onclick="toggleModalTheme()">
@@ -330,18 +325,6 @@
              syncExportToggleUI em js/settings.js). -->
         <div class="sb-toggle" id="mExportToggle" onclick="toggleModalExport()">
           <div class="tog-track"><div class="tog-knob"></div></div><span>Export</span>
-        </div>
-      </div>
-      <!-- Default (org-wide) para o toggle "System commands" da sidebar — só
-           visível com Admin mode ligado (ver body.hide-command-editing em
-           components.css). Diferente do toggle da sidebar: isto NÃO é a
-           preferência pessoal de quem está mexendo agora, é o valor que
-           qualquer usuário SEM escolha própria salva vai herdar (ver
-           applyGlobalDefaultsIfNeeded em js/settings.js). -->
-      <div class="set-group" id="adminDefaultsBlock">
-        <span class="set-label">Admin default</span>
-        <div class="sb-toggle" id="mSystemCommandsDefaultToggle" onclick="toggleModalSystemCommandsDefault()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>Show System commands by default</span>
         </div>
       </div>
       <div class="set-group set-group-row">
@@ -460,25 +443,87 @@
           </div>
         </div>
       </div>
-    </div>
+      </div><!-- /.settings-pane[prefs] -->
+
+      <!-- PANE: Registration — cadastros compartilhados (Vendors, Systems,
+           Versions, Environments, Topics, Parameters), antes na sidebar
+           (#addCommandBlock) e reservados ao Admin mode. Cada botão abre o
+           modal já existente (openCatalogAdmin(kind), ver
+           js/catalog-admin.js) — nenhuma mudança de comportamento, só de
+           localização. -->
+      <div class="settings-pane" data-pane="catalog" style="display:none;">
+        <span class="set-hint">Manage the shared catalogs used across the app. Changes apply to every user immediately.</span>
+        <div class="settings-catalog-grid">
+          <button type="button" class="settings-tile" onclick="openCatalogAdmin('vendors')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V7l7-4 7 4v14"/><path d="M10 21v-6h4v6"/><path d="M17 21V10l4 2v9"/></svg>
+            <span>Vendors</span>
+          </button>
+          <button type="button" class="settings-tile" onclick="openCatalogAdmin('systems')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>
+            <span>Systems</span>
+          </button>
+          <button type="button" class="settings-tile" onclick="openCatalogAdmin('versions')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+            <span>Versions</span>
+          </button>
+          <button type="button" class="settings-tile" onclick="openCatalogAdmin('environments')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 4 5.6 4 9s-1.5 6.5-4 9c-2.5-2.5-4-5.6-4-9s1.5-6.5 4-9z"/></svg>
+            <span>Environments</span>
+          </button>
+          <button type="button" class="settings-tile" onclick="openCatalogAdmin('topics')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4L13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg>
+            <span>Topics</span>
+          </button>
+          <button type="button" class="settings-tile" onclick="openCatalogAdmin('parameters')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            <span>Parameters</span>
+          </button>
+        </div>
+      </div><!-- /.settings-pane[catalog] -->
+
+      <!-- PANE: System — audit log, backup/restore, import/export de
+           comandos e o default org-wide de "System commands", antes atrás do
+           Admin mode e espalhados entre a toolbar e o rodapé deste modal.
+           Nenhuma mudança de comportamento, só de localização. -->
+      <div class="settings-pane" data-pane="system" style="display:none;">
+        <div class="set-group" id="adminDefaultsBlock">
+          <span class="set-label">Organization default</span>
+          <div class="sb-toggle" id="mSystemCommandsDefaultToggle" onclick="toggleModalSystemCommandsDefault()">
+            <div class="tog-track"><div class="tog-knob"></div></div><span>Show System commands by default</span>
+          </div>
+        </div>
+        <div class="set-group">
+          <span class="set-label">Commands</span>
+          <div class="settings-action-row">
+            <button type="button" class="btn btn-ghost admin-highlight" onclick="openImportCommandsModal(event)" title="Bulk-create commands from a .csv file.">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 10.5V3M4.5 6.5L8 3l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <span>Import commands</span>
+            </button>
+            <button type="button" class="btn btn-ghost admin-highlight" id="exportCsvBtn" onclick="openExportColumnsModal()" title="Exports the command catalog as a .csv file — you choose the columns">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 2v7.5M4.5 6.5L8 10l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <span>Export commands</span>
+            </button>
+          </div>
+        </div>
+        <div class="set-group">
+          <span class="set-label">Database</span>
+          <div class="settings-action-row">
+            <button type="button" class="btn btn-ghost" onclick="openAuditLogModal()">📋 View audit log</button>
+            <button type="button" class="btn btn-ghost" id="backupManagerBtn" onclick="openBackupManagerModal()">🗄️ Backup &amp; Restore</button>
+          </div>
+        </div>
+      </div><!-- /.settings-pane[system] -->
+      </div><!-- /.settings-content -->
+    </div><!-- /.settings-layout -->
     <div class="modal-foot">
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;" id="settingsFootLeft">
         <button type="button" class="btn btn-ghost" id="mClearFavBtn" onclick="clearFavoritesConfirm()">🗑️ Clear favorites</button>
         <button class="btn btn-ghost" onclick="restoreDefaultsModal()">Restore defaults</button>
-        <!-- Log de auditoria (create/update/delete de comandos, 30 dias) — ver
-             server/index.js (GET /api/audit-log) e js/audit-log.js. Visível
-             para todos os usuários, assim como os demais botões deste rodapé. -->
-        <button type="button" class="btn btn-ghost" onclick="openAuditLogModal()">📋 View audit log</button>
-        <!-- Backup/restauração do banco de dados + agendamento (ver
-             server/index.js: GET/POST /api/backups, PUT /api/backup-schedule,
-             e js/backup.js). Só aparece com Admin mode ligado (mesma regra
-             CSS de #cmdActionsAdminOnly), por ser uma operação de
-             infraestrutura, não uma preferência pessoal. -->
-        <button type="button" class="btn btn-ghost" id="backupManagerBtn" onclick="openBackupManagerModal()">🗄️ Backup &amp; Restore</button>
       </div>
       <div style="display:flex;gap:8px;">
-        <button class="btn" onclick="closeSettingsModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveSettingsModal()">Save</button>
+        <button class="btn" id="settingsCancelBtn" onclick="closeSettingsModal()">Cancel</button>
+        <button class="btn" id="settingsCloseBtn" onclick="closeSettingsModal()" style="display:none;">Close</button>
+        <button class="btn btn-primary" id="settingsSaveBtn" onclick="saveSettingsModal()">Save</button>
       </div>
     </div>
   </div>

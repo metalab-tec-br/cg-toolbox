@@ -65,7 +65,26 @@ bindMultiSelect('mVersion', '.seg-btn', 'data-val', () => updateModalMultiLabel(
 bindMultiSelect('mEnv', '.seg-btn', 'data-val', () => updateModalMultiLabel('mEnv', 'mEnvDDBtn', ENV_KEYS, 'selected', 'None'));
 bindMultiSelect('mType', '.seg-btn', 'data-val', () => updateModalMultiLabel('mType', 'mTypeDDBtn', TYPE_KEYS, 'selected', 'None'));
 
+// Troca de aba do modal de Configurações (User preferences / Registration /
+// System) — ver .settings-nav-btn/.settings-pane em index.html e
+// components.css. Só a aba "prefs" usa o rodapé Cancel/Save/Clear
+// favorites/Restore defaults; nas outras duas (Registration/System) não há
+// nada para salvar, então o rodapé mostra apenas um botão "Close".
+function switchSettingsPane(pane) {
+  document.querySelectorAll('.settings-nav-btn').forEach(b => b.classList.toggle('on', b.dataset.pane === pane));
+  document.querySelectorAll('.settings-pane').forEach(p => { p.style.display = (p.dataset.pane === pane) ? '' : 'none'; });
+  const isPrefs = pane === 'prefs';
+  const footLeft = document.getElementById('settingsFootLeft');
+  const cancelBtn = document.getElementById('settingsCancelBtn');
+  const closeBtn = document.getElementById('settingsCloseBtn');
+  const saveBtn = document.getElementById('settingsSaveBtn');
+  if (footLeft) footLeft.style.display = isPrefs ? '' : 'none';
+  if (cancelBtn) cancelBtn.style.display = isPrefs ? '' : 'none';
+  if (saveBtn) saveBtn.style.display = isPrefs ? '' : 'none';
+  if (closeBtn) closeBtn.style.display = isPrefs ? 'none' : '';
+}
 function openSettingsModal() {
+  switchSettingsPane('prefs'); // sempre abre na primeira aba, independente de onde foi fechado da última vez
   const s = loadSettings();
   const curTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
   syncThemeToggleUI(curTheme);
@@ -86,7 +105,6 @@ function openSettingsModal() {
   if (typeof ccRefreshCascade === 'function') ccRefreshCascade();
   gvSet('mLogFile', s.logFile);
   syncShowDetailsToggleUI(s.showCardDetails === true);
-  syncCommandEditingToggleUI(s.enableCommandEditing === true);
   const clearBtn = document.getElementById('mClearFavBtn');
   if (clearBtn) {
     clearBtn.textContent = FAVORITES.size ? `🗑️ Clear favorites (${FAVORITES.size})` : '🗑️ Clear favorites';
@@ -153,7 +171,6 @@ function restoreDefaultsModal() {
   if (typeof ccRefreshCascade === 'function') ccRefreshCascade();
   gvSet('mLogFile', DEFAULT_SETTINGS.logFile);
   setShowCardDetails(DEFAULT_SETTINGS.showCardDetails);
-  setEnableCommandEditing(DEFAULT_SETTINGS.enableCommandEditing);
   // "Default settings" (Dark mode/Details/Export/System commands) voltam
   // todos para desabilitado — Details já estava aqui, Export e System
   // commands faltavam (bug pré-existente: o botão não os restaurava).
