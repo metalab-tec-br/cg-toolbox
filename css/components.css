@@ -550,7 +550,11 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
    flex row), mas sem fundo/pill — a nota continua "solta" no terminal,
    sem sombra/cor de fundo, só com o prefixo colorido e o ícone. */
 .ln-note {
-  display: inline-flex; align-items: center; gap: 5px;
+  /* display:flex (não inline-flex) — precisa ser um bloco para sempre
+     começar em uma linha nova, senão duas linhas de anotação seguidas
+     (ex.: note logo antes de image) colam lado a lado na mesma linha, já
+     que nenhuma delas é mais um bloco puro que force a quebra sozinha. */
+  display: flex; align-items: center; gap: 5px;
   font-size: 10.5px; color: var(--muted); font-style: italic; font-family: var(--sans); margin-top: 1px;
 }
 .ln-note svg { flex-shrink: 0; }
@@ -578,7 +582,12 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
    fica na cor de destaque, o ícone e o nome usam a cor normal de texto,
    igual ao restante do terminal. O rótulo trunca com "…" se não couber. */
 .ln-image {
-  display: inline-flex; align-items: center; justify-content: flex-start; gap: 5px;
+  /* display:flex (não inline-flex) pelo mesmo motivo de .ln-note — bloco
+     puro para sempre quebrar linha antes/depois, mesmo entre duas linhas
+     de anotação seguidas (ex.: note + image, ou image + image). width
+     continua limitando a caixa a 30%, independente de display ser flex ou
+     inline-flex. */
+  display: flex; align-items: center; justify-content: flex-start; gap: 5px;
   font-size: 12.5px; font-family: var(--mono); line-height: 1.2;
   color: var(--text); background: var(--teal-bg); border: 1px solid transparent; border-radius: 4px;
   width: 30%; min-width: 130px; max-width: 100%; box-sizing: border-box;
