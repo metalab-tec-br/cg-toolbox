@@ -178,7 +178,7 @@
   </div>
 
   <!-- Manage Vendors/Systems/Versions/Environments/Topics/Parameters moved
-       into the Settings modal → "Registration" tab (see #settingsOverlay,
+       into the Settings modal → "Register" tab (see #settingsOverlay,
        .settings-pane[data-pane="catalog"]) — no longer gated behind Admin
        mode, which was removed entirely. -->
 
@@ -265,7 +265,7 @@
 <!-- ══ SETTINGS MODAL ══
      Reestruturado em 3 abas (nav lateral + conteúdo), padrão comum a
      configurações de apps modernos (Slack/VS Code/Notion): "User
-     preferences" (as antigas Default settings), "Registration" (cadastros
+     preferences" (as antigas Default settings), "Register" (cadastros
      Vendors/Systems/Versions/Environments/Topics/Parameters, antes na
      sidebar) e "System" (audit log, backup, import/export de comandos,
      default org-wide de System commands — antes espalhados e atrás do toggle
@@ -287,8 +287,8 @@
           <span>User preferences</span>
         </button>
         <button type="button" class="settings-nav-btn" data-pane="catalog" onclick="switchSettingsPane('catalog')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="18" height="4" rx="1"/></svg>
-          <span>Registration</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+          <span>Register</span>
         </button>
         <button type="button" class="settings-nav-btn" data-pane="system" onclick="switchSettingsPane('system')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6l7-3z"/></svg>
@@ -463,7 +463,7 @@
       </div>
       </div><!-- /.settings-pane[prefs] -->
 
-      <!-- PANE: Registration — cadastros compartilhados (Vendors, Systems,
+      <!-- PANE: Register — cadastros compartilhados (Vendors, Systems,
            Versions, Environments, Topics, Parameters), antes na sidebar
            (#addCommandBlock) e reservados ao Admin mode. Cada botão abre o
            modal já existente (openCatalogAdmin(kind), ver
