@@ -342,10 +342,14 @@ function _ceBuildLineRow(data, opts) {
     <div class="set-row ln-image-controls" style="display:none;">
       <div class="set-group" style="flex:1;">
         <span class="set-label">Configuration image</span>
-        <span class="set-hint">Upload a file, or click the box and paste (Ctrl+V) a screenshot from your clipboard.</span>
-        <div class="ln-image-dropzone" tabindex="0" onclick="_ceOpenImageFilePicker(this)">
+        <span class="set-hint">Drag an image here, click the box and paste (Ctrl+V) a screenshot, or use the button below to browse files.</span>
+        <div class="ln-image-dropzone" tabindex="0"
+             ondragover="event.preventDefault(); this.classList.add('dragover');"
+             ondragleave="this.classList.remove('dragover');"
+             ondrop="_ceHandleImageDrop(event, this)">
           <img class="ln-image-preview" style="display:none;" alt="">
-          <span class="ln-image-placeholder">📷 Click to upload, or paste an image here</span>
+          <span class="ln-image-placeholder">📷 Drag an image here, or paste it (Ctrl+V)</span>
+          <button type="button" class="btn btn-ghost btn-sm ln-image-upload-btn" onclick="event.stopPropagation(); _ceOpenImageFilePicker(this)">📁 Choose file…</button>
         </div>
         <input type="file" class="ln-image-file" accept="image/*" style="display:none;" onchange="_ceHandleImageFileInput(this)">
         <input type="hidden" class="ln-image-data">
@@ -404,6 +408,16 @@ function _ceLoadImageFile(row, file) {
   const reader = new FileReader();
   reader.onload = () => _ceSetImagePreview(row, reader.result);
   reader.readAsDataURL(file);
+}
+// Arrastar-e-soltar um arquivo de imagem sobre a caixa (.ln-image-dropzone).
+// A classe 'dragover' (feedback visual, ver css/components.css) é adicionada
+// no ondragover inline do próprio elemento e removida aqui e no ondragleave.
+function _ceHandleImageDrop(ev, dropzoneEl) {
+  ev.preventDefault();
+  dropzoneEl.classList.remove('dragover');
+  const file = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+  const row = dropzoneEl.closest('.line-row');
+  if (row && file && file.type && file.type.startsWith('image/')) _ceLoadImageFile(row, file);
 }
 function _ceSetImagePreview(row, dataUrl) {
   const hidden = row.querySelector('.ln-image-data');

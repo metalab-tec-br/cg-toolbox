@@ -226,14 +226,19 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .ln-drag-handle:active { cursor: grabbing; }
 .line-row.dragging { opacity: .45; }
 /* Linha do tipo 'image' no editor de comandos (ver _ceBuildLineRow em
-   command-editor.js) — caixa clicável (upload) que também aceita colar
-   (Ctrl+V) uma captura de tela enquanto estiver com foco. */
+   command-editor.js) — três jeitos de preencher: arrastar um arquivo,
+   clicar na caixa (só foca — não abre o seletor de arquivo sozinho) e colar
+   (Ctrl+V), ou clicar no botão "Choose file…" para abrir o seletor. Antes o
+   clique na caixa inteira já disparava o <input type=file>, o que atrapalhava
+   quem queria colar (tinha que cancelar o seletor primeiro) — agora só o
+   botão abre o seletor; a caixa em si só recebe foco. */
 .ln-image-dropzone {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 6px; min-height: 90px; border: 1px dashed var(--bdr2); border-radius: 6px;
-  background: var(--surf); cursor: pointer; padding: 10px; transition: border-color .12s;
+  gap: 8px; min-height: 90px; border: 1px dashed var(--bdr2); border-radius: 6px;
+  background: var(--surf); cursor: text; padding: 10px; transition: border-color .12s, background .12s;
 }
 .ln-image-dropzone:hover, .ln-image-dropzone:focus { border-color: var(--teal); outline: none; }
+.ln-image-dropzone.dragover { border-color: var(--teal); background: var(--teal-bg); }
 .ln-image-placeholder { font-size: 11px; color: var(--muted); text-align: center; }
 .ln-image-preview { max-width: 100%; max-height: 160px; border-radius: 4px; object-fit: contain; }
 .ln-image-actions { display: flex; }
