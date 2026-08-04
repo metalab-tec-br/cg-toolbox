@@ -210,15 +210,24 @@
    (flyout aberto, ver .sidebar-inner acima), nenhuma dessas regras mais
    bate no seletor, e o conteúdo volta sozinho ao layout normal (mesmas
    regras "sem prefixo" de sempre) — sem precisar de um bloco de "reverter"
-   escrito à parte. Colapsada mostra só a lupa de busca e o ícone de
-   Favoritos; Vendor/System/Version/Environment/Topic/Clear filters/Options
-   (marcados com .sb-block-filter no HTML) somem por inteiro. */
+   escrito à parte. Colapsada mostra o ícone de cada item (Favoritos e
+   também Vendor/System/Version/Environment/Topic/Options — todos os
+   ícones já usados na sidebar fixa), maiores que o tamanho normal (18px
+   em vez de 13-14px) pra ficarem fáceis de identificar/clicar na barra
+   estreita; só o texto/dropdown/toggle de cada um some. "Clear filters"
+   (sem ícone próprio, .sb-block-clearfilters) e o rodapé continuam
+   somendo por inteiro. */
 .app.sidebar-collapsed .sidebar:not(:hover) .sb-block { padding-left: 4px; padding-right: 4px; }
-/* Busca: unicamente o ícone, centralizado; campo/limpar/histórico somem. */
+/* Busca: unicamente o ícone, centralizado e maior; campo/limpar/histórico
+   somem. transform:none anula o translateY(-50%) herdado de
+   .cmd-search-icon (que só faz sentido com position:absolute) — sem isso
+   o ícone ficava deslocado pra cima, desalinhado dentro da caixa. */
 .app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap {
   display: flex; align-items: center; justify-content: center; padding: 10px 0 8px;
 }
-.app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cmd-search-icon { position: static; }
+.app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cmd-search-icon {
+  position: static; transform: none; font-size: 16px;
+}
 .app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cmd-search { display: none; }
 /* !important: .cmd-search-clear/.cpq-panel têm display controlado via
    estilo inline por JS (updateSearchClearBtn() em favorites.js, e o painel
@@ -226,13 +235,24 @@
    colapsada, senão poderiam aparecer por cima da barra estreita. */
 .app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cmd-search-clear { display: none !important; }
 .app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cpq-panel { display: none !important; }
-/* Favoritos: só o ícone da estrela, centralizado — o único item de
-   navegação que continua visível na barra colapsada. */
-.app.sidebar-collapsed .sidebar:not(:hover) #favNavRow { justify-content: center; padding: 6px 4px; }
+/* Favoritos: só o ícone da estrela, centralizado e maior. */
+.app.sidebar-collapsed .sidebar:not(:hover) #favNavRow { justify-content: center; padding: 7px 4px; }
 .app.sidebar-collapsed .sidebar:not(:hover) #favNavRow > span { display: none; }
-/* Vendor/System/Version/Environment/Topic/Clear filters/Options somem por
-   inteiro (não só o texto) — só reaparecem no hover-flyout. */
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter { display: none; }
+.app.sidebar-collapsed .sidebar:not(:hover) #favNavRow svg { width: 18px; height: 18px; }
+/* Vendor/System/Version/Environment/Topic/Options: mostra só o ícone do
+   cabeçalho (.sb-head-icon), maior, centralizado; texto (.sb-head-txt),
+   dropdown (.dd) e toggles (.sb-toggle, dentro de Options) somem. */
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .sb-head {
+  display: flex; align-items: center; justify-content: center; padding: 3px 0; margin-bottom: 0;
+}
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .sb-head-icon svg { width: 18px; height: 18px; }
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .sb-head-txt { display: none; }
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .dd { display: none; }
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .sb-toggle { display: none; }
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .sb-file-wrap.show { display: none !important; }
+/* "Clear filters" não tem ícone próprio — some inteiro (não faz sentido
+   virar só um ícone). */
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-clearfilters { display: none; }
 /* Rodapé "Developed by CG One" some inteiro. */
 .app.sidebar-collapsed .sidebar:not(:hover) .sb-credit { display: none; }
 

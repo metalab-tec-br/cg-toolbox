@@ -154,9 +154,11 @@
     </div>
   </div>
 
-  <!-- Escondido inteiro na barra colapsada (sb-block-filter, ver
-       css/layout.css) — reaparece junto com o resto no hover-flyout. -->
-  <div class="sb-block sb-block-filter">
+  <!-- Escondido inteiro na barra colapsada (sb-block-clearfilters, ver
+       css/layout.css) — não tem ícone próprio, então não faz sentido
+       mostrar só um ícone dele como os demais blocos .sb-block-filter;
+       reaparece junto com o resto no hover-flyout. -->
+  <div class="sb-block sb-block-filter sb-block-clearfilters">
     <button type="button" class="btn btn-ghost sb-clear-filters-btn" style="width:100%; font-size:11px;" onclick="clearAllSidebarFilters()">Clear filters</button>
   </div>
 
