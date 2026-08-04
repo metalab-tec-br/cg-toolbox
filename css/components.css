@@ -215,6 +215,11 @@
 .imp-res-choice { width: 100%; }
 .imp-res-extra { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .imp-res-parent { flex: 1; min-width: 140px; }
+/* Linha de criação de Parâmetro — key fixa (não é um input, ver
+   renderImportResolutionPanel em js/csv-import.js: diferente dos outros 5
+   tipos, aqui a key TEM que ser o token exato já usado no arquivo). */
+.imp-res-param-key { font-size: 11px; color: var(--dim); white-space: nowrap; }
+.imp-res-param-key code { font-family: var(--mono); color: var(--text); }
 .imp-res-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .imp-res-errors {
   display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px;

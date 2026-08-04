@@ -240,6 +240,16 @@ function buildImportPayload(obj, existingIdsInBatch) {
   const lines = [...cmdLines];
   if (noteCell.trim()) lines.push({ line_type: 'note', content: noteCell.trim() });
 
+  // Aviso (não bloqueia a linha) para {{token}} sem parâmetro cadastrado —
+  // só acontece se o usuário escolheu "Import anyway" no painel de resolução
+  // (ver collectTokensFromRow/paramIsKnown mais abaixo no arquivo; hoisted,
+  // por isso pode ser chamado aqui mesmo definido depois). Sem isso o
+  // comando importa normalmente, mas o token nunca é substituído (fica como
+  // "<token>" literal pra sempre, ver resolveTokens em js/db-render-engine.js).
+  collectTokensFromRow(obj).forEach(tok => {
+    if (!paramIsKnown(tok)) warnings.push(`Parameter "{{${tok}}}" not registered — will show as a literal placeholder until you add it via Manage Parameters`);
+  });
+
   const payload = {
     id, name,
     desc: getCell(obj, 'Description', 'Desc'),
@@ -281,9 +291,33 @@ const IMPORT_RES_META = {
 // rawLower -> key já resolvida (mapeada pra existente OU criada nesta sessão
 // de import). Reiniciado a cada arquivo novo escolhido / a cada abertura do
 // modal — ver resetImportResolutionState abaixo.
-let _importResolutionMap = { vendor: {}, system: {}, version: {}, environment: {}, topic: {} };
+let _importResolutionMap = { vendor: {}, system: {}, version: {}, environment: {}, topic: {}, parameter: {} };
 function resetImportResolutionState() {
-  _importResolutionMap = { vendor: {}, system: {}, version: {}, environment: {}, topic: {} };
+  _importResolutionMap = { vendor: {}, system: {}, version: {}, environment: {}, topic: {}, parameter: {} };
+}
+
+// Parâmetros ({{token}}) — diferente dos outros 5 tipos, aqui não existe uma
+// coluna dedicada no CSV: o "valor" é o próprio nome do token, digitado
+// direto no meio do texto livre (Command/Prompt/Note/Description/...). Por
+// isso a varredura é uma busca bruta em TODAS as células da linha (mesma
+// regex \w+ usada por resolveTokens em js/db-render-engine.js, pra garantir
+// que "resolvido aqui" == "substituído de verdade na hora de renderizar") em
+// vez de ler uma coluna específica por nome, como as outras 5 fazem via getCell.
+const IMPORT_PARAM_TOKEN_RE = /\{\{(\w+)\}\}/g;
+function collectTokensFromRow(obj) {
+  const found = new Set();
+  Object.values(obj || {}).forEach(val => {
+    String(val || '').replace(IMPORT_PARAM_TOKEN_RE, (m, key) => { found.add(key); return m; });
+  });
+  return [...found];
+}
+// Match é sempre exato (case-sensitive, sem normKey) — é assim que
+// resolveTokens compara contra CATALOGS.parameters, então "resolvido" aqui
+// tem que usar a mesma regra, senão o token nunca seria substituído de
+// verdade mesmo depois de "resolvido" nesta tela.
+function paramIsKnown(token) {
+  if ((CATALOGS.parameters || []).some(p => p.key === token)) return true;
+  return !!_importResolutionMap.parameter[token];
 }
 
 function importCatalogItemsFor(type) {
@@ -313,7 +347,7 @@ function importCatalogOptionLabel(type, item) {
 // (nem no catálogo vivo, nem no que já foi resolvido nesta sessão de
 // import) — base do painel "Resolve unmatched values".
 function collectUnresolvedRefs(rows) {
-  const out = { vendor: new Map(), system: new Map(), version: new Map(), environment: new Map(), topic: new Map() };
+  const out = { vendor: new Map(), system: new Map(), version: new Map(), environment: new Map(), topic: new Map(), parameter: new Map() };
   const bump = (type, raw) => {
     const k = normKey(raw);
     if (!k || k === 'all') return;
@@ -341,11 +375,19 @@ function collectUnresolvedRefs(rows) {
     splitCell(getCell(obj, 'Topics', 'Topic')).forEach(v => {
       if (!isKnown('topic', v, importCatalogItemsFor('topic'), ['label'])) bump('topic', v);
     });
+    // Parâmetros: sem coluna própria, sem normKey (case-sensitive, ver
+    // paramIsKnown acima) — não usa bump() por isso.
+    collectTokensFromRow(obj).forEach(tok => {
+      if (paramIsKnown(tok)) return;
+      const cur = out.parameter.get(tok);
+      if (cur) cur.count++;
+      else out.parameter.set(tok, { raw: tok, count: 1 });
+    });
   });
   return out;
 }
 function importAnyUnresolved(unresolved) {
-  return IMPORT_RES_ORDER.some(t => unresolved[t].size > 0);
+  return IMPORT_RES_ORDER.some(t => unresolved[t].size > 0) || (unresolved.parameter && unresolved.parameter.size > 0);
 }
 
 // Monta o HTML do painel de resolução, uma seção por tipo (só as que têm
@@ -401,13 +443,46 @@ function renderImportResolutionPanel(unresolved) {
       </div>`;
   }).join('');
 
+  // Parâmetros ({{token}}) — mesmo painel/mesma ideia (criar novo ou mapear
+  // pra existente), mas layout próprio: sem "pai" (dependency select), e a
+  // key NUNCA é editável na criação — ela É o token já usado no arquivo (ver
+  // comentário em collectTokensFromRow); só o rótulo/descrição é editável.
+  const paramMap = unresolved.parameter;
+  let paramSection = '';
+  if (paramMap && paramMap.size) {
+    const existingParams = CATALOGS.parameters || [];
+    const paramRowsHtml = [...paramMap.entries()].map(([token, info], idx) => {
+      const domId = `impres-parameter-${idx}`;
+      const existingOptionsHtml = existingParams.map(p =>
+        `<option value="${escAttr(p.key)}">${escAttr(p.label)} ({{${escAttr(p.key)}}})</option>`).join('');
+      return `
+        <div class="imp-res-row" id="${domId}-row">
+          <div class="imp-res-raw">"{{${escAttr(token)}}}"<span class="imp-res-count"> — used in ${info.count} command${info.count === 1 ? '' : 's'}</span></div>
+          <select class="set-input imp-res-choice" id="${domId}-choice" data-type="parameter" data-idx="${idx}" data-raw="${escAttr(token)}"
+                  onchange="_impResToggleExtra('parameter', ${idx})">
+            <option value="__new__">➕ Create new parameter: {{${escAttr(token)}}}</option>
+            ${existingOptionsHtml ? `<option disabled>──────────</option>${existingOptionsHtml}` : ''}
+          </select>
+          <div class="imp-res-extra" id="${domId}-extra">
+            <span class="imp-res-param-key">Key: <code>{{${escAttr(token)}}}</code> (fixed — matches the token used in this file)</span>
+            <input class="set-input" id="${domId}-label" placeholder="Parameter description (e.g. Source IP)" style="flex:1;min-width:140px;">
+          </div>
+        </div>`;
+    }).join('');
+    paramSection = `
+      <div class="set-group imp-res-section">
+        <span class="set-label">Parameter${paramMap.size > 1 ? 's' : ''} not registered (${paramMap.size})</span>
+        ${paramRowsHtml}
+      </div>`;
+  }
+
   return `
     <div id="importResolveBox" class="imp-res-panel">
       <span class="set-hint" style="display:block;margin-bottom:10px;">
         Some values in this file don't match anything registered yet. For each one below, create it as a new catalog
         item or map it to the existing one it should use instead.
       </span>
-      ${sections}
+      ${sections}${paramSection}
       <div class="imp-res-actions">
         <button type="button" class="btn btn-ghost btn-sm" onclick="_impResSkipAndPreview()">Import anyway (skip unresolved)</button>
         <button type="button" class="btn btn-primary btn-sm" id="impResApplyBtn" onclick="applyImportResolutions()">Apply &amp; continue</button>
@@ -488,6 +563,58 @@ async function applyImportResolutions() {
       }
     }
   }
+
+  // Parâmetros — sem "pai", e a key na criação é sempre o próprio token (não
+  // vem de um input editável, ver renderImportResolutionPanel acima).
+  {
+    const choiceEls = box ? Array.from(box.querySelectorAll('.imp-res-choice[data-type="parameter"]')) : [];
+    for (const choiceEl of choiceEls) {
+      const idx = choiceEl.getAttribute('data-idx');
+      const token = choiceEl.getAttribute('data-raw');
+      const domId = `impres-parameter-${idx}`;
+      if (choiceEl.value !== '__new__') {
+        _importResolutionMap.parameter[token] = choiceEl.value;
+        continue;
+      }
+      const labelInput = _impBox(`${domId}-label`);
+      const label = (labelInput && labelInput.value.trim()) || token;
+      try {
+        const res = await fetch('/api/parameters', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: token, label }),
+        });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          errors.push(`"{{${token}}}": ${errBody.message || 'failed to create'}`);
+          continue;
+        }
+        const created = await res.json();
+        _importResolutionMap.parameter[token] = created.key; // sempre === token
+      } catch (e) {
+        errors.push(`"{{${token}}}": something went wrong — check your connection and try again`);
+      }
+    }
+  }
+
+  // Diferente dos outros 5 tipos (onde a key resolvida só entra em arrays do
+  // payload), um Parâmetro precisa aparecer LITERALMENTE como {{key}} no
+  // texto do comando pra ser substituído em tempo de render (ver
+  // resolveTokens em js/db-render-engine.js) — por isso, quando o usuário
+  // mapeia um token pra um parâmetro já existente com key diferente (ex.:
+  // arquivo usa {{srcip}}, mas o catálogo já tem {{src_ip}}), é preciso
+  // reescrever {{srcip}} -> {{src_ip}} em todas as células de texto das
+  // linhas afetadas antes de montar os comandos. Sem isso o valor mapeado
+  // nunca teria efeito nenhum na hora de renderizar.
+  Object.entries(_importResolutionMap.parameter).forEach(([token, resolvedKey]) => {
+    if (!resolvedKey || resolvedKey === token) return;
+    const re = new RegExp(`\\{\\{${token}\\}\\}`, 'g');
+    (_importParsedRows || []).forEach(obj => {
+      Object.keys(obj).forEach(header => {
+        if (typeof obj[header] === 'string' && obj[header].indexOf(`{{${token}}}`) !== -1) {
+          obj[header] = obj[header].replace(re, `{{${resolvedKey}}}`);
+        }
+      });
+    });
+  });
 
   if (typeof catAdminRefreshCatalogs === 'function') await catAdminRefreshCatalogs();
 
