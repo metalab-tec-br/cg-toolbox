@@ -25,12 +25,25 @@
 /* Rótulo + campo na mesma linha (em vez de empilhados) — usado no modal de
    Configurações para reduzir a altura total (ex.: "Home page [Command
    menu]"). O campo (dropdown/input/botão) fica com largura flexível mas
-   limitada, para não esticar demais em rótulos curtos. */
-.set-group-row { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
+   limitada, para não esticar demais em rótulos curtos.
+   Virou uma barra horizontal com contorno (mesmo padrão visual dos toggles
+   .sb-toggle e das linhas .settings-tile do Register) — antes era um texto
+   solto sem caixa, inconsistente com o resto do modal. O dropdown/input
+   interno perde a própria borda/fundo (fica "achatado") pra não duplicar a
+   caixa — a barra .set-group-row já é o contorno único da linha. */
+.set-group-row {
+  flex-direction: row; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 7px 10px; border: 1px solid var(--bdr); border-radius: 6px; background: var(--surf2);
+}
 .set-group-row > .set-label { flex-shrink: 0; margin-bottom: 0; }
 .set-group-row > .dd,
 .set-group-row > .set-input,
 .set-group-row > .btn { flex: 1 1 auto; min-width: 120px; max-width: 220px; }
+.set-group-row > .dd > .dd-btn { background: transparent; border-color: transparent; }
+.set-group-row > .dd > .dd-btn:hover { border-color: transparent; color: var(--teal); }
+.set-group-row > .dd.open > .dd-btn { border-color: transparent; }
+.set-group-row > .set-input { background: transparent; border-color: transparent; text-align: right; }
+.set-group-row > .set-input:focus { border-color: transparent; }
 /* Grupo compacto: o toggle não estica para preencher a linha inteira, fica só
    do tamanho do próprio conteúdo (ex.: Admin mode, no final do modal). */
 .set-group-compact { align-items: flex-start; }
@@ -93,8 +106,14 @@
 .btn.admin-highlight:hover { filter: brightness(1.05); border-color: var(--teal); }
 
 /* Modal de Configurações: layout de 2 colunas (nav lateral + conteúdo por
-   aba), por isso mais largo que os modais padrão. */
-#settingsOverlay .modal-box { max-height: 92vh; width: min(760px, 100%); overflow: hidden; }
+   aba), por isso mais largo que os modais padrão. Altura FIXA (não só
+   max-height) — antes a caixa crescia/encolhia de acordo com o conteúdo de
+   cada aba (Register, com poucas linhas, ficava bem mais baixo que User
+   preferences, cheio de linhas), o que fazia o modal "pular" de tamanho ao
+   trocar de aba. Com height fixo, as três abas usam sempre a mesma caixa —
+   quem tem menos conteúdo (Register) sobra espaço em branco, quem tem mais
+   rola dentro de .settings-content (overflow-y already set ali). */
+#settingsOverlay .modal-box { height: min(680px, 92vh); max-height: 92vh; width: min(760px, 100%); overflow: hidden; }
 #settingsOverlay .set-group { gap: 4px; }
 
 /* ─── Configurações: layout em abas (nav lateral + painel de conteúdo) ───
@@ -123,7 +142,7 @@
   flex: 1 1 auto; min-width: 0; overflow-y: auto;
   padding: 16px; display: flex; flex-direction: column; gap: 15px;
 }
-.settings-pane { display: flex; flex-direction: column; gap: 15px; }
+.settings-pane { display: flex; flex-direction: column; gap: 8px; }
 /* Antes um grid 3x2 de blocos quadrados; virou uma lista de barras
    horizontais (ícone + nome lado a lado, ocupando a largura toda) — mais
    fácil de escanear numa lista de 6 itens. */
