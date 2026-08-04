@@ -44,10 +44,20 @@ const CAT_ADMIN_MSG_IDS = ['catAdminMsgVendors', 'catAdminMsgSystems', 'catAdmin
 // preservando/aplicando o valor selecionado — usado pelos formulários de
 // Sistema (vendor) e Versão (sistema), que agora são FK obrigatória e direta
 // (ver server/schema.sql) em vez de vínculo N:N.
-function _catPopulateSelect(selectId, items, selectedValue) {
+// `placeholder` (opcional): rótulo da dependência (ex.: "Vendor", "System")
+// mostrado como 1ª opção desabilitada — sem isso, um <select> nunca fica
+// "em branco" de verdade quando não há nada selecionado (o navegador sempre
+// escolhe a primeira opção da lista), o que deixava o campo parecendo vazio/
+// sem explicação nenhuma (ex.: linha "+ Add system" antes de qualquer Vendor
+// existir). Com o placeholder, sempre fica claro o que aquele dropdown
+// representa, tanto vazio quanto já preenchido.
+function _catPopulateSelect(selectId, items, selectedValue, placeholder) {
   const el = _cat(selectId);
   if (!el) return;
-  el.innerHTML = (items || []).map(it => `<option value="${_catEscAttr(it.key)}">${_catEscHtml(it.label)}</option>`).join('');
+  const placeholderHtml = placeholder
+    ? `<option value="" disabled${selectedValue ? '' : ' selected'}>${_catEscHtml(placeholder)}</option>`
+    : '';
+  el.innerHTML = placeholderHtml + (items || []).map(it => `<option value="${_catEscAttr(it.key)}">${_catEscHtml(it.label)}</option>`).join('');
   if (selectedValue != null) el.value = selectedValue;
 }
 
@@ -197,8 +207,8 @@ function renderCatAdminSystems() {
         <button type="button" class="edit-btn" onclick="catAdminDeleteSystem('${_catEscAttr(s.key)}')" title="Delete">🗑️</button>
       </div>
     </div>`).join('');
-  systems.forEach(s => _catPopulateSelect('catSys_vendor_' + s.key, CATALOGS.vendors, s.vendor));
-  _catPopulateSelect('catSysNewVendor', CATALOGS.vendors);
+  systems.forEach(s => _catPopulateSelect('catSys_vendor_' + s.key, CATALOGS.vendors, s.vendor, 'Vendor'));
+  _catPopulateSelect('catSysNewVendor', CATALOGS.vendors, null, 'Vendor');
 }
 async function catAdminSaveSystem(key) {
   const label = _cat('catSys_label_' + key).value.trim();
@@ -266,8 +276,8 @@ function renderCatAdminVersions() {
       </div>
     </div>`;
   }).join('');
-  versions.forEach(v => _catPopulateSelect('catV_system_' + v.system + '::' + v.key, CATALOGS.systems, v.system));
-  _catPopulateSelect('catVNewSystem', CATALOGS.systems);
+  versions.forEach(v => _catPopulateSelect('catV_system_' + v.system + '::' + v.key, CATALOGS.systems, v.system, 'System'));
+  _catPopulateSelect('catVNewSystem', CATALOGS.systems, null, 'System');
 }
 async function catAdminSaveVersion(system, key) {
   const rid = system + '::' + key;
