@@ -547,43 +547,38 @@
            Admin mode e espalhados entre a toolbar e o rodapé deste modal.
            Nenhuma mudança de comportamento, só de localização. -->
       <div class="settings-pane" data-pane="system" style="display:none;">
-        <div class="set-group" id="adminDefaultsBlock">
-          <span class="set-label">Organization default</span>
-          <!-- NÃO é a mesma preferência do toggle "System commands" em
-               User preferences (mSystemCommandsToggle/showSystemCommands,
-               pessoal de cada usuário). Este aqui (showSystemCommandsDefault,
-               salvo no servidor via /api/global-settings) só define o valor
-               inicial herdado por quem AINDA NÃO tocou no próprio toggle —
-               ver hasExplicitSetting('showSystemCommands') em js/settings.js.
-               Por isso os dois continuam existindo em telas separadas. -->
-          <div class="sb-toggle" id="mSystemCommandsDefaultToggle" onclick="toggleModalSystemCommandsDefault()">
-            <div class="tog-track"><div class="tog-knob"></div></div><span>Show System commands by default</span>
-          </div>
-          <span class="set-hint">Starting value for users who haven't set their own "System commands" preference yet (User preferences). Doesn't override anyone who already made a choice.</span>
-        </div>
+        <!-- O antigo toggle "Organization default" (Show System commands by
+             default / showSystemCommandsDefault, GET/PUT /api/global-settings)
+             foi removido a pedido do usuário — o default agora é sempre
+             desabilitado (ver DEFAULT_SETTINGS.showSystemCommands e
+             applyGlobalDefaultsIfNeeded em js/settings.js). Quem quiser
+             habilitar "System commands" faz isso na própria tela de User
+             preferences. -->
+        <!-- Itens em ordem alfabética dentro de cada grupo (Commands:
+             Export/Import; Database: Backup/View). -->
         <div class="set-group">
           <span class="set-label">Commands</span>
           <div class="settings-action-row">
-            <button type="button" class="btn btn-ghost admin-highlight" onclick="openImportCommandsModal(event)" title="Bulk-create commands from a .csv file.">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 10.5V3M4.5 6.5L8 3l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-              <span>Import commands</span>
-            </button>
             <button type="button" class="btn btn-ghost admin-highlight" id="exportCsvBtn" onclick="openExportColumnsModal()" title="Exports the command catalog as a .csv file — you choose the columns">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 2v7.5M4.5 6.5L8 10l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
               <span>Export commands</span>
+            </button>
+            <button type="button" class="btn btn-ghost admin-highlight" onclick="openImportCommandsModal(event)" title="Bulk-create commands from a .csv file.">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 10.5V3M4.5 6.5L8 3l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <span>Import commands</span>
             </button>
           </div>
         </div>
         <div class="set-group">
           <span class="set-label">Database</span>
           <div class="settings-action-row">
-            <button type="button" class="btn btn-ghost" onclick="openAuditLogModal()">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h10v11H3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-              <span>View audit log</span>
-            </button>
             <button type="button" class="btn btn-ghost" id="backupManagerBtn" onclick="openBackupManagerModal()">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 4.3c0-1.1 2.7-1.9 6-1.9s6 .8 6 1.9-2.7 1.9-6 1.9-6-.8-6-1.9z" stroke="currentColor" stroke-width="1.3"/><path d="M2 4.3v3.4c0 1.1 2.7 1.9 6 1.9s6-.8 6-1.9V4.3M2 7.7v3.4c0 1.1 2.7 1.9 6 1.9s6-.8 6-1.9V7.7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
               <span>Backup &amp; Restore</span>
+            </button>
+            <button type="button" class="btn btn-ghost" onclick="openAuditLogModal()">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h10v11H3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              <span>View audit log</span>
             </button>
           </div>
         </div>

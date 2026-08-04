@@ -11,10 +11,10 @@ const DEFAULT_SETTINGS = {
   showImages: false,
   showSidebar: true,
   groupBy: 'topic',
-  // Só usado quando o usuário AINDA não tem preferência própria salva — nesse
-  // caso o valor real vem do default do administrador (ver
-  // applyGlobalDefaultsIfNeeded() mais abaixo); `false` aqui é só o fallback
-  // caso o servidor não responda por qualquer motivo. Todas as 4 preferências
+  // Sempre desabilitado por padrão para quem ainda não tem preferência
+  // própria salva (ver applyGlobalDefaultsIfNeeded() mais abaixo) — não é
+  // mais configurável por um default de organização; quem quiser habilitar
+  // faz isso na própria tela de User preferences. Todas as 4 preferências
   // do grupo "Default settings" do modal (Dark mode, Details, Export, System
   // commands) começam desabilitadas por padrão, a pedido do usuário.
   showSystemCommands: false,
@@ -252,11 +252,14 @@ function toggleShowSidebar() {
   setShowSidebar(!(loadSettings().showSidebar === true));
 }
 
-// ── Default do administrador para "System commands" (Settings modal, seção
-// Admin mode — ver GET/PUT /api/global-settings em server/index.js) ─────────
-// Só é aplicado a um usuário que AINDA não tem preferência própria salva
-// (ver hasExplicitSetting abaixo) — depois que a pessoa mexe no toggle da
-// sidebar, a escolha dela passa a valer sempre, independente do default.
+// ── Default para "System commands" de quem AINDA não tem preferência
+// própria salva ─────────────────────────────────────────────────────────
+// Antes era configurável por um toggle de "default de organização" (Settings
+// → System, salvo via GET/PUT /api/global-settings) — removido a pedido do
+// usuário: agora é sempre `false` (desabilitado). Quem quiser ligar decide
+// isso na própria tela de User preferences (ver hasExplicitSetting abaixo —
+// depois que a pessoa mexe no toggle da sidebar, a escolha dela passa a
+// valer sempre, independente deste default).
 function hasExplicitSetting(key) {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -264,34 +267,11 @@ function hasExplicitSetting(key) {
     return Object.prototype.hasOwnProperty.call(JSON.parse(raw), key);
   } catch (e) { return false; }
 }
-function syncAdminDefaultToggleUI(show) {
-  const el = document.getElementById('mSystemCommandsDefaultToggle');
-  if (el) el.classList.toggle('on', show !== false);
-}
-// Chamado uma vez no boot (ver fim deste arquivo) — busca o default salvo pelo
-// administrador e, SE este usuário ainda não tiver escolha própria, aplica e
-// persiste esse valor (a partir daí passa a contar como "escolha própria").
-async function applyGlobalDefaultsIfNeeded() {
-  let globalDefault = false;
-  try {
-    const g = await fetchGlobalSettings();
-    if (g && g.showSystemCommandsDefault != null) globalDefault = g.showSystemCommandsDefault !== 'false';
-    syncAdminDefaultToggleUI(globalDefault);
-  } catch (e) {
-    console.warn('Could not load admin defaults — using built-in fallback', e);
-  }
+// Chamado uma vez no boot (ver fim deste arquivo).
+function applyGlobalDefaultsIfNeeded() {
   if (!hasExplicitSetting('showSystemCommands')) {
-    setShowSystemCommands(globalDefault);
+    setShowSystemCommands(false);
   }
-}
-// Toggle do modal (seção Admin mode) — grava o default GLOBAL (todo mundo que
-// ainda não tiver escolha própria passa a herdar este valor), não a
-// preferência pessoal de quem está mexendo agora (essa é o toggle da sidebar).
-function toggleModalSystemCommandsDefault() {
-  const el = document.getElementById('mSystemCommandsDefaultToggle');
-  const next = !(el && el.classList.contains('on'));
-  syncAdminDefaultToggleUI(next);
-  saveGlobalSettings({ showSystemCommandsDefault: String(next) }).catch(e => console.warn('Failed to save admin default', e));
 }
 
 // Botão '+ Adicionar comando' e o ícone de editar de cada card ficam sempre

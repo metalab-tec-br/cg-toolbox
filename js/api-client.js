@@ -70,9 +70,12 @@ async function updateCommand(id, payload) {
 }
 
 // Default(s) definidos pelo administrador (ver comentário em server/index.js:
-// GET/PUT /api/global-settings) — hoje só "showSystemCommandsDefault"
-// (Settings modal, seção Admin mode), mas o formato {chave: valor} genérico
-// permite adicionar outros defaults futuramente sem mudar a API.
+// GET/PUT /api/global-settings). Sem uso no momento no front-end — o único
+// consumidor era o toggle "Show System commands by default" (Settings →
+// System), removido a pedido do usuário (ver applyGlobalDefaultsIfNeeded em
+// js/settings.js, agora fixo em `false`). Mantido aqui (front e back) porque
+// o formato {chave: valor} genérico serve para outros defaults futuros sem
+// mudar a API.
 async function fetchGlobalSettings() {
   const res = await fetch('/api/global-settings');
   if (!res.ok) throw new Error(`fetchGlobalSettings: HTTP ${res.status}`);
