@@ -73,10 +73,11 @@
   transition: left .15s, border-color .12s, color .12s;
 }
 .sb-divider-toggle:hover { border-color: var(--teal); color: var(--teal); }
-/* Ícone "desafixado" (colapsado): mesmo alfinete, só que em contorno (sem
-   preenchimento) em vez de sólido — a inclinação de 25° já vem do próprio
-   desenho (ver rotate(25 12 12) no <g> do SVG, em index.html), então aqui
-   não precisa de nenhum giro extra via CSS. */
+/* « (icon-collapse, sidebar fixa) e » (icon-expand, colapsada) — mesmo
+   estilo dos chevrons duplos de "Expand all"/"Collapse all" na
+   content-toolbar, só que na horizontal. Nenhum dos dois precisa de
+   transform via CSS (não são a mesma arte girada, são dois desenhos
+   diferentes já apontando pro lado certo). */
 .sb-divider-toggle .icon-expand { display: none; }
 .app.sidebar-collapsed .sb-divider-toggle { left: calc(var(--sidebar-collapsed-w) - 10px); }
 .app.sidebar-collapsed .sb-divider-toggle .icon-collapse { display: none; }

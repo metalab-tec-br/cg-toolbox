@@ -218,17 +218,17 @@
      mover o mouse da barra colapsada até o botão (que fica por cima, em
      z-index mais alto), o hover saía da sidebar um instante antes do
      clique, fechando o flyout na hora e fazendo o botão fugir do cursor.
-     Ícone de alfinete/pushpin clássico (cabeça arredondada + ponta
-     triangular, inclinado 25°, no formato do alfinete vermelho de
-     referência enviado pelo usuário): preenchido e sólido
-     (.icon-collapse) = sidebar fixa, clique colapsa; contorno (mesmo
-     formato, sem preenchimento, .icon-expand) = sidebar colapsada/solta,
-     clique fixa de novo. Os dois ficam no mesmo botão; qual aparece é
-     decidido só por CSS, a partir da classe 'sidebar-collapsed' em .app
-     (ver .sb-divider-toggle). -->
+     Ícone de seta dupla, mesmo estilo visual dos botões "Expand all"/
+     "Collapse all" da content-toolbar (ver .icon-btn em index.html, mais
+     abaixo — dois chevrons finos, stroke-width 1.6, cantos arredondados):
+     aqui apontando pra esquerda/direita em vez de baixo/cima. «
+     (.icon-collapse) = sidebar fixa, clique colapsa; » (.icon-expand) =
+     sidebar colapsada/solta, clique fixa de novo. Os dois ficam no mesmo
+     botão; qual aparece é decidido só por CSS, a partir da classe
+     'sidebar-collapsed' em .app (ver .sb-divider-toggle). -->
 <button type="button" class="sb-divider-toggle" id="sbDividerToggle" onclick="toggleShowSidebar()" title="Pin/unpin sidebar">
-  <svg class="icon-collapse" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="none" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(25 12 12)"><rect x="7" y="3" width="10" height="9" rx="4" fill="currentColor"/><polygon points="9,12 15,12 12,21" fill="currentColor" fill-opacity=".6"/></g></svg>
-  <svg class="icon-expand" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(25 12 12)"><rect x="7" y="3" width="10" height="9" rx="4"/><polygon points="9,12 15,12 12,21"/></g></svg>
+  <svg class="icon-collapse" width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M10.5 2l-6 6 6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M14.5 2l-6 6 6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <svg class="icon-expand" width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M1.5 2l6 6-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 2l6 6-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
 </button>
 </nav>
 
