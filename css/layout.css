@@ -51,13 +51,19 @@
 .app.sidebar-collapsed .sidebar-inner { width: var(--sidebar-collapsed-w); }
 /* Botão de fixar/colapsar a sidebar (#sbDividerToggle, ver index.html) — um
    círculo pequeno sentado bem em cima da linha de divisão entre a sidebar
-   e o conteúdo, no estilo comum em vários sistemas (ex.: VS Code), em vez
-   de morar dentro da sidebar ou do header. position: fixed (independe de
-   onde está no DOM) alinhado à altura do campo de busca; "left" acompanha a
-   borda real da sidebar em cada estado (fixa, colapsada, ou colapsada com o
-   flyout aberto no hover). Os dois ícones internos (.icon-collapse/
-   .icon-expand) alternam via CSS, sem JS. z-index bem alto pra nunca ficar
-   escondido atrás do flyout (.sidebar-inner em hover, z-index: 90). */
+   e o conteúdo, no estilo comum em vários sistemas (ex.: VS Code). Vive
+   DENTRO de <nav class="sidebar"> no HTML (não mais como irmão fora dela)
+   — position: fixed continua posicionando pela viewport normalmente
+   (aninhamento no DOM não muda onde ele aparece), mas agora conta como
+   parte da sidebar para ":hover": sem isso, ao mover o mouse da barra
+   colapsada até o botão (que fica por cima dela, em z-index mais alto), o
+   ":hover" da sidebar terminava um instante antes do clique — o flyout
+   fechava na hora e o botão fugia do cursor, dificultando o clique. "left"
+   acompanha a borda real da sidebar em cada estado (fixa, colapsada, ou
+   colapsada com o flyout aberto no hover). Os dois ícones internos
+   (.icon-collapse/.icon-expand) alternam via CSS, sem JS. z-index bem alto
+   pra nunca ficar escondido atrás do flyout (.sidebar-inner em hover,
+   z-index: 90). */
 .sb-divider-toggle {
   position: fixed; top: 60px; left: calc(var(--sidebar-w) - 10px); z-index: 95;
   width: 20px; height: 20px; border-radius: 50%;
@@ -74,9 +80,12 @@
 .app.sidebar-collapsed .sb-divider-toggle { left: calc(var(--sidebar-collapsed-w) - 10px); }
 .app.sidebar-collapsed .sb-divider-toggle .icon-collapse { display: none; }
 .app.sidebar-collapsed .sb-divider-toggle .icon-expand { display: block; }
-/* Enquanto o flyout está aberto (mouse em cima da sidebar colapsada), o
-   botão acompanha a borda do flyout — mesma posição de quando está fixa. */
-.app.sidebar-collapsed .sidebar:hover ~ .sb-divider-toggle { left: calc(var(--sidebar-w) - 10px); }
+/* Enquanto o flyout está aberto (mouse em cima da sidebar colapsada,
+   incluindo em cima do próprio botão — agora descendente dela), o botão
+   acompanha a borda do flyout — mesma posição de quando está fixa.
+   Descendente (sem "~"), já que o botão foi movido para dentro de
+   <nav class="sidebar"> — ver comentário acima. */
+.app.sidebar-collapsed .sidebar:hover .sb-divider-toggle { left: calc(var(--sidebar-w) - 10px); }
 
 
 /* ─── SIDEBAR ─── */

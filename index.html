@@ -200,7 +200,6 @@
   </a>
 
 </div>
-</nav>
 
 <!-- Botão único de fixar/colapsar a sidebar (preferência 'showSidebar' — ver
      toggleShowSidebar() em js/settings.js), sentado bem em cima da linha de
@@ -210,18 +209,24 @@
      só reposiciona o botão para a borda da barra estreita, nunca some).
      Colapsada = barra estreita só com ícones por seção; passar o mouse
      expande tudo por cima do conteúdo (flyout) e recolhe ao tirar o mouse,
-     sem ficar fixa aberta. Ícone de alfinete/pin (o "balão" clássico de
-     mapa/pin, usado como ícone de "fixar" em várias apps): preenchido e
-     reto (.icon-collapse) = sidebar fixa, clique colapsa; contorno e
-     inclinado (.icon-expand, gira via CSS) = sidebar colapsada/solta,
-     clique fixa de novo. O "furo" do alfinete usa fill:var(--surf), mesma
-     cor de fundo do botão, pra parecer um vazado de verdade. Os dois ficam
-     no mesmo botão; qual aparece é decidido só por CSS, a partir da classe
+     sem ficar fixa aberta. Fica DENTRO de <nav class="sidebar"> (não mais
+     como irmão, fora dela) — position:fixed não muda de lugar por causa
+     disso (não depende de aninhamento no DOM), mas assim o botão passa a
+     contar como parte da sidebar para efeito de ":hover": sem isso, ao
+     mover o mouse da barra colapsada até o botão (que fica por cima, em
+     z-index mais alto), o hover saía da sidebar um instante antes do
+     clique, fechando o flyout na hora e fazendo o botão fugir do cursor.
+     Ícone de alfinete/pin (cabeça oval + agulha, estilo alfinete/thumbtack
+     clássico): preenchido e reto (.icon-collapse) = sidebar fixa, clique
+     colapsa; contorno e inclinado (.icon-expand, gira via CSS) = sidebar
+     colapsada/solta, clique fixa de novo. Os dois ficam no mesmo botão;
+     qual aparece é decidido só por CSS, a partir da classe
      'sidebar-collapsed' em .app (ver .sb-divider-toggle). -->
 <button type="button" class="sb-divider-toggle" id="sbDividerToggle" onclick="toggleShowSidebar()" title="Pin/unpin sidebar">
-  <svg class="icon-collapse" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="currentColor"/><circle cx="12" cy="10" r="3" fill="var(--surf)" stroke="none"/></svg>
-  <svg class="icon-expand" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+  <svg class="icon-collapse" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="7.5" rx="4.3" ry="3.3" fill="currentColor" stroke="none"/><line x1="12" y1="10.6" x2="12" y2="20"/></svg>
+  <svg class="icon-expand" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="7.5" rx="4.3" ry="3.3"/><line x1="12" y1="10.6" x2="12" y2="20"/></svg>
 </button>
+</nav>
 
 <!-- ══ MAIN ══ -->
 <div class="main">
