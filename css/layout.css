@@ -43,27 +43,18 @@
 /* Preferência 'showSidebar' (ver toggleShowSidebar()/applyShowSidebarSetting()
    em js/settings.js): true = sidebar fixa (pinned, largura normal, como
    sempre foi); false = sidebar COLAPSADA numa barra estreita só com ícones
-   (um por seção — Vendor/System/Version/Environment/Topic/Options), que
-   expande por cima do conteúdo ao passar o mouse (flyout, ver
-   .sidebar-inner abaixo) e recolhe de volta ao tirar o mouse, sem ficar
-   fixa aberta — só o botão .sb-divider-toggle alterna entre os dois modos. */
+   (um por seção — Vendor/System/Version/Environment/Topic/Options). Não
+   expande mais ao passar o mouse (flyout removido a pedido do usuário) —
+   fica colapsada até o botão .sb-divider-toggle ser clicado de novo. */
 .app.sidebar-collapsed .sidebar { width: var(--sidebar-collapsed-w); }
 .app.sidebar-collapsed .sidebar-inner { width: var(--sidebar-collapsed-w); }
 /* Botão de fixar/colapsar a sidebar (#sbDividerToggle, ver index.html) — um
    círculo pequeno sentado bem em cima da linha de divisão entre a sidebar
    e o conteúdo, no estilo comum em vários sistemas (ex.: VS Code). Vive
-   DENTRO de <nav class="sidebar"> no HTML (não mais como irmão fora dela)
-   — position: fixed continua posicionando pela viewport normalmente
-   (aninhamento no DOM não muda onde ele aparece), mas agora conta como
-   parte da sidebar para ":hover": sem isso, ao mover o mouse da barra
-   colapsada até o botão (que fica por cima dela, em z-index mais alto), o
-   ":hover" da sidebar terminava um instante antes do clique — o flyout
-   fechava na hora e o botão fugia do cursor, dificultando o clique. "left"
-   acompanha a borda real da sidebar em cada estado (fixa, colapsada, ou
-   colapsada com o flyout aberto no hover). Os dois ícones internos
-   (.icon-collapse/.icon-expand) alternam via CSS, sem JS. z-index bem alto
-   pra nunca ficar escondido atrás do flyout (.sidebar-inner em hover,
-   z-index: 90). */
+   DENTRO de <nav class="sidebar"> no HTML (não mais como irmão fora dela).
+   "left" acompanha a borda real da sidebar em cada estado (fixa ou
+   colapsada). Os dois ícones internos (.icon-collapse/.icon-expand)
+   alternam via CSS, sem JS. */
 .sb-divider-toggle {
   position: fixed; top: 60px; left: calc(var(--sidebar-w) - 10px); z-index: 95;
   width: 20px; height: 20px; border-radius: 50%;
@@ -82,32 +73,26 @@
 .app.sidebar-collapsed .sb-divider-toggle { left: calc(var(--sidebar-collapsed-w) - 10px); }
 .app.sidebar-collapsed .sb-divider-toggle .icon-collapse { display: none; }
 .app.sidebar-collapsed .sb-divider-toggle .icon-expand { display: block; }
-/* Enquanto o flyout está aberto (mouse em cima da sidebar colapsada,
-   incluindo em cima do próprio botão — agora descendente dela), o botão
-   acompanha a borda do flyout — mesma posição de quando está fixa.
-   Descendente (sem "~"), já que o botão foi movido para dentro de
-   <nav class="sidebar"> — ver comentário acima. */
-.app.sidebar-collapsed .sidebar:hover .sb-divider-toggle { left: calc(var(--sidebar-w) - 10px); }
 
 
 /* ─── SIDEBAR ─── */
 /* .sidebar (nav) só controla a largura reservada no layout (flex row com
-   .main) e fica com overflow: visible — necessário para o .sidebar-inner
-   "vazar" por cima do conteúdo durante o flyout (hover), sem que .main
-   precise saber disso ou mudar de tamanho. Todo o conteúdo visual (fundo,
-   scroll, flex-direction) mora em .sidebar-inner. */
+   .main). Todo o conteúdo visual (fundo, scroll, flex-direction) mora em
+   .sidebar-inner. Sem flyout no hover (removido a pedido do usuário) — a
+   sidebar colapsada fica colapsada até o botão .sb-divider-toggle ser
+   clicado de novo, não precisa mais de overflow:visible pra vazar nada
+   por cima do conteúdo. */
 .sidebar {
   width: var(--sidebar-w); flex-shrink: 0;
   border-right: 1px solid var(--bdr);
-  overflow: visible;
+  overflow: hidden;
   position: sticky; top: 48px; height: calc(100vh - 48px);
   transition: width .15s ease;
   /* z-index explícito: sem isso, dropdowns do conteúdo principal (.dd,
      position:relative — ex.: "Group by" na content-toolbar) podem pintar
-     por cima da sidebar (inclusive do flyout colapsado) em vez de ficarem
-     atrás dela, dependendo do motor do navegador. Garante, sem ambiguidade,
-     que a sidebar (fixa ou colapsada/flyout) sempre fique acima do
-     conteúdo principal — ver z-index: 1 em .main mais abaixo. */
+     por cima da sidebar em vez de ficarem atrás dela, dependendo do motor
+     do navegador. Garante, sem ambiguidade, que a sidebar sempre fique
+     acima do conteúdo principal — ver z-index: 1 em .main mais abaixo. */
   z-index: 10;
 }
 .sidebar-inner {
@@ -115,17 +100,6 @@
   overflow-y: auto; overflow-x: hidden;
   display: flex; flex-direction: column;
   transition: width .15s ease;
-}
-/* Flyout: com a sidebar colapsada, passar o mouse em cima expande só o
-   .sidebar-inner (não o .sidebar/.main, que mantêm a largura estreita
-   reservada no layout) para a largura normal, virando um painel flutuante
-   por cima do conteúdo — ver regras de ":not(:hover)" mais abaixo, que
-   escondem rótulos/dropdowns/toggles só quando NÃO está em hover; ao
-   entrar em hover essas regras deixam de valer e o conteúdo volta ao
-   normal automaticamente, sem precisar de um bloco de "reverter" à parte. */
-.app.sidebar-collapsed .sidebar:hover .sidebar-inner {
-  position: absolute; top: 0; left: 0; width: var(--sidebar-w); height: 100%;
-  box-shadow: 2px 0 20px rgba(0,0,0,.32); z-index: 90;
 }
 .sb-block { padding: 6px 10px 4px; }
 /* Ícone de seção (Vendor/System/Version/Environment/Topic/Options) — sempre
@@ -206,64 +180,61 @@
 
 
 /* ─── SIDEBAR COLAPSADA (barra de ícones) ─── */
-/* Todas as regras abaixo usam ":not(:hover)" — só valem quando a sidebar
-   está colapsada E o mouse não está em cima dela. Assim que o hover começa
-   (flyout aberto, ver .sidebar-inner acima), nenhuma dessas regras mais
-   bate no seletor, e o conteúdo volta sozinho ao layout normal (mesmas
-   regras "sem prefixo" de sempre) — sem precisar de um bloco de "reverter"
-   escrito à parte. Colapsada mostra o ícone de cada item (busca,
-   Favoritos e também Vendor/System/Version/Environment/Topic/Options —
-   todos os ícones já usados na sidebar fixa), maiores que o tamanho
-   normal (21px em vez de 13-14px) pra ficarem fáceis de identificar/
-   clicar na barra estreita; só o texto/dropdown/toggle de cada um some.
-   "Clear filters" (sem ícone próprio, .sb-block-clearfilters) e o rodapé
-   continuam somendo por inteiro. */
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-block { padding-left: 4px; padding-right: 4px; }
+/* Sem hover-flyout (removido a pedido do usuário: a sidebar colapsada não
+   expande mais ao passar o mouse) — todas as regras abaixo valem sempre
+   que a sidebar estiver colapsada, sem condição de ":hover". Colapsada
+   mostra o ícone de cada item (busca, Favoritos e também
+   Vendor/System/Version/Environment/Topic/Options — todos os ícones já
+   usados na sidebar fixa), maiores que o tamanho normal (21px em vez de
+   13-14px) pra ficarem fáceis de identificar/clicar na barra estreita; só
+   o texto/dropdown/toggle de cada um some. "Clear filters" (sem ícone
+   próprio, .sb-block-clearfilters) e o rodapé continuam somendo por
+   inteiro. */
+.app.sidebar-collapsed .sidebar .sb-block { padding-left: 4px; padding-right: 4px; }
 /* Busca: unicamente o ícone, centralizado e maior; campo/limpar/histórico
    somem. transform:none anula o translateY(-50%) herdado de
    .cmd-search-icon (que só faz sentido com position:absolute) — sem isso
    o ícone ficava deslocado pra cima, desalinhado dentro da caixa. */
-.app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap {
+.app.sidebar-collapsed .sidebar .cmd-search-wrap {
   display: flex; align-items: center; justify-content: center; padding: 10px 0 8px;
 }
-.app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cmd-search-icon {
+.app.sidebar-collapsed .sidebar .cmd-search-wrap .cmd-search-icon {
   position: static; transform: none;
 }
-.app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cmd-search-icon svg { width: 21px; height: 21px; }
-.app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cmd-search { display: none; }
+.app.sidebar-collapsed .sidebar .cmd-search-wrap .cmd-search-icon svg { width: 21px; height: 21px; }
+.app.sidebar-collapsed .sidebar .cmd-search-wrap .cmd-search { display: none; }
 /* !important: .cmd-search-clear/.cpq-panel têm display controlado via
    estilo inline por JS (updateSearchClearBtn() em favorites.js, e o painel
    de histórico abre/fecha via classe .open) — precisa vencer isso enquanto
    colapsada, senão poderiam aparecer por cima da barra estreita. */
-.app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cmd-search-clear { display: none !important; }
-.app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cpq-panel { display: none !important; }
+.app.sidebar-collapsed .sidebar .cmd-search-wrap .cmd-search-clear { display: none !important; }
+.app.sidebar-collapsed .sidebar .cmd-search-wrap .cpq-panel { display: none !important; }
 /* Favoritos: só o ícone da estrela, centralizado e maior. */
-.app.sidebar-collapsed .sidebar:not(:hover) #favNavRow { justify-content: center; padding: 7px 4px; }
-.app.sidebar-collapsed .sidebar:not(:hover) #favNavRow > span { display: none; }
-.app.sidebar-collapsed .sidebar:not(:hover) #favNavRow svg { width: 21px; height: 21px; }
+.app.sidebar-collapsed .sidebar #favNavRow { justify-content: center; padding: 7px 4px; }
+.app.sidebar-collapsed .sidebar #favNavRow > span { display: none; }
+.app.sidebar-collapsed .sidebar #favNavRow svg { width: 21px; height: 21px; }
 /* Vendor/System/Version/Environment/Topic/Options: mostra só o ícone do
    cabeçalho (.sb-head-icon), maior, centralizado; texto (.sb-head-txt),
    dropdown (.dd) e toggles (.sb-toggle, dentro de Options) somem. */
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .sb-head {
+.app.sidebar-collapsed .sidebar .sb-block-filter .sb-head {
   display: flex; align-items: center; justify-content: center; padding: 3px 0; margin-bottom: 0;
 }
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .sb-head-icon svg { width: 21px; height: 21px; }
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .sb-head-txt { display: none; }
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .dd { display: none; }
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .sb-toggle { display: none; }
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .sb-file-wrap.show { display: none !important; }
+.app.sidebar-collapsed .sidebar .sb-block-filter .sb-head-icon svg { width: 21px; height: 21px; }
+.app.sidebar-collapsed .sidebar .sb-block-filter .sb-head-txt { display: none; }
+.app.sidebar-collapsed .sidebar .sb-block-filter .dd { display: none; }
+.app.sidebar-collapsed .sidebar .sb-block-filter .sb-toggle { display: none; }
+.app.sidebar-collapsed .sidebar .sb-block-filter .sb-file-wrap.show { display: none !important; }
 /* "Clear filters" não tem ícone próprio — some inteiro (não faz sentido
    virar só um ícone). */
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-clearfilters { display: none; }
+.app.sidebar-collapsed .sidebar .sb-block-clearfilters { display: none; }
 /* Rodapé "Developed by CG One" some inteiro. */
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-credit { display: none; }
+.app.sidebar-collapsed .sidebar .sb-credit { display: none; }
 
 
 /* ─── MAIN ─── */
 /* position: relative + z-index: 1 (bem abaixo do z-index: 10 da .sidebar,
    ver acima) — garante que dropdowns internos (.dd, .cpq-panel etc., todos
-   position:relative/absolute) nunca pintem por cima da sidebar, inclusive
-   durante o flyout da barra colapsada. */
+   position:relative/absolute) nunca pintem por cima da sidebar. */
 .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; min-width: 0; position: relative; z-index: 1; }
 
 

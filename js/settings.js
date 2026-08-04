@@ -227,9 +227,9 @@ function toggleModalShowImages() {
 // Fixa ou colapsa a barra lateral esquerda (nav.sidebar) — preferência
 // 'showSidebar': true = fixa (pinned, largura normal, como sempre foi);
 // false = COLAPSADA numa barra estreita só com ícones por seção (ver
-// .sb-head-icon em css/layout.css), que expande por cima do conteúdo ao
-// passar o mouse (flyout, ver .sidebar-inner) e recolhe ao tirar o mouse,
-// sem ficar fixa aberta. Aplica/remove a classe 'sidebar-collapsed' em
+// .sb-head-icon em css/layout.css). Não expande mais ao passar o mouse
+// (flyout removido a pedido do usuário) — fica colapsada até o botão ser
+// clicado de novo. Aplica/remove a classe 'sidebar-collapsed' em
 // <div class="app"> (ver css/layout.css). Acionada só pelo botão único
 // #sbDividerToggle (ver index.html/.sb-divider-toggle em css/layout.css),
 // sentado em cima da linha de divisão entre sidebar e conteúdo — não tem

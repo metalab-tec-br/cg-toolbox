@@ -36,9 +36,9 @@
 
 <!-- ══ SIDEBAR ══ -->
 <!-- .sidebar só reserva a largura no layout (fixa ou colapsada — ver
-     css/layout.css); todo o conteúdo visual mora em .sidebar-inner, que é
-     quem realmente muda de largura/vira flyout no hover (ver comentários em
-     css/layout.css, seção LAYOUT/SIDEBAR). -->
+     css/layout.css); todo o conteúdo visual mora em .sidebar-inner. Sem
+     expandir no hover (removido a pedido do usuário) — ver comentários em
+     css/layout.css, seção LAYOUT/SIDEBAR. -->
 <nav class="sidebar">
 <div class="sidebar-inner">
 
@@ -159,8 +159,7 @@
 
   <!-- Escondido inteiro na barra colapsada (sb-block-clearfilters, ver
        css/layout.css) — não tem ícone próprio, então não faz sentido
-       mostrar só um ícone dele como os demais blocos .sb-block-filter;
-       reaparece junto com o resto no hover-flyout. -->
+       mostrar só um ícone dele como os demais blocos .sb-block-filter. -->
   <div class="sb-block sb-block-filter sb-block-clearfilters">
     <button type="button" class="btn btn-ghost sb-clear-filters-btn" style="width:100%; font-size:11px;" onclick="clearAllSidebarFilters()">Clear filters</button>
   </div>
@@ -212,16 +211,11 @@
      vários sistemas (ex.: VS Code). position: fixed, então continua visível
      mesmo com a sidebar colapsada (.app.sidebar-collapsed em css/layout.css
      só reposiciona o botão para a borda da barra estreita, nunca some).
-     Colapsada = barra estreita só com ícones por seção; passar o mouse
-     expande tudo por cima do conteúdo (flyout) e recolhe ao tirar o mouse,
-     sem ficar fixa aberta. Fica DENTRO de <nav class="sidebar"> (não mais
-     como irmão, fora dela) — position:fixed não muda de lugar por causa
-     disso (não depende de aninhamento no DOM), mas assim o botão passa a
-     contar como parte da sidebar para efeito de ":hover": sem isso, ao
-     mover o mouse da barra colapsada até o botão (que fica por cima, em
-     z-index mais alto), o hover saía da sidebar um instante antes do
-     clique, fechando o flyout na hora e fazendo o botão fugir do cursor.
-     Ícone de seta dupla, mesmo estilo visual dos botões "Expand all"/
+     Colapsada = barra estreita só com ícones por seção; não expande mais
+     ao passar o mouse (flyout removido a pedido do usuário) — só esse
+     botão alterna entre fixa e colapsada. Fica DENTRO de
+     <nav class="sidebar"> (não como irmão, fora dela). Ícone de seta
+     dupla, mesmo estilo visual dos botões "Expand all"/
      "Collapse all" da content-toolbar (ver .icon-btn em index.html, mais
      abaixo — dois chevrons finos, stroke-width 1.6, cantos arredondados):
      aqui apontando pra esquerda/direita em vez de baixo/cima. «
