@@ -42,6 +42,16 @@ const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 const TLS_CERT_PATH = process.env.TLS_CERT_PATH;
 const TLS_KEY_PATH = process.env.TLS_KEY_PATH;
 
+// Botão "Check for updates"/"Update now" (Settings → System) — este
+// processo (container cg-toolbox) não tem git nem Docker CLI de propósito
+// (imagem enxuta/non-root, ver Dockerfile); quem sabe fazer isso é o
+// serviço companion "updater" (ver updater/server.js e docker-compose.yml),
+// alcançável só pela rede interna do compose. Sem UPDATER_URL configurado
+// (ex.: instalação sem Docker), os dois endpoints abaixo respondem 501 e o
+// botão no frontend mostra "not available nesta instalação".
+const UPDATER_URL = process.env.UPDATER_URL || null;
+const UPDATER_TOKEN = process.env.UPDATER_TOKEN || '';
+
 // Limite maior que o padrão do Express (100kb) para caber o payload de um
 // comando com uma ou mais linhas de imagem (screenshots de configuração,
 // ver command_lines.image_data em schema.sql) — a imagem viaja em base64
@@ -1406,6 +1416,62 @@ app.put('/api/backup-schedule', (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// ════════════════════════════════════════════════
+// UPDATE CHECK / APPLY — só repassam pro serviço companion "updater" (ver
+// UPDATER_URL acima e updater/server.js). Este processo nunca roda git nem
+// docker diretamente. Timeout curto no check (é só git fetch+rev-parse);
+// timeout maior não faz sentido no apply porque a resposta do updater
+// chega antes do rebuild terminar (ver updater/server.js — responde 202 e
+// continua em background), então aqui só repassamos essa resposta rápida.
+// ════════════════════════════════════════════════
+async function callUpdater(path, options) {
+  if (!UPDATER_URL) {
+    const err = new Error('not_configured');
+    err.notConfigured = true;
+    throw err;
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  try {
+    const res = await fetch(`${UPDATER_URL}${path}`, {
+      ...options,
+      headers: { ...(options && options.headers), 'X-Updater-Token': UPDATER_TOKEN },
+      signal: controller.signal,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.message || `updater responded ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+app.get('/api/system/update-check', async (req, res) => {
+  try {
+    const data = await callUpdater('/status', { method: 'GET' });
+    res.json(data);
+  } catch (err) {
+    if (err.notConfigured) return res.status(501).json({ error: 'not_configured', message: 'Update checking isn\'t available in this installation.' });
+    console.error('update-check failed:', err);
+    res.status(502).json({ error: 'updater_unreachable', message: 'Could not reach the updater service. Check that it is running (docker compose ps).' });
+  }
+});
+
+app.post('/api/system/update-apply', async (req, res) => {
+  try {
+    const data = await callUpdater('/apply', { method: 'POST' });
+    res.status(202).json(data);
+  } catch (err) {
+    if (err.notConfigured) return res.status(501).json({ error: 'not_configured', message: 'Updating isn\'t available in this installation.' });
+    console.error('update-apply failed:', err);
+    res.status(502).json({ error: 'updater_unreachable', message: 'Could not reach the updater service. Check that it is running (docker compose ps).' });
   }
 });
 

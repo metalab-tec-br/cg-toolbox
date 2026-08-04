@@ -108,7 +108,7 @@ function downloadImportTemplate() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'check-point-commands-import-template.csv';
+  a.download = 'cgtoolbox-template.csv';
   document.body.appendChild(a);
   a.click();
   a.remove();

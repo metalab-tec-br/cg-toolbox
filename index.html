@@ -582,6 +582,25 @@
             </button>
           </div>
         </div>
+        <!-- "Check for updates"/"Update now" fala com o serviço companion
+             "updater" (container isolado, ver updater/server.js e
+             docker-compose.yml) — não existe em instalações sem Docker ou
+             sem esse serviço habilitado; nesse caso os botões mostram uma
+             mensagem em vez de erro (ver js/system-update.js). -->
+        <div class="set-group">
+          <span class="set-label">Updates</span>
+          <div class="settings-action-row">
+            <button type="button" class="btn btn-ghost" id="checkUpdateBtn" onclick="checkForUpdate()">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M13 8A5 5 0 103.5 10.8M3 5.5V9h3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>Check for updates</span>
+            </button>
+            <button type="button" class="btn btn-primary" id="applyUpdateBtn" style="display:none;" onclick="applyUpdate()">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 12.5V3M4.5 6.5L8 3l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 13.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <span>Update now</span>
+            </button>
+          </div>
+          <span class="set-hint" id="updateStatus"></span>
+        </div>
       </div><!-- /.settings-pane[system] -->
       </div><!-- /.settings-content -->
     </div><!-- /.settings-layout -->
@@ -1225,5 +1244,6 @@
 <script src="js/catalog-admin.js"></script>
 <script src="js/audit-log.js"></script>
 <script src="js/backup.js"></script>
+<script src="js/system-update.js"></script>
 </body>
 </html>

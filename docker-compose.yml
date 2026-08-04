@@ -44,6 +44,16 @@ services:
       # usuário do sistema operacional rodando o Node dentro do container,
       # ex.: "node"), o que quebra favoritos por pessoa.
       # NTLM_DISABLED: "1"
+      #
+      # Botão "Check for updates"/"Update now" (Settings → System) — fala
+      # com o serviço "updater" abaixo pela rede interna do compose (nome do
+      # serviço = hostname). UPDATER_TOKEN é opcional: só faz sentido setar
+      # se este compose alguma vez publicar a porta do updater ou rodar numa
+      # rede compartilhada com outros containers não confiáveis; deixando em
+      # branco (padrão), a proteção já vem de o updater não ter porta
+      # publicada pro host (ver serviço "updater" abaixo).
+      UPDATER_URL: "http://updater:8080"
+      UPDATER_TOKEN: "${UPDATER_TOKEN:-}"
     volumes:
       # Banco de dados (commands.db) num volume nomeado, fora da imagem —
       # sobrevive a "docker compose down"/rebuild da imagem. Numa instalação
@@ -56,6 +66,37 @@ services:
       # Descomente junto com o bloco de HTTPS acima, apontando para a pasta
       # com cert.pem/key.pem no host:
       # - /etc/cg-toolbox/tls:/app/tls:ro
+
+  # ── UPDATER (companion) ──
+  # Único motivo de existir: dar ao botão "Check for updates"/"Update now"
+  # acesso a git + docker CLI SEM dar esse acesso ao container público
+  # cg-toolbox (ver updater/server.js e updater/Dockerfile para o racional
+  # de segurança completo). Isolado de propósito:
+  #   - SEM "ports:" — não é alcançável de fora do host, só pelo cg-toolbox
+  #     via rede interna do compose (DNS "updater", porta 8080);
+  #   - só sabe fazer duas coisas fixas (checar/aplicar update) — não recebe
+  #     nenhum comando arbitrário do chamador;
+  #   - roda com o socket do Docker do host montado, então tecnicamente tem
+  #     controle total do Docker do host — é o trade-off aceito para ter
+  #     "1 clique" de update sem dar esse mesmo acesso ao container exposto.
+  # Se preferir não correr nem esse risco, comente/remova este serviço e as
+  # 2 linhas UPDATER_* acima — o botão passa a mostrar "not available" e a
+  # atualização volta a ser 100% manual (git pull + docker compose up -d
+  # --build, ver comando no próprio README/install-instructions.txt).
+  updater:
+    build: ./updater
+    image: cg-toolbox-updater:latest
+    restart: unless-stopped
+    environment:
+      UPDATER_TOKEN: "${UPDATER_TOKEN:-}"
+    volumes:
+      # Socket do Docker do host — é isto que dá ao "docker compose" rodado
+      # DENTRO deste container poder de gerenciar containers do HOST.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # O repositório inteiro (bind mount, não volume nomeado) — "git pull"
+      # aqui dentro escreve direto nos arquivos do host, e "docker compose
+      # up --build" usa este mesmo diretório como contexto de build.
+      - .:/repo
 
 volumes:
   cg-toolbox-data:

@@ -175,6 +175,21 @@ Comandos do dia a dia:
     sudo docker compose down                   # parar (mantém o volume/dados)
     sudo docker compose up -d --build          # atualizar depois de um "git pull"
 
+Atualizar pela própria aplicação (opcional): Configurações → System → "Check
+for updates"/"Update now" faz exatamente o "git pull" + "docker compose up -d
+--build" acima, com 1 clique, direto pela interface — sem precisar de acesso
+SSH ao servidor. Isso só funciona porque o docker-compose.yml sobe um segundo
+serviço, "updater" (ver updater/Dockerfile e updater/server.js), dedicado
+só a isso: ele é o único container com acesso ao socket do Docker do host
+(/var/run/docker.sock) e a git — o container principal (cg-toolbox, exposto
+na porta 80) continua sem nenhum desses dois. Ainda assim, dar a QUALQUER
+container acesso ao docker.sock do host é, na prática, dar a ele controle
+total do Docker daquele host — avalie se esse trade-off faz sentido pro seu
+ambiente. Se preferir não ter esse serviço rodando, comente/remova o bloco
+"updater" e as duas linhas "UPDATER_*" do serviço cg-toolbox em
+docker-compose.yml — o botão passa a mostrar "Not available in this
+installation" e a atualização volta a ser 100% manual (comandos acima).
+
 
 9.1) BUILD TRAVA EM "apt-get update" (Connection timed out)
 --------------------------------------------------------------
