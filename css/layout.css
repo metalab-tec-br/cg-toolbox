@@ -138,9 +138,12 @@
    primários/destaques) quando selecionado, para se destacar das demais linhas
    (Versão/Ambiente/Tópico), que usam o cinza neutro padrão. Sombra fixa
    (sempre visível, não só no hover/seleção) para destacar o bloco como um
-   cartão próprio; a cor de fundo/borda/texto continua mudando normalmente
-   quando selecionado (.on), só a sombra é constante. */
-#favNavRow { box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+   cartão próprio; usa a mesma cor de destaque (--teal) que já aparece nos
+   estados de hover/seleção em todo o app (color-mix para aplicar opacidade
+   sem precisar de uma variável rgba separada). A cor de fundo/borda/texto
+   continua mudando normalmente quando selecionado (.on), só a sombra é
+   constante. */
+#favNavRow { box-shadow: 0 1px 5px color-mix(in srgb, var(--teal) 45%, transparent); }
 #favNavRow.on { background: var(--teal-bg); border-color: var(--teal); color: var(--teal); }
 .sb-chk {
   width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;
@@ -231,8 +234,19 @@
 /* "Clear filters" não tem ícone próprio — some inteiro (não faz sentido
    virar só um ícone). */
 .app.sidebar-collapsed .sidebar .sb-block-clearfilters { display: none; }
-/* Rodapé "Developed by CG One" some inteiro. */
-.app.sidebar-collapsed .sidebar .sb-credit { display: none; }
+/* Rodapé "Developed by CG One" — o texto e o logo completo somem, dando
+   lugar só à marca "//" (.sb-credit-mark), do mesmo tamanho dos demais
+   ícones da barra colapsada (21px de altura). */
+.app.sidebar-collapsed .sidebar .sb-credit {
+  display: flex; justify-content: center; padding: 10px 4px 12px;
+}
+.app.sidebar-collapsed .sidebar .sb-credit-txt,
+.app.sidebar-collapsed .sidebar .sb-credit-img { display: none; }
+.app.sidebar-collapsed .sidebar .sb-credit-mark { display: inline-flex; gap: 3px; }
+.app.sidebar-collapsed .sidebar .sb-credit-mark span {
+  width: 4px; height: 21px; background: var(--brand-pink);
+  transform: skewX(-18deg); border-radius: 1px; display: inline-block;
+}
 
 
 /* ─── MAIN ─── */

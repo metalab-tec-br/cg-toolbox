@@ -198,9 +198,15 @@
     <span class="sb-credit-txt">Developed by</span>
     <!-- Logo oficial CG//One (arquivo enviado pelo usuário) — não gerado,
          apenas recortado/redimensionado a partir do original em
-         img/cg-one-navy.png / img/cg-one-white.png. -->
+         img/cg-one-navy.png / img/cg-one-white.png. Some na barra colapsada
+         (ver css/layout.css), dando lugar só à marca "//" (.sb-credit-mark
+         abaixo), do mesmo jeito que o resto do rodapé some virando ícone. -->
     <img class="sb-credit-img for-dark" src="img/cg-one-white.png?v=1" alt="CG One">
     <img class="sb-credit-img for-light" src="img/cg-one-navy.png?v=1" alt="CG One">
+    <!-- Marca "//" isolada (mesma estrutura/cor de .cg-mark i, ver
+         components.css) — some por padrão; só aparece na barra colapsada,
+         no lugar do texto+logo, proporcional aos demais ícones do rodapé. -->
+    <i class="sb-credit-mark" aria-hidden="true"><span></span><span></span></i>
   </a>
 
 </div>

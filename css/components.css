@@ -313,6 +313,9 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .sb-credit-img.for-light { display: none; }
 [data-theme="light"] .sb-credit-img.for-dark { display: none; }
 [data-theme="light"] .sb-credit-img.for-light { display: block; }
+/* Marca "//" isolada do rodapé — escondida no estado normal (só aparece na
+   barra colapsada, ver regra .app.sidebar-collapsed em css/layout.css). */
+.sb-credit-mark { display: none; }
 
 
 /* ─── DROPDOWN (Versão / Ambiente / Tipo-Assunto) ─── */
