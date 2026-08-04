@@ -19,6 +19,20 @@ server/node_modules/
 server/backup/
 /backup/
 
+# O banco de dados de produção (server/commands.db) NÃO é mais versionado —
+# até aqui ele estava no git, e isso causava dois problemas: 1) cada servidor
+# real diverge do que está commitado (comandos cadastrados, favoritos,
+# auditoria), então todo "git pull" batia em conflito de merge nesse arquivo
+# binário; 2) uma instalação nova (outra empresa, outro servidor) clonando o
+# repositório herdava dados de produção de quem versionou por último, em vez
+# de começar com um catálogo limpo. server/db.js já cria o arquivo e
+# aplica o schema (sem semear dados) na primeira vez que o servidor sobe se
+# commands.db não existir — então uma instalação nova começa com o catálogo
+# vazio, populado depois pela própria tela de administração/importação CSV.
+# Em servidores que já tinham commands.db versionado, ele continua no disco
+# (git só para de rastrear as mudanças dele) — sem apagar nada.
+server/commands.db
+
 # Lixo comum de SO/editor
 .DS_Store
 Thumbs.db

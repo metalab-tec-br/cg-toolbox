@@ -53,6 +53,15 @@ RUN useradd --system --no-create-home --shell /usr/sbin/nologin cgtoolbox \
 USER cgtoolbox
 
 ENV PORT=3000
+# HTTPS_PORT defaults to 443 in server/index.js — explicitly pinned to the
+# same value as PORT here so the container only opens ONE listener by
+# default. Binding a port <1024 as this non-root user would fail (EACCES);
+# reaching the app on 80/443 from outside is done via the HOST port mapping
+# in docker-compose.yml ("80:3000"), not by binding low ports in-container.
+# To terminate real TLS inside the container instead, override HTTPS_PORT to
+# a high port (e.g. 3443) + TLS_CERT_PATH/TLS_KEY_PATH, and map that port on
+# the host — see the commented block in docker-compose.yml.
+ENV HTTPS_PORT=3000
 ENV DB_PATH=/app/data/commands.db
 # Uncomment (or set at "docker run"/compose level) if this host is not on a
 # Windows domain — otherwise NTLM identification is attempted by default,

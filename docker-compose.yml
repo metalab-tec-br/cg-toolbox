@@ -4,9 +4,32 @@ services:
     image: cg-toolbox:latest
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Host:container — o container escuta em 3000 (não-root não pode abrir
+      # <1024, ver Dockerfile); "80" aqui é só o mapeamento do host, então o
+      # app fica acessível em http://<ip-do-servidor> (sem porta na URL) do
+      # mesmo jeito que a instalação bare-metal (install-cgtoolbox.sh).
+      - "80:3000"
+      # Descomente se quiser acessar também direto pela porta 3000 (além da 80):
+      # - "3000:3000"
+      #
+      # --- HTTPS de verdade dentro do container (opcional) ---
+      # 1) Gere/obtenha um certificado e monte-o em /app/tls (ex.: volume ou
+      #    bind mount para /etc/cg-toolbox/tls do host);
+      # 2) Descomente a porta abaixo e as variáveis TLS_CERT_PATH/TLS_KEY_PATH
+      #    e HTTPS_PORT no bloco "environment";
+      # 3) "443:3443" mapeia a porta 443 do host pra 3443 do container (porta
+      #    alta — não precisa de root/capability dentro do container).
+      # - "443:3443"
     environment:
       PORT: "3000"
+      # Ver comentário no Dockerfile — mantém as duas portas iguais por
+      # padrão (só HTTP, sem tentar abrir 443 dentro do container). Para
+      # habilitar HTTPS de verdade, descomente as 3 linhas abaixo (e a porta
+      # "443:3443" acima):
+      # HTTPS_PORT: "3443"
+      # TLS_CERT_PATH: "/app/tls/cert.pem"
+      # TLS_KEY_PATH: "/app/tls/key.pem"
+      #
       # Descomente se este host não estiver num domínio Windows — sem NTLM,
       # os usuários são identificados por um header x-dev-user (ou caem no
       # usuário do sistema operacional rodando o Node dentro do container,
@@ -14,10 +37,16 @@ services:
       # NTLM_DISABLED: "1"
     volumes:
       # Banco de dados (commands.db) num volume nomeado, fora da imagem —
-      # sobrevive a "docker compose down"/rebuild da imagem. Veja no
-      # README/instruções como importar o commands.db já existente para
-      # este volume na primeira instalação.
+      # sobrevive a "docker compose down"/rebuild da imagem. Numa instalação
+      # nova, o volume começa vazio e o servidor cria um commands.db novo
+      # (schema aplicado, sem dados) no primeiro boot — ver server/db.js.
+      # Para trazer um catálogo já existente, copie o arquivo .db para dentro
+      # do volume antes do primeiro "docker compose up" (ver
+      # install-instructions.txt, seção Docker).
       - cg-toolbox-data:/app/data
+      # Descomente junto com o bloco de HTTPS acima, apontando para a pasta
+      # com cert.pem/key.pem no host:
+      # - /etc/cg-toolbox/tls:/app/tls:ro
 
 volumes:
   cg-toolbox-data:

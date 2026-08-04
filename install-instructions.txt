@@ -134,3 +134,43 @@ mexe no banco de dados (server/commands.db).
 - Ver logs detalhados do serviço:
       sudo journalctl -u cg-toolbox -n 50 --no-pager
       sudo journalctl -u cg-toolbox -f      (acompanhar em tempo real)
+
+
+9) ALTERNATIVA: INSTALAR VIA DOCKER
+-------------------------------------
+Sem instalar Node.js nem systemd no host — só Docker + Docker Compose.
+
+    sudo apt-get install -y docker.io docker-compose-plugin   # se não tiver
+    sudo git clone https://github.com/metalab-tec-br/downloads.git /opt/cg-toolbox
+    cd /opt/cg-toolbox
+    sudo docker compose up -d --build
+
+Isso constrói a imagem e sobe o container:
+  - app acessível em http://<ip-do-servidor> (porta 80 do host, mapeada
+    pra 3000 dentro do container — ver docker-compose.yml);
+  - banco de dados (commands.db) num volume Docker nomeado
+    ("cg-toolbox-data"), fora da imagem — sobrevive a rebuild/recreate do
+    container.
+
+Numa instalação NOVA (catálogo vazio, "como em outra empresa"): não precisa
+fazer nada além do "docker compose up -d --build" — o volume começa vazio e
+o servidor cria um commands.db novo (schema aplicado, zero comandos) no
+primeiro boot. Cadastre os comandos depois pela própria aplicação (editor de
+comandos, ou Importar comandos via CSV).
+
+Para trazer um commands.db já existente (ex.: migrando uma instalação
+bare-metal para Docker), copie o arquivo para dentro do volume ANTES do
+primeiro "up":
+    sudo docker compose up -d                     # cria o volume vazio
+    sudo docker compose stop
+    sudo docker cp ./server/commands.db.bak $(docker compose ps -q cg-toolbox):/app/data/commands.db
+    sudo docker compose start
+
+HTTPS de verdade dentro do container, backup/restore via volume, e outras
+opções: ver os comentários em docker-compose.yml.
+
+Comandos do dia a dia:
+    sudo docker compose logs -f cg-toolbox     # acompanhar logs
+    sudo docker compose restart cg-toolbox     # reiniciar
+    sudo docker compose down                   # parar (mantém o volume/dados)
+    sudo docker compose up -d --build          # atualizar depois de um "git pull"

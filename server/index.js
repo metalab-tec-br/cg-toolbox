@@ -32,6 +32,11 @@ const FRONTEND_ROOT = path.join(__dirname, '..');
 //     trocar os arquivos e reiniciar o serviço depois, sem mudar código.
 // PORT (variável antiga, de instalações anteriores a essa mudança) continua
 // funcionando como alias de HTTP_PORT, para compatibilidade.
+// No Docker (ver Dockerfile/docker-compose.yml), o container roda como
+// usuário não-root e por padrão HTTP_PORT=HTTPS_PORT=3000 (via PORT=3000) —
+// portas <1024 exigem privilégio, então lá o "80"/"443" de fora vem do
+// mapeamento de porta do host (docker-compose "80:3000"), não de bind direto
+// dentro do container.
 const HTTP_PORT = process.env.HTTP_PORT || process.env.PORT || 80;
 const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 const TLS_CERT_PATH = process.env.TLS_CERT_PATH;
@@ -1443,10 +1448,31 @@ function checkScheduledBackup() {
 setInterval(checkScheduledBackup, 60 * 1000);
 checkScheduledBackup();
 
+// Loga e derruba SÓ esse listener em caso de erro de bind (porta ocupada,
+// ou sem permissão — ex.: tentar abrir a porta 443 dentro de um container
+// Docker rodando como usuário não-root, onde portas <1024 exigem root/
+// CAP_NET_BIND_SERVICE). Sem isso, um erro de 'listen' não tratado derruba
+// o processo inteiro (Node relança como excessão não capturada), tirando
+// do ar até a porta que tinha dado bind certo.
+function onListenError(port, label) {
+  return err => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Erro: a porta ${port} já está em uso por outro processo — ${label} não vai subir nesta porta.`);
+    } else if (err.code === 'EACCES') {
+      console.error(`Erro: sem permissão para abrir a porta ${port} (${label}). Portas < 1024 exigem root/CAP_NET_BIND_SERVICE — ` +
+        `em Docker, prefira mapear a porta do host para uma porta alta no container (ver docker-compose.yml) em vez de usar HTTP_PORT/HTTPS_PORT < 1024 diretamente.`);
+    } else {
+      console.error(`Erro ao abrir a porta ${port} (${label}):`, err);
+    }
+  };
+}
+
 function startPlainHttp(port, extraLabel) {
-  http.createServer(app).listen(port, () => {
-    console.log(`CG Toolbox server listening on port ${port} (HTTP)${extraLabel ? ' ' + extraLabel : ''}`);
-  });
+  http.createServer(app)
+    .on('error', onListenError(port, 'HTTP'))
+    .listen(port, () => {
+      console.log(`CG Toolbox server listening on port ${port} (HTTP)${extraLabel ? ' ' + extraLabel : ''}`);
+    });
 }
 
 // Porta HTTP — sempre ativa.
@@ -1463,9 +1489,11 @@ if (Number(HTTPS_PORT) !== Number(HTTP_PORT)) {
       cert: fs.readFileSync(TLS_CERT_PATH, 'utf8'),
       key: fs.readFileSync(TLS_KEY_PATH, 'utf8'),
     };
-    https.createServer(credentials, app).listen(HTTPS_PORT, () => {
-      console.log(`CG Toolbox server listening on port ${HTTPS_PORT} (HTTPS)`);
-    });
+    https.createServer(credentials, app)
+      .on('error', onListenError(HTTPS_PORT, 'HTTPS'))
+      .listen(HTTPS_PORT, () => {
+        console.log(`CG Toolbox server listening on port ${HTTPS_PORT} (HTTPS)`);
+      });
   } else {
     if (certConfigurado) {
       console.warn(`Aviso: TLS_CERT_PATH/TLS_KEY_PATH configurados, mas o(s) arquivo(s) não foi(ram) encontrado(s) (cert: ${TLS_CERT_PATH}, key: ${TLS_KEY_PATH}) — porta ${HTTPS_PORT} vai subir em HTTP puro (sem cadeado) até isso ser corrigido.`);
