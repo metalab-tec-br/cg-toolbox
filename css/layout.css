@@ -194,7 +194,7 @@
 .cmd-search:focus { border-color: var(--teal); }
 .cmd-search-icon {
   position: absolute; left: 18px; top: 50%; transform: translateY(-50%);
-  font-size: 12px; line-height: 1; color: var(--dim); pointer-events: none;
+  display: flex; line-height: 1; color: var(--dim); pointer-events: none;
 }
 .cmd-search-clear {
   position: absolute; right: 18px; top: 50%; transform: translateY(-50%);
@@ -211,13 +211,13 @@
    (flyout aberto, ver .sidebar-inner acima), nenhuma dessas regras mais
    bate no seletor, e o conteúdo volta sozinho ao layout normal (mesmas
    regras "sem prefixo" de sempre) — sem precisar de um bloco de "reverter"
-   escrito à parte. Colapsada mostra o ícone de cada item (Favoritos e
-   também Vendor/System/Version/Environment/Topic/Options — todos os
-   ícones já usados na sidebar fixa), maiores que o tamanho normal (18px
-   em vez de 13-14px) pra ficarem fáceis de identificar/clicar na barra
-   estreita; só o texto/dropdown/toggle de cada um some. "Clear filters"
-   (sem ícone próprio, .sb-block-clearfilters) e o rodapé continuam
-   somendo por inteiro. */
+   escrito à parte. Colapsada mostra o ícone de cada item (busca,
+   Favoritos e também Vendor/System/Version/Environment/Topic/Options —
+   todos os ícones já usados na sidebar fixa), maiores que o tamanho
+   normal (21px em vez de 13-14px) pra ficarem fáceis de identificar/
+   clicar na barra estreita; só o texto/dropdown/toggle de cada um some.
+   "Clear filters" (sem ícone próprio, .sb-block-clearfilters) e o rodapé
+   continuam somendo por inteiro. */
 .app.sidebar-collapsed .sidebar:not(:hover) .sb-block { padding-left: 4px; padding-right: 4px; }
 /* Busca: unicamente o ícone, centralizado e maior; campo/limpar/histórico
    somem. transform:none anula o translateY(-50%) herdado de
@@ -227,8 +227,9 @@
   display: flex; align-items: center; justify-content: center; padding: 10px 0 8px;
 }
 .app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cmd-search-icon {
-  position: static; transform: none; font-size: 16px;
+  position: static; transform: none;
 }
+.app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cmd-search-icon svg { width: 21px; height: 21px; }
 .app.sidebar-collapsed .sidebar:not(:hover) .cmd-search-wrap .cmd-search { display: none; }
 /* !important: .cmd-search-clear/.cpq-panel têm display controlado via
    estilo inline por JS (updateSearchClearBtn() em favorites.js, e o painel
@@ -239,14 +240,14 @@
 /* Favoritos: só o ícone da estrela, centralizado e maior. */
 .app.sidebar-collapsed .sidebar:not(:hover) #favNavRow { justify-content: center; padding: 7px 4px; }
 .app.sidebar-collapsed .sidebar:not(:hover) #favNavRow > span { display: none; }
-.app.sidebar-collapsed .sidebar:not(:hover) #favNavRow svg { width: 18px; height: 18px; }
+.app.sidebar-collapsed .sidebar:not(:hover) #favNavRow svg { width: 21px; height: 21px; }
 /* Vendor/System/Version/Environment/Topic/Options: mostra só o ícone do
    cabeçalho (.sb-head-icon), maior, centralizado; texto (.sb-head-txt),
    dropdown (.dd) e toggles (.sb-toggle, dentro de Options) somem. */
 .app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .sb-head {
   display: flex; align-items: center; justify-content: center; padding: 3px 0; margin-bottom: 0;
 }
-.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .sb-head-icon svg { width: 18px; height: 18px; }
+.app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .sb-head-icon svg { width: 21px; height: 21px; }
 .app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .sb-head-txt { display: none; }
 .app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .dd { display: none; }
 .app.sidebar-collapsed .sidebar:not(:hover) .sb-block-filter .sb-toggle { display: none; }
