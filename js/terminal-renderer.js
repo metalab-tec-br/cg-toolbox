@@ -35,11 +35,14 @@ function termRender(lines) {
       // busca (.cpq-tag em css/layout.css: fundo teal-bg, borda teal, texto
       // teal, mono), sem sombra, em vez do preenchimento full-width usado
       // antes. O nome fica em seu próprio <span> pra truncar com "…" (ver
-      // .ln-image-label).
+      // .ln-image-label). onclick/role/tabindex ficam só na etiqueta
+      // (.ln-image-tag), não na linha inteira (.ln-image) — o "[Image]#" não
+      // é clicável, só o nome/ícone da imagem, igual ao botão de copiar nas
+      // linhas de comando.
       const icon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`;
       const badge = l.imageData
-        ? `<span class="ln-image" data-img="${l.imageData}" onclick="openImageLightbox(this)" role="button" tabindex="0" title="Click to view image"><span class="ln-image-prompt">[Image]#</span><span class="ln-image-tag">${icon}<span class="ln-image-label">${label}</span></span></span>`
-        : `<span class="ln-image ln-image-missing" title="No image attached"><span class="ln-image-prompt">[Image]#</span><span class="ln-image-tag">${icon}<span class="ln-image-label">${label}</span></span></span>`;
+        ? `<span class="ln-image"><span class="ln-image-prompt">[Image]#</span><span class="ln-image-tag" data-img="${l.imageData}" onclick="openImageLightbox(this)" role="button" tabindex="0" title="Click to view image">${icon}<span class="ln-image-label">${label}</span></span></span>`
+        : `<span class="ln-image ln-image-missing"><span class="ln-image-prompt">[Image]#</span><span class="ln-image-tag" title="No image attached">${icon}<span class="ln-image-label">${label}</span></span></span>`;
       // Preferência 'Show images' (Settings → User preferences — ver
       // SHOW_IMAGES/applyShowImagesSetting em js/settings.js): quando
       // ligada, mostra a miniatura logo abaixo do badge, sem precisar
@@ -410,10 +413,11 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('keydown', ev => {
   if (ev.key === 'Escape') closeImageLightbox();
 });
-// Acessibilidade: o badge da imagem é focável (tabindex) e tem role="button"
-// (ver termRender acima) — Enter/Espaço ativam igual a um clique.
+// Acessibilidade: a etiqueta da imagem (.ln-image-tag, não a linha .ln-image
+// inteira) é focável (tabindex) e tem role="button" (ver termRender acima) —
+// Enter/Espaço ativam igual a um clique.
 document.addEventListener('keydown', ev => {
-  if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList && ev.target.classList.contains('ln-image')) {
+  if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList && ev.target.classList.contains('ln-image-tag')) {
     ev.preventDefault();
     openImageLightbox(ev.target);
   }

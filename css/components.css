@@ -575,14 +575,14 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .ln-ok   { display: block; font-size: 11px; font-family: var(--sans); color: var(--green); background: var(--green-bg); border-radius: 4px; padding: 4px 9px; margin-top: 5px; font-weight: 600; }
 /* Linha do tipo 'image' (screenshot de configuração) — ver
    command_lines.image_data (schema.sql) e openImageLightbox()
-   (terminal-renderer.js). Clicável/focável, abre a imagem em tamanho maior.
-   Início da linha no mesmo formato de uma linha de comando — "[Image]#
-   <etiqueta>" — com o prompt na mesma cor/peso de .pr (ver termRender() tipo
-   'image' em terminal-renderer.js). O nome da imagem (ícone + texto) vem em
-   uma etiqueta (.ln-image-tag) com o MESMO estilo visual das etiquetas de
-   parâmetro da busca (.cpq-tag em css/layout.css: fundo teal-bg, borda fina
-   teal, texto teal, mono, sem sombra) — só o "[Image]#" fica fora da
-   etiqueta, sem fundo, igual aos demais prefixos. */
+   (terminal-renderer.js). Início da linha no mesmo formato de uma linha de
+   comando — "[Image]# <etiqueta>" — com o prompt na mesma cor/peso de .pr
+   (ver termRender() tipo 'image' em terminal-renderer.js). Só a etiqueta
+   (.ln-image-tag) é clicável/focável (abre a imagem em tamanho maior) — o
+   "[Image]#" (.ln-image-prompt) é só texto, sem ação, igual aos demais
+   prefixos. O nome da imagem (ícone + texto) vem no MESMO estilo visual das
+   etiquetas de parâmetro da busca (.cpq-tag em css/layout.css: fundo
+   teal-bg, borda fina teal, texto teal, mono, sem sombra). */
 .ln-image {
   /* display:flex (não inline-flex) pelo mesmo motivo de .ln-note — bloco
      puro para sempre quebrar linha antes/depois, mesmo entre duas linhas
@@ -592,12 +592,13 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
      de .term (1.9) já dá o espaçamento entre linhas; manter margin aqui
      deixava o espaço antes de uma linha de imagem maior que entre as
      demais linhas do terminal. */
-  margin-top: 0; cursor: pointer;
+  margin-top: 0;
 }
 .ln-image-prompt { color: var(--teal); font-weight: 700; font-style: normal; font-family: var(--mono); font-size: 12.5px; flex-shrink: 0; }
 /* Etiqueta (chip) do nome da imagem — cópia do estilo de .cpq-tag
    (css/layout.css), sem sombra, largura ajustada ao conteúdo (não mais 30%
-   fixo da linha inteira). */
+   fixo da linha inteira). cursor:pointer só aqui (não na linha inteira,
+   ver .ln-image acima) — é a única parte clicável. */
 .ln-image-tag {
   display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%;
   background: var(--teal-bg); border: 1px solid var(--teal); color: var(--teal);
@@ -606,14 +607,12 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
      terminal, deixando o espaçamento entre linhas desigual (ver .term
      line-height: 1.9, herdado pelas demais linhas). */
   border-radius: 4px; padding: 0 7px; font-family: var(--mono); font-size: 11px; line-height: 1.2;
-  box-sizing: border-box;
+  box-sizing: border-box; cursor: pointer;
 }
 .ln-image-tag svg { flex-shrink: 0; }
 .ln-image-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; text-align: left; }
-.ln-image:focus { outline: none; }
-.ln-image:focus .ln-image-tag { border-color: var(--teal); }
-.ln-image.ln-image-missing { cursor: default; }
-.ln-image.ln-image-missing .ln-image-tag { color: var(--muted); background: var(--surf2); border-color: var(--bdr); }
+.ln-image-tag:focus { outline: none; border-color: var(--teal); }
+.ln-image.ln-image-missing .ln-image-tag { color: var(--muted); background: var(--surf2); border-color: var(--bdr); cursor: default; }
 /* Miniatura exibida automaticamente logo abaixo do badge quando a
    preferência 'Show images' (Settings → User preferences) está ligada — ver
    SHOW_IMAGES em js/settings.js e a renderização condicional em
