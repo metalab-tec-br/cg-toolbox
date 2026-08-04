@@ -229,7 +229,24 @@ function buildImportPayload(obj, existingIdsInBatch) {
   const environments = resolveMultiCatalog(getCell(obj, 'Environments', 'Environment'), CATALOGS.environments || [], warnings, 'Environment', 'environment');
   if (!environments.length) return { error: 'No valid "Environment" (at least one is required — must match an existing environment)' };
   const tags = parseTagsCell(getCell(obj, 'Tags'));
-  const requires_ips = parseYesNo(getCell(obj, 'Requires IP/Port'));
+  // "Requires IP/Port" = Yes só faz sentido pra um comando que muda de
+  // conteúdo quando SRC/DST estão vazios (ver toggle "This command changes
+  // content when SRC/DST are empty" no editor manual, passo Avançado) — e
+  // isso exige cadastrar uma linha alternativa (variant 'empty'), algo que a
+  // importação por CSV não tem como preencher (não existe coluna pra isso).
+  // Sem essa linha alternativa, o servidor rebaixa a flag pra 0 (ver
+  // buildCommandColumns em server/index.js) e o comando importa normalmente
+  // — mas ANTES dessa guarda existir, um comando assim ficava com a flag
+  // "presa" em 1 sem nenhuma linha empty, e o card desaparecia da tela por
+  // completo sempre que Source IP/Destination IP não estivessem os dois
+  // preenchidos no topo, sem nenhum erro visível. Por isso aqui a importação
+  // já nem tenta setar a flag — sempre "No" — e só avisa quando a célula do
+  // .csv dizia "Yes", pra quem editou o arquivo à mão entender por que foi
+  // ignorado.
+  if (parseYesNo(getCell(obj, 'Requires IP/Port'))) {
+    warnings.push('"Requires IP/Port" = Yes ignored — CSV import cannot register the alternate content shown when Source/Destination IP are empty (that requires the manual editor\'s Advanced step); the command was imported as always-visible instead.');
+  }
+  const requires_ips = false;
   const prompt = getCell(obj, 'Prompt') || '[Expert@FW]#';
   const commandCell = getCell(obj, 'Command');
   const noteCell = getCell(obj, 'Note');

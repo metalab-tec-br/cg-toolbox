@@ -592,13 +592,27 @@ function buildCommandColumns(body) {
   // `topic` (coluna, singular) é mantido em paralelo = topics[0], só por
   // compatibilidade — a lista completa vive em command_topics (ver insertChildren).
   const topics = resolveTopics(body);
+  // Guarda estrutural: requires_ips/requires_ip_port fazem buildCardHtmlForRow
+  // (js/db-render-engine.js) trocar para um "empty state" quando SRC/DST (ou
+  // IP/Porta genéricos) não estão preenchidos — e se não existir NENHUMA linha
+  // variant='empty' cadastrada, buildEmptyStateCard retorna null e o card
+  // desaparece da tela por completo, sem erro nenhum visível (bug real: um
+  // comando importado via CSV com "Requires IP/Port"=Yes ficou invisível,
+  // porque a importação por CSV nunca cria linhas variant='empty' — só o
+  // editor manual, tela Avançado, tem esse campo). Por isso o server nunca
+  // aceita requires_ips/requires_ip_port=1 sem pelo menos uma linha empty com
+  // conteúdo — se vier assim, a flag é rebaixada para 0 em vez de deixar o
+  // comando entrar num estado "invisível por design". Vale tanto pra CSV
+  // import quanto pro editor manual (mesmo payload shape), é a única fonte de
+  // verdade.
+  const hasEmptyLines = Array.isArray(body.lines) && body.lines.some(l => l && l.variant === 'empty' && String(l.content || '').trim());
   const cols = {
     id: body.id,
     topic: topics[0],
     icon: body.icon || '📄',
     sort_order: Number.isInteger(body.sort_order) ? body.sort_order : 0,
-    requires_ips: body.requires_ips ? 1 : 0,
-    requires_ip_port: body.requires_ip_port ? 1 : 0,
+    requires_ips: (body.requires_ips && hasEmptyLines) ? 1 : 0,
+    requires_ip_port: (body.requires_ip_port && hasEmptyLines) ? 1 : 0,
     placeholder_resolver: body.placeholder_resolver || null,
     raw_template: body.raw_template || '',
     about_icon: body.about_icon || 'ℹ️',
