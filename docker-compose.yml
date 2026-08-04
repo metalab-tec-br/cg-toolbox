@@ -1,6 +1,15 @@
 services:
   cg-toolbox:
-    build: .
+    build:
+      context: .
+      # "network: host" faz o build usar a rede do próprio host em vez da
+      # bridge padrão do Docker — em alguns servidores/VPNs a bridge do
+      # Docker tem um MTU incompatível com a rede real, e etapas do build
+      # que baixam pacotes (apt-get update/install da imagem "deps", ver
+      # Dockerfile) travam com "Connection timed out" mesmo com internet
+      # funcionando normalmente no host. Com host network, o build usa a
+      # mesma interface/MTU que o "curl"/"apt" do host já usam sem problema.
+      network: host
     image: cg-toolbox:latest
     restart: unless-stopped
     ports:
