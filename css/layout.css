@@ -102,12 +102,6 @@
   transition: width .15s ease;
 }
 .sb-block { padding: 6px 10px 4px; }
-/* Linha divisória entre a seção Favorites e as seções de filtro (Vendor em
-   diante) — mesmo padrão visual do .cpq-panel-divider já usado no painel de
-   busca (linha 1px na cor --bdr). Escondida por completo na barra colapsada
-   via regra dedicada mais abaixo (marcar só com .sb-block-filter não basta,
-   pois esse seletor só some com filhos como .sb-head-txt/.dd/.sb-toggle). */
-.sb-divider { height: 1px; background: var(--bdr); margin: 4px 10px 6px; }
 /* Ícone de seção (Vendor/System/Version/Environment/Topic/Options) — sempre
    visível ao lado do rótulo, mesmo padrão visual do ícone de estrela ao
    lado de "Favorites" (#favNavRow) logo acima. Bloco inteiro some na barra
@@ -142,7 +136,11 @@
 .sb-row.on { background: var(--surf3); color: var(--text); border-color: var(--bdr); }
 /* Botão "Favoritos" da sidebar — cor de marca do projeto (mesma usada em botões
    primários/destaques) quando selecionado, para se destacar das demais linhas
-   (Versão/Ambiente/Tópico), que usam o cinza neutro padrão. */
+   (Versão/Ambiente/Tópico), que usam o cinza neutro padrão. Sombra fixa
+   (sempre visível, não só no hover/seleção) para destacar o bloco como um
+   cartão próprio; a cor de fundo/borda/texto continua mudando normalmente
+   quando selecionado (.on), só a sombra é constante. */
+#favNavRow { box-shadow: 0 1px 4px rgba(0,0,0,.18); }
 #favNavRow.on { background: var(--teal-bg); border-color: var(--teal); color: var(--teal); }
 .sb-chk {
   width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;
@@ -233,9 +231,6 @@
 /* "Clear filters" não tem ícone próprio — some inteiro (não faz sentido
    virar só um ícone). */
 .app.sidebar-collapsed .sidebar .sb-block-clearfilters { display: none; }
-/* Linha divisória (Favorites/Vendor) some inteira na barra colapsada — não
-   tem filhos como .sb-head-txt para a regra genérica acima esconder. */
-.app.sidebar-collapsed .sidebar .sb-divider { display: none; }
 /* Rodapé "Developed by CG One" some inteiro. */
 .app.sidebar-collapsed .sidebar .sb-credit { display: none; }
 
