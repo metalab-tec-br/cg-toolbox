@@ -157,7 +157,14 @@
 .settings-tile svg { opacity: .85; transition: opacity .12s; }
 .settings-tile:hover { border-color: var(--teal); color: var(--teal); }
 .settings-tile:hover svg { opacity: 1; }
-.settings-action-row { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Antes botões lado a lado (flex-wrap); virou uma lista de barras
+   horizontais full-width, uma por linha (mesmo padrão dos toggles e do
+   Register) — consistência com o resto do modal de Configurações. */
+.settings-action-row { display: flex; flex-direction: column; gap: 8px; }
+.settings-action-row > .btn {
+  width: 100%; display: flex; align-items: center; gap: 10px; justify-content: flex-start;
+  padding: 10px 14px;
+}
 
 /* Modal de confirmação genérico (substitui o confirm() nativo do navegador —
    fica centralizado na tela e segue as cores do tema, sem exibir o host). */
