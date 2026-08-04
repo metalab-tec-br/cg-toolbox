@@ -73,6 +73,8 @@ function getCell(obj, ...names) {
   }
   return '';
 }
+function normKey(s) { return String(s || '').trim().toLowerCase(); }
+function splitCell(cell) { return String(cell || '').split(',').map(s => s.trim()).filter(Boolean); }
 
 // ── Template para download — mesmas colunas usadas na exportação (Topic,
 // Versions, Environments, Purpose/When to use/Notes — ver CSV_COLUMNS em
@@ -133,15 +135,25 @@ function matchCatalogItem(raw, items, extraFields) {
 // Environment agora NÃO é (ver validateBody em server/index.js: mesmos 4
 // campos são obrigatórios no cadastro, e a importação CSV segue a mesma
 // regra). Valores digitados mas não reconhecidos viram aviso, não erro fatal.
-function resolveMultiCatalog(cell, items, warnings, label) {
+// `resType` (opcional) é a chave em _importResolutionMap a consultar quando
+// matchCatalogItem não encontra nada — preenchida pelo painel "Resolve
+// unmatched values" (ver mais abaixo) quando o usuário mapeia um valor
+// digitado pra um item já existente com nome diferente (ex.: "CP" -> "Check
+// Point"). Itens marcados como "criar novo" nesse painel já foram de fato
+// criados via API antes de chegar aqui, então já batem direto no catálogo
+// (CATALOGS foi recarregado) — o mapa só é mesmo necessário pro caso "mapear
+// pra existente com grafia diferente".
+function resolveMultiCatalog(cell, items, warnings, label, resType) {
   const raw = (cell || '').trim();
   if (!raw || raw.toLowerCase() === 'all') return [];
   const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
   const keys = [];
   parts.forEach(p => {
     const found = matchCatalogItem(p, items);
-    if (found) keys.push(found.key);
-    else warnings.push(`${label} "${p}" not found — ignored`);
+    if (found) { keys.push(found.key); return; }
+    const mapped = resType && _importResolutionMap[resType] && _importResolutionMap[resType][normKey(p)];
+    if (mapped) { keys.push(mapped); return; }
+    warnings.push(`${label} "${p}" not found — ignored`);
   });
   return keys;
 }
@@ -151,8 +163,10 @@ function resolveTopics(cell, warnings) {
   const keys = [];
   parts.forEach(p => {
     const found = matchCatalogItem(p, (CATALOGS.topics || []).filter(t => !t.is_protected), ['label']);
-    if (found) keys.push(found.key);
-    else warnings.push(`Topic "${p}" not found — ignored`);
+    if (found) { keys.push(found.key); return; }
+    const mapped = _importResolutionMap.topic[normKey(p)];
+    if (mapped) { keys.push(mapped); return; }
+    warnings.push(`Topic "${p}" not found — ignored`);
   });
   return [...new Set(keys)];
 }
@@ -205,14 +219,14 @@ function buildImportPayload(obj, existingIdsInBatch) {
   // A command belongs to exactly one vendor (unlike System/Version/Environment/
   // Topic below, which allow several) — mirrors the single-select Vendor field
   // in the "New command" editor (see _ceBindVendorSeg in js/command-editor.js).
-  const vendors = resolveMultiCatalog(getCell(obj, 'Vendor', 'Vendors'), CATALOGS.vendors || [], warnings, 'Vendor');
+  const vendors = resolveMultiCatalog(getCell(obj, 'Vendor', 'Vendors'), CATALOGS.vendors || [], warnings, 'Vendor', 'vendor');
   if (!vendors.length) return { error: 'No valid "Vendor" (exactly one is required — must match an existing vendor)' };
   if (vendors.length > 1) return { error: `"Vendor" must have exactly one value, found ${vendors.length} (${vendors.join(', ')}) — a command belongs to a single vendor` };
-  const systems = resolveMultiCatalog(getCell(obj, 'System', 'Operating System', 'OS'), CATALOGS.systems || [], warnings, 'System');
+  const systems = resolveMultiCatalog(getCell(obj, 'System', 'Operating System', 'OS'), CATALOGS.systems || [], warnings, 'System', 'system');
   if (!systems.length) return { error: 'No valid "System" (at least one is required — must match an existing system)' };
-  const versions = resolveMultiCatalog(getCell(obj, 'Versions', 'Version'), CATALOGS.versions || [], warnings, 'Version');
+  const versions = resolveMultiCatalog(getCell(obj, 'Versions', 'Version'), CATALOGS.versions || [], warnings, 'Version', 'version');
   if (!versions.length) return { error: 'No valid "Version" (at least one is required — must match an existing version)' };
-  const environments = resolveMultiCatalog(getCell(obj, 'Environments', 'Environment'), CATALOGS.environments || [], warnings, 'Environment');
+  const environments = resolveMultiCatalog(getCell(obj, 'Environments', 'Environment'), CATALOGS.environments || [], warnings, 'Environment', 'environment');
   if (!environments.length) return { error: 'No valid "Environment" (at least one is required — must match an existing environment)' };
   const tags = parseTagsCell(getCell(obj, 'Tags'));
   const requires_ips = parseYesNo(getCell(obj, 'Requires IP/Port'));
@@ -239,6 +253,272 @@ function buildImportPayload(obj, existingIdsInBatch) {
   return { payload, warnings };
 }
 
+// ════════════════════════════════════════════════
+// RESOLVER VALORES DE CATÁLOGO SEM CORRESPONDÊNCIA — quando Vendor/System/
+// Versions/Environments/Topics do .csv não batem com nada já cadastrado, em
+// vez de só ignorar (aviso) ou rejeitar a linha (campos obrigatórios), o
+// usuário resolve cada valor direto na tela de importação: cria como novo
+// item do catálogo (chamando a mesma API do "Manage → Vendors/Systems/..."),
+// ou mapeia pra um item já existente com nome diferente (ex.: "CP" -> "Check
+// Point"). Só depois disso o botão "Import" é liberado.
+//
+// Ordem de resolução: Vendor → System → Version → Environment → Topic — os
+// dois primeiros pares (System depende de Vendor, Version depende de
+// System) porque criar um System novo exige escolher a Vendor (e Version
+// exige escolher o System), então o dropdown de vínculo de cada um lista os
+// itens já cadastrados MAIS os que estão sendo criados nesta mesma tela
+// (marcados "(new, from this file)") — resolvidos de fato só na hora de
+// aplicar (applyImportResolutions), na mesma ordem de dependência.
+// ════════════════════════════════════════════════
+const IMPORT_RES_ORDER = ['vendor', 'system', 'version', 'environment', 'topic'];
+const IMPORT_RES_META = {
+  vendor:      { label: 'Vendor',      endpoint: '/api/vendors',      parent: null },
+  system:      { label: 'System',      endpoint: '/api/systems',      parent: 'vendor' },
+  version:     { label: 'Version',     endpoint: '/api/versions',     parent: 'system' },
+  environment: { label: 'Environment', endpoint: '/api/environments', parent: null },
+  topic:       { label: 'Topic',       endpoint: '/api/topics',       parent: null },
+};
+// rawLower -> key já resolvida (mapeada pra existente OU criada nesta sessão
+// de import). Reiniciado a cada arquivo novo escolhido / a cada abertura do
+// modal — ver resetImportResolutionState abaixo.
+let _importResolutionMap = { vendor: {}, system: {}, version: {}, environment: {}, topic: {} };
+function resetImportResolutionState() {
+  _importResolutionMap = { vendor: {}, system: {}, version: {}, environment: {}, topic: {} };
+}
+
+function importCatalogItemsFor(type) {
+  if (type === 'vendor') return CATALOGS.vendors || [];
+  if (type === 'system') return CATALOGS.systems || [];
+  if (type === 'version') return CATALOGS.versions || [];
+  if (type === 'environment') return CATALOGS.environments || [];
+  if (type === 'topic') return (CATALOGS.topics || []).filter(t => !t.is_protected);
+  return [];
+}
+// Rótulo com o pai entre parênteses, pra não confundir (ex.: duas versões
+// "R82" cadastradas sob systems diferentes).
+function importCatalogOptionLabel(type, item) {
+  if (type === 'system') {
+    const vendor = (CATALOGS.vendors || []).find(v => v.key === item.vendor);
+    return vendor ? `${item.label} (${vendor.label})` : item.label;
+  }
+  if (type === 'version') {
+    const system = (CATALOGS.systems || []).find(s => s.key === item.system);
+    return system ? `${item.label} (${system.label})` : item.label;
+  }
+  return item.label;
+}
+
+// Varre todas as linhas já parseadas e devolve, por tipo de catálogo, um Map
+// rawLower -> {raw, count} com os valores digitados que não batem com nada
+// (nem no catálogo vivo, nem no que já foi resolvido nesta sessão de
+// import) — base do painel "Resolve unmatched values".
+function collectUnresolvedRefs(rows) {
+  const out = { vendor: new Map(), system: new Map(), version: new Map(), environment: new Map(), topic: new Map() };
+  const bump = (type, raw) => {
+    const k = normKey(raw);
+    if (!k || k === 'all') return;
+    const cur = out[type].get(k);
+    if (cur) cur.count++;
+    else out[type].set(k, { raw: raw.trim(), count: 1 });
+  };
+  const isKnown = (type, raw, items, extraFields) => {
+    if (matchCatalogItem(raw, items, extraFields)) return true;
+    return !!_importResolutionMap[type][normKey(raw)];
+  };
+  (rows || []).forEach(obj => {
+    splitCell(getCell(obj, 'Vendor', 'Vendors')).forEach(v => {
+      if (!isKnown('vendor', v, importCatalogItemsFor('vendor'))) bump('vendor', v);
+    });
+    splitCell(getCell(obj, 'System', 'Operating System', 'OS')).forEach(v => {
+      if (!isKnown('system', v, importCatalogItemsFor('system'))) bump('system', v);
+    });
+    splitCell(getCell(obj, 'Versions', 'Version')).forEach(v => {
+      if (!isKnown('version', v, importCatalogItemsFor('version'))) bump('version', v);
+    });
+    splitCell(getCell(obj, 'Environments', 'Environment')).forEach(v => {
+      if (!isKnown('environment', v, importCatalogItemsFor('environment'))) bump('environment', v);
+    });
+    splitCell(getCell(obj, 'Topics', 'Topic')).forEach(v => {
+      if (!isKnown('topic', v, importCatalogItemsFor('topic'), ['label'])) bump('topic', v);
+    });
+  });
+  return out;
+}
+function importAnyUnresolved(unresolved) {
+  return IMPORT_RES_ORDER.some(t => unresolved[t].size > 0);
+}
+
+// Monta o HTML do painel de resolução, uma seção por tipo (só as que têm
+// pendência) — ver applyImportResolutions para o que acontece ao confirmar.
+function renderImportResolutionPanel(unresolved) {
+  const sections = IMPORT_RES_ORDER.map(type => {
+    const map = unresolved[type];
+    if (!map || !map.size) return '';
+    const meta = IMPORT_RES_META[type];
+    const existingItems = importCatalogItemsFor(type);
+    const parentType = meta.parent;
+    const parentExistingItems = parentType ? importCatalogItemsFor(parentType) : [];
+    const parentPendingRaws = parentType ? [...unresolved[parentType].keys()] : [];
+
+    const rowsHtml = [...map.entries()].map(([rawKey, info], idx) => {
+      const domId = `impres-${type}-${idx}`;
+      const existingOptionsHtml = existingItems.map(it =>
+        `<option value="${escAttr(it.key)}">${escAttr(importCatalogOptionLabel(type, it))}</option>`).join('');
+      let parentFieldHtml = '';
+      if (parentType) {
+        const existingParentOpts = parentExistingItems.map(it =>
+          `<option value="key:${escAttr(it.key)}">${escAttr(importCatalogOptionLabel(parentType, it))}</option>`).join('');
+        const pendingParentOpts = parentPendingRaws.map(praw => {
+          const pinfo = unresolved[parentType].get(praw);
+          return `<option value="new:${escAttr(praw)}">${escAttr(pinfo.raw)} (new, from this file)</option>`;
+        }).join('');
+        parentFieldHtml = `
+          <select class="set-input imp-res-parent" id="${domId}-parent">
+            <option value="">— choose ${escAttr(IMPORT_RES_META[parentType].label)} —</option>
+            ${existingParentOpts}${pendingParentOpts}
+          </select>`;
+      }
+      return `
+        <div class="imp-res-row" id="${domId}-row">
+          <div class="imp-res-raw">"${escAttr(info.raw)}"<span class="imp-res-count"> — used in ${info.count} command${info.count === 1 ? '' : 's'}</span></div>
+          <select class="set-input imp-res-choice" id="${domId}-choice" data-type="${type}" data-idx="${idx}" data-raw="${escAttr(rawKey)}"
+                  onchange="_impResToggleExtra('${type}', ${idx})">
+            <option value="__new__">➕ Create new ${escAttr(meta.label.toLowerCase())}: "${escAttr(info.raw)}"</option>
+            ${existingOptionsHtml ? `<option disabled>──────────</option>${existingOptionsHtml}` : ''}
+          </select>
+          <div class="imp-res-extra" id="${domId}-extra">
+            <input class="set-input" id="${domId}-label" value="${escAttr(info.raw)}" placeholder="${escAttr(meta.label)} name" style="flex:1;min-width:120px;">
+            <input type="color" class="cat-color-input" id="${domId}-color" value="#8B949E">
+            ${parentFieldHtml}
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="set-group imp-res-section">
+        <span class="set-label">${escAttr(meta.label)}${map.size > 1 ? 's' : ''} not found (${map.size})</span>
+        ${rowsHtml}
+      </div>`;
+  }).join('');
+
+  return `
+    <div id="importResolveBox" class="imp-res-panel">
+      <span class="set-hint" style="display:block;margin-bottom:10px;">
+        Some values in this file don't match anything registered yet. For each one below, create it as a new catalog
+        item or map it to the existing one it should use instead.
+      </span>
+      ${sections}
+      <div class="imp-res-actions">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="_impResSkipAndPreview()">Import anyway (skip unresolved)</button>
+        <button type="button" class="btn btn-primary btn-sm" id="impResApplyBtn" onclick="applyImportResolutions()">Apply &amp; continue</button>
+      </div>
+    </div>`;
+}
+function _impResToggleExtra(type, idx) {
+  const domId = `impres-${type}-${idx}`;
+  const choice = _impBox(`${domId}-choice`);
+  const extra = _impBox(`${domId}-extra`);
+  if (!choice || !extra) return;
+  extra.style.display = choice.value === '__new__' ? 'flex' : 'none';
+}
+
+// Aplica as decisões do painel: pra cada item, ou grava o mapeamento direto
+// (escolheu um item existente), ou cria via API (na ordem vendor->system->
+// version->environment->topic, pra que o dropdown de vínculo de System/
+// Version já tenha o pai recém-criado disponível) e grava o mapeamento com a
+// key real devolvida pelo servidor. Ao final, recarrega CATALOGS (mesma
+// função usada pela tela de Manage) e reavalia o que ainda falta — se nada
+// mais, mostra o preview normal e libera o Import; se ainda faltar algo
+// (ex.: erro de rede numa criação), re-renderiza o painel só com o que
+// sobrou.
+async function applyImportResolutions() {
+  const applyBtn = _impBox('impResApplyBtn');
+  if (applyBtn) { applyBtn.disabled = true; applyBtn.textContent = 'Applying…'; }
+  const box = _impBox('importResolveBox');
+  const errors = [];
+
+  for (const type of IMPORT_RES_ORDER) {
+    const meta = IMPORT_RES_META[type];
+    const choiceEls = box ? Array.from(box.querySelectorAll(`.imp-res-choice[data-type="${type}"]`)) : [];
+    for (const choiceEl of choiceEls) {
+      const idx = choiceEl.getAttribute('data-idx');
+      const raw = choiceEl.getAttribute('data-raw');
+      const domId = `impres-${type}-${idx}`;
+      if (choiceEl.value !== '__new__') {
+        _importResolutionMap[type][raw] = choiceEl.value;
+        continue;
+      }
+      const labelInput = _impBox(`${domId}-label`);
+      const colorInput = _impBox(`${domId}-color`);
+      const label = (labelInput && labelInput.value.trim()) || raw;
+      const color = (colorInput && colorInput.value) || '#8B949E';
+      const body = { label, color };
+      if (meta.parent) {
+        const parentSelect = _impBox(`${domId}-parent`);
+        const parentVal = parentSelect ? parentSelect.value : '';
+        if (!parentVal) {
+          errors.push(`Choose a ${IMPORT_RES_META[meta.parent].label} for "${label}"`);
+          continue;
+        }
+        let parentKey = parentVal;
+        if (parentVal.startsWith('key:')) {
+          parentKey = parentVal.slice(4);
+        } else if (parentVal.startsWith('new:')) {
+          parentKey = _importResolutionMap[meta.parent][parentVal.slice(4)];
+          if (!parentKey) {
+            errors.push(`"${label}" depends on a new ${meta.parent} that wasn't created — resolve it first`);
+            continue;
+          }
+        }
+        body[meta.parent] = parentKey;
+      }
+      try {
+        const res = await fetch(meta.endpoint, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          errors.push(`"${label}": ${errBody.message || 'failed to create'}`);
+          continue;
+        }
+        const created = await res.json();
+        _importResolutionMap[type][raw] = created.key;
+      } catch (e) {
+        errors.push(`"${label}": something went wrong — check your connection and try again`);
+      }
+    }
+  }
+
+  if (typeof catAdminRefreshCatalogs === 'function') await catAdminRefreshCatalogs();
+
+  const stillUnresolved = collectUnresolvedRefs(_importParsedRows || []);
+  const preview = _impBox('importPreviewBox');
+  if (importAnyUnresolved(stillUnresolved)) {
+    if (preview) {
+      preview.innerHTML =
+        (errors.length ? `<div class="imp-res-errors">${errors.map(e => `<div>${escAttr(e)}</div>`).join('')}</div>` : '') +
+        renderImportResolutionPanel(stillUnresolved);
+    }
+  } else {
+    _impResShowPreview(errors);
+  }
+}
+function _impResShowPreview(errors) {
+  const preview = _impBox('importPreviewBox');
+  const btn = _impBox('importConfirmBtn');
+  const n = (_importParsedRows || []).length;
+  if (preview) {
+    preview.innerHTML =
+      (errors && errors.length ? `<div class="imp-res-errors">${errors.map(e => `<div>${escAttr(e)}</div>`).join('')}</div>` : '') +
+      `<span class="set-hint" style="display:block;margin-top:10px;">${n} row${n === 1 ? '' : 's'} ready. Click Import to create ${n === 1 ? 'it' : 'them'}.</span>`;
+  }
+  if (btn) btn.disabled = n === 0;
+}
+// "Import anyway" — mantém o comportamento antigo (valores não reconhecidos
+// entram como aviso por linha, ou rejeitam a linha se forem obrigatórios e
+// ficarem vazios), pra quem não quiser resolver tudo antes de importar.
+function _impResSkipAndPreview() { _impResShowPreview([]); }
+
 // ── Estado do modal ──
 let _importParsedRows = null; // array de objetos {header: valor}, ou null se nada carregado ainda
 
@@ -246,6 +526,7 @@ function _impBox(id) { return document.getElementById(id); }
 
 function openImportCommandsModal(ev) {
   _importParsedRows = null;
+  resetImportResolutionState();
   const fileInput = _impBox('importCsvFile');
   if (fileInput) fileInput.value = '';
   const preview = _impBox('importPreviewBox');
@@ -256,7 +537,7 @@ function openImportCommandsModal(ev) {
   if (btn) btn.disabled = true;
   const hint = _impBox('importHint');
   if (hint) {
-    hint.textContent = 'Bulk-create commands from a .csv file. Not sure how to fill it in? Download the template below — it has the exact columns expected, with a filled-in example row. Topics/Versions/Environments must match names already registered in this app (Manage → Environments/Topics/Versions in the sidebar); unrecognised values are skipped with a warning. Imported commands are always created as your own and can be edited/deleted normally afterwards.';
+    hint.textContent = 'Bulk-create commands from a .csv file. Not sure how to fill it in? Download the template below — it has the exact columns expected, with a filled-in example row. If Vendor/System/Version/Environment/Topics don\'t match anything registered yet, you\'ll be able to create them or map them to an existing item right here before importing. Imported commands are always created as your own and can be edited/deleted normally afterwards.';
   }
   const overlay = _impBox('importCommandsOverlay');
   if (overlay) overlay.classList.add('show');
@@ -272,6 +553,7 @@ function handleImportFileSelected(input) {
   const btn = _impBox('importConfirmBtn');
   const results = _impBox('importResultsBox');
   if (results) results.innerHTML = '';
+  resetImportResolutionState();
   if (!file) {
     _importParsedRows = null;
     if (preview) preview.innerHTML = '';
@@ -283,10 +565,18 @@ function handleImportFileSelected(input) {
     try {
       const rows = parseCsvText(String(reader.result || ''));
       _importParsedRows = csvRowsToObjects(rows);
-      if (preview) {
-        preview.innerHTML = `<span class="set-hint" style="display:block;margin-top:10px;">${_importParsedRows.length} row${_importParsedRows.length === 1 ? '' : 's'} found in "${escAttr(file.name)}". Click Import to create ${_importParsedRows.length === 1 ? 'it' : 'them'}.</span>`;
+      if (!_importParsedRows.length) {
+        if (preview) preview.innerHTML = `<span class="set-hint" style="display:block;margin-top:10px;color:var(--orange);">No rows found in "${escAttr(file.name)}".</span>`;
+        if (btn) btn.disabled = true;
+        return;
       }
-      if (btn) btn.disabled = _importParsedRows.length === 0;
+      const unresolved = collectUnresolvedRefs(_importParsedRows);
+      if (importAnyUnresolved(unresolved)) {
+        if (preview) preview.innerHTML = renderImportResolutionPanel(unresolved);
+        if (btn) btn.disabled = true;
+      } else {
+        _impResShowPreview([]);
+      }
     } catch (e) {
       console.error(e);
       _importParsedRows = null;
