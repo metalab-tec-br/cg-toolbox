@@ -73,11 +73,11 @@
   transition: left .15s, border-color .12s, color .12s;
 }
 .sb-divider-toggle:hover { border-color: var(--teal); color: var(--teal); }
-/* Ícone "desafixado" (colapsado): mesma tachinha, mas sem preenchimento e
-   com uma pequena inclinação extra — a arte já nasce inclinada a 35°
-   (ver rotate(35 12 12) no <g> do SVG, em index.html), então aqui é só um
-   empurrão a mais (não os 28° usados antes com o desenho reto). */
-.sb-divider-toggle .icon-expand { display: none; transform: rotate(14deg); transform-origin: 50% 50%; }
+/* Ícone "desafixado" (colapsado): mesmo alfinete, só que em contorno (sem
+   preenchimento) em vez de sólido — a inclinação de 25° já vem do próprio
+   desenho (ver rotate(25 12 12) no <g> do SVG, em index.html), então aqui
+   não precisa de nenhum giro extra via CSS. */
+.sb-divider-toggle .icon-expand { display: none; }
 .app.sidebar-collapsed .sb-divider-toggle { left: calc(var(--sidebar-collapsed-w) - 10px); }
 .app.sidebar-collapsed .sb-divider-toggle .icon-collapse { display: none; }
 .app.sidebar-collapsed .sb-divider-toggle .icon-expand { display: block; }
