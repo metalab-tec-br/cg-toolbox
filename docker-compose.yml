@@ -84,7 +84,13 @@ services:
   # atualização volta a ser 100% manual (git pull + docker compose up -d
   # --build, ver comando no próprio README/install-instructions.txt).
   updater:
-    build: ./updater
+    build:
+      context: ./updater
+      # Mesmo motivo do serviço cg-toolbox acima: o build baixa pacotes via
+      # apt e um binário via curl (plugin docker compose), e a bridge padrão
+      # do Docker pode ter MTU incompatível com a rede real do host em
+      # alguns ambientes.
+      network: host
     image: cg-toolbox-updater:latest
     restart: unless-stopped
     environment:
