@@ -136,14 +136,13 @@
 .sb-row.on { background: var(--surf3); color: var(--text); border-color: var(--bdr); }
 /* Botão "Favoritos" da sidebar — cor de marca do projeto (mesma usada em botões
    primários/destaques) quando selecionado, para se destacar das demais linhas
-   (Versão/Ambiente/Tópico), que usam o cinza neutro padrão. Sombra fixa
-   (sempre visível, não só no hover/seleção) para destacar o bloco como um
-   cartão próprio; usa a mesma cor de destaque (--teal) que já aparece nos
-   estados de hover/seleção em todo o app (color-mix para aplicar opacidade
-   sem precisar de uma variável rgba separada). A cor de fundo/borda/texto
-   continua mudando normalmente quando selecionado (.on), só a sombra é
-   constante. */
-#favNavRow { box-shadow: 0 1px 5px color-mix(in srgb, var(--teal) 45%, transparent); }
+   (Versão/Ambiente/Tópico), que usam o cinza neutro padrão. Em vez de uma
+   sombra externa (que vazava como um contorno colorido ao redor da caixa),
+   o destaque fixo agora é um preenchimento por dentro da caixa, na mesma
+   cor cinza-claro do hover (.sb-row:hover usa var(--surf2)) — como se o
+   item estivesse sempre "meio hover". Quando selecionado (.on), a regra mais
+   específica abaixo assume e troca para a cor de destaque (--teal) normalmente. */
+#favNavRow { background: var(--surf2); }
 #favNavRow.on { background: var(--teal-bg); border-color: var(--teal); color: var(--teal); }
 .sb-chk {
   width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;
