@@ -238,7 +238,8 @@
    lugar só à marca "//" (.sb-credit-mark), do mesmo tamanho dos demais
    ícones da barra colapsada (21px de altura). */
 .app.sidebar-collapsed .sidebar .sb-credit {
-  display: flex; justify-content: center; padding: 10px 4px 12px;
+  display: flex; flex-direction: row; align-items: center; justify-content: center;
+  padding: 10px 4px 12px;
 }
 .app.sidebar-collapsed .sidebar .sb-credit-txt,
 .app.sidebar-collapsed .sidebar .sb-credit-img { display: none; }
