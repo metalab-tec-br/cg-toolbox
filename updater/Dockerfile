@@ -20,7 +20,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git docker.io docker-compose-v2 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY updater/server.js ./server.js
+COPY server.js ./server.js
 
 # Roda como root de propósito: precisa ler/escrever no socket do Docker do
 # host (/var/run/docker.sock, montado pelo docker-compose.yml), cujo grupo
