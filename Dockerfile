@@ -21,16 +21,17 @@ WORKDIR /app/server
 # python3/make/g++ are only actually exercised if npm can't find a prebuilt
 # better-sqlite3 binary for this exact OS/arch and has to compile it itself.
 #
-# The sed below forces Debian's apt sources to HTTPS instead of HTTP. Some
-# networks (corporate proxy/DPI in the path) let small plain-HTTP responses
-# through but stall/mangle larger ones — deb.debian.org's InRelease/Packages
-# downloads hang forever with "Connection timed out" while the exact same
-# host has no trouble reaching the internet over HTTPS. Rewriting to https://
-# sidesteps that without needing to touch anything outside the image.
-RUN find /etc/apt -name '*.list' -o -name '*.sources' 2>/dev/null | xargs -r sed -i \
-      -e 's|http://deb.debian.org|https://deb.debian.org|g' \
-      -e 's|http://security.debian.org|https://security.debian.org|g' \
-    && apt-get update \
+# NOTE: if this build hangs on "apt-get update" with "Connection timed out"
+# on some host, that's very likely a PMTU black hole (ICMP "fragmentation
+# needed" being dropped somewhere on the path — common on VPNs/certain cloud
+# networks): small packets (TCP handshake, tiny HTTP responses) go through
+# fine, but anything requiring a full-size packet stalls forever, on BOTH
+# HTTP and HTTPS. That's a host/network-level issue, not something to route
+# around here — fix it on the Docker host with a TCP MSS clamp, e.g.:
+#   sudo iptables -t mangle -A OUTPUT -p tcp --tcp-flags SYN,RST SYN \
+#     -j TCPMSS --set-mss 1400
+# (see install-instructions.txt for the full explanation/verification steps).
+RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 

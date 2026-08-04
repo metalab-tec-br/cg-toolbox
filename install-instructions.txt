@@ -174,3 +174,37 @@ Comandos do dia a dia:
     sudo docker compose restart cg-toolbox     # reiniciar
     sudo docker compose down                   # parar (mantém o volume/dados)
     sudo docker compose up -d --build          # atualizar depois de um "git pull"
+
+
+9.1) BUILD TRAVA EM "apt-get update" (Connection timed out)
+--------------------------------------------------------------
+Sintoma: o build para na etapa "deps" (ver Dockerfile) baixando pacotes
+Debian, com "Get:1 ... InRelease" repetindo várias vezes e terminando em
+"Connection timed out", mesmo o host tendo internet normal (curl/apt do
+host funcionam sem problema).
+
+Causa provável: PMTU black hole — algum ponto do caminho de rede (VPN,
+firewall, certas redes de nuvem) descarta os pacotes ICMP "fragmentação
+necessária", então pacotes pequenos (handshake TCP, respostas HTTP/TLS
+pequenas) passam, mas qualquer transferência que precise de um pacote no
+tamanho máximo (MTU cheio) trava pra sempre. Isso afeta tanto HTTP quanto
+HTTPS, e afeta o host inteiro, não só o Docker — então a correção é no
+host, com um "clamp" do MSS do TCP:
+
+    # 1) confirmar o diagnóstico (opcional): estas duas linhas devem travar
+    #    (ou demorar até o timeout) se for isso mesmo:
+    curl -m 8 -o /dev/null -s -w "HTTP:  %{http_code}  %{time_total}s\n" http://deb.debian.org/debian/dists/bookworm/InRelease
+    curl -m 8 -o /dev/null -s -w "HTTPS: %{http_code}  %{time_total}s\n" https://deb.debian.org/debian/dists/bookworm/InRelease
+
+    # 2) aplicar o clamp (efeito imediato, não precisa reiniciar nada)
+    sudo iptables -t mangle -A OUTPUT -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1400
+
+    # 3) confirmar que resolveu (repita o teste do passo 1 — agora deve
+    #    responder rápido, "200", em bem menos de 1 segundo)
+
+    # 4) tornar permanente (a regra acima não sobrevive a reboot por si só)
+    sudo apt-get install -y iptables-persistent   # ou netfilter-persistent
+    sudo netfilter-persistent save
+
+Se 1400 não resolver, teste valores menores (1300, 1200) — o valor ideal
+depende de quanto overhead a rede/VPN em questão está adicionando.
