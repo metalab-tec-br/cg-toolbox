@@ -1,19 +1,13 @@
-# Nunca vai pra imagem: node_modules é reinstalado dentro do build (o
-# binário nativo do better-sqlite3 é específico da plataforma da imagem —
-# reaproveitar um node_modules copiado do host quebra o container).
+# Nunca vai pra imagem: node_modules é reinstalado dentro do build.
 node_modules
 server/node_modules
 
-# O banco de dados vive num volume (ver docker-compose.yml), não na imagem.
-server/commands.db
-server/commands.db.bak_*
-server/*.db-journal
-server/*.db-wal
-server/*.db-shm
+# O banco de dados agora é PostgreSQL, num container/volume próprios
+# (cg-toolbox-db) — nunca fica dentro da imagem do backend nem do frontend.
+server/backup/
+/backup/
 
-# Scripts/artefatos de instalação bare-metal e documentação — não afetam a
-# aplicação em si, ficam de fora só para manter a imagem enxuta.
-install-cgtoolbox.sh
+# Documentação e planilhas — não afetam a aplicação em si.
 *.md
 *.docx
 *.xlsx

@@ -19,7 +19,7 @@
 //   (commands.js only ever wrote Portuguese for these) — English text below
 //   was translated for this migration.
 
-const db = require('./db');
+const { pool, initDb, withTransaction } = require('./db');
 
 const cmdLine = (p, c) => ({ line_type: 'cmd', prompt: p, content_pt: c, content_en: c });
 const note = (pt, en) => ({ line_type: 'note', prompt: null, content_pt: pt, content_en: en });
@@ -957,63 +957,84 @@ const COMMANDS = [
 // migração ao vivo, com fallback para o português se o inglês estiver vazio.
 function canon(en, pt) { return (en !== undefined && en !== null && en !== '') ? en : (pt || ''); }
 
-const insertCommand = db.prepare(`
-  INSERT OR REPLACE INTO commands (
+const INSERT_COMMAND_SQL = `
+  INSERT INTO commands (
     id, topic, icon, sort_order, requires_ips, requires_ip_port, placeholder_resolver, raw_template,
-    name, name_empty, desc, desc_empty,
+    name, name_empty, "desc", desc_empty,
     about_icon, about_purpose, about_when, about_obs
   ) VALUES (
-    @id, @topic, @icon, @sort_order, @requires_ips, @requires_ip_port, @placeholder_resolver, @raw_template,
-    @name, @name_empty, @desc, @desc_empty,
-    @about_icon, @about_purpose, @about_when, @about_obs
+    $1, $2, $3, $4, $5, $6, $7, $8,
+    $9, $10, $11, $12,
+    $13, $14, $15, $16
   )
-`);
-const insertTag = db.prepare('INSERT INTO command_tags (command_id, css_class, label, sort_order) VALUES (?, ?, ?, ?)');
-const insertTopic = db.prepare('INSERT INTO command_topics (command_id, topic) VALUES (?, ?)');
-const insertVersion = db.prepare('INSERT INTO command_versions (command_id, version) VALUES (?, ?)');
-const insertEnv = db.prepare('INSERT INTO command_environments (command_id, environment) VALUES (?, ?)');
-const insertLine = db.prepare(`INSERT INTO command_lines (command_id, variant, sort_order, line_type, prompt, content) VALUES (?, ?, ?, ?, ?, ?)`);
-const insertDiff = db.prepare('INSERT INTO command_diffs (command_id, version, note, sort_order) VALUES (?, ?, ?, ?)');
-const insertDiffLine = db.prepare(`INSERT INTO command_diff_lines (diff_id, sort_order, line_type, prompt, content) VALUES (?, ?, ?, ?, ?)`);
+  ON CONFLICT (id) DO UPDATE SET
+    topic = EXCLUDED.topic, icon = EXCLUDED.icon, sort_order = EXCLUDED.sort_order,
+    requires_ips = EXCLUDED.requires_ips, requires_ip_port = EXCLUDED.requires_ip_port,
+    placeholder_resolver = EXCLUDED.placeholder_resolver, raw_template = EXCLUDED.raw_template,
+    name = EXCLUDED.name, name_empty = EXCLUDED.name_empty, "desc" = EXCLUDED."desc", desc_empty = EXCLUDED.desc_empty,
+    about_icon = EXCLUDED.about_icon, about_purpose = EXCLUDED.about_purpose,
+    about_when = EXCLUDED.about_when, about_obs = EXCLUDED.about_obs
+`;
 
-const seed = db.transaction(() => {
-  // clear existing rows for a clean, re-runnable seed (cascades to all child tables)
-  db.prepare('DELETE FROM commands').run();
+async function seed() {
+  await initDb();
+  await withTransaction(async client => {
+    // clear existing rows for a clean, re-runnable seed (cascades to all child tables)
+    await client.query('DELETE FROM commands');
 
-  for (const c of COMMANDS) {
-    insertCommand.run({
-      id: c.id, topic: c.topic, icon: c.icon, sort_order: c.sort_order, requires_ips: c.requires_ips,
-      requires_ip_port: c.requires_ip_port || 0,
-      placeholder_resolver: c.placeholder_resolver, raw_template: c.raw_template,
-      name: canon(c.name_en, c.name_pt),
-      name_empty: (c.name_empty_en || c.name_empty_pt) ? canon(c.name_empty_en, c.name_empty_pt) : null,
-      desc: canon(c.desc_en, c.desc_pt),
-      desc_empty: (c.desc_empty_en || c.desc_empty_pt) ? canon(c.desc_empty_en, c.desc_empty_pt) : null,
-      about_icon: c.about_icon || 'ℹ️',
-      about_purpose: canon(c.about_purpose_en, c.about_purpose_pt),
-      about_when: canon(c.about_when_en, c.about_when_pt),
-      about_obs: canon(c.about_obs_en, c.about_obs_pt),
-    });
+    for (const c of COMMANDS) {
+      await client.query(INSERT_COMMAND_SQL, [
+        c.id, c.topic, c.icon, c.sort_order, c.requires_ips ? 1 : 0,
+        c.requires_ip_port || 0,
+        c.placeholder_resolver || null, c.raw_template,
+        canon(c.name_en, c.name_pt),
+        (c.name_empty_en || c.name_empty_pt) ? canon(c.name_empty_en, c.name_empty_pt) : null,
+        canon(c.desc_en, c.desc_pt),
+        (c.desc_empty_en || c.desc_empty_pt) ? canon(c.desc_empty_en, c.desc_empty_pt) : null,
+        c.about_icon || 'ℹ️',
+        canon(c.about_purpose_en, c.about_purpose_pt),
+        canon(c.about_when_en, c.about_when_pt),
+        canon(c.about_obs_en, c.about_obs_pt),
+      ]);
 
-    (c.tags || []).forEach(([cls, pt, en], i) => insertTag.run(c.id, cls, canon(en, pt), i));
-    // Um comando pode pertencer a mais de um Tópico (c.topics, opcional); por padrão
-    // usa o único `c.topic` do registro legado (todo comando tem sempre >=1 tópico).
-    (c.topics && c.topics.length ? c.topics : [c.topic]).forEach(tp => insertTopic.run(c.id, tp));
-    (c.versions || []).forEach(v => insertVersion.run(c.id, v));
-    (c.environments || []).forEach(e => insertEnv.run(c.id, e));
+      for (const [i, [cls, pt, en]] of (c.tags || []).entries()) {
+        await client.query('INSERT INTO command_tags (command_id, css_class, label, sort_order) VALUES ($1, $2, $3, $4)', [c.id, cls, canon(en, pt), i]);
+      }
+      // Um comando pode pertencer a mais de um Tópico (c.topics, opcional); por padrão
+      // usa o único `c.topic` do registro legado (todo comando tem sempre >=1 tópico).
+      for (const tp of (c.topics && c.topics.length ? c.topics : [c.topic])) {
+        await client.query('INSERT INTO command_topics (command_id, topic) VALUES ($1, $2)', [c.id, tp]);
+      }
+      for (const v of (c.versions || [])) {
+        await client.query('INSERT INTO command_versions (command_id, version) VALUES ($1, $2)', [c.id, v]);
+      }
+      for (const e of (c.environments || [])) {
+        await client.query('INSERT INTO command_environments (command_id, environment) VALUES ($1, $2)', [c.id, e]);
+      }
 
-    (c.linesDefault || []).forEach((l, i) => insertLine.run(c.id, 'default', i, l.line_type, l.prompt, canon(l.content_en, l.content_pt)));
-    (c.linesEmpty || []).forEach((l, i) => insertLine.run(c.id, 'empty', i, l.line_type, l.prompt, canon(l.content_en, l.content_pt)));
+      for (const [i, l] of (c.linesDefault || []).entries()) {
+        await client.query('INSERT INTO command_lines (command_id, variant, sort_order, line_type, prompt, content) VALUES ($1, $2, $3, $4, $5, $6)', [c.id, 'default', i, l.line_type, l.prompt, canon(l.content_en, l.content_pt)]);
+      }
+      for (const [i, l] of (c.linesEmpty || []).entries()) {
+        await client.query('INSERT INTO command_lines (command_id, variant, sort_order, line_type, prompt, content) VALUES ($1, $2, $3, $4, $5, $6)', [c.id, 'empty', i, l.line_type, l.prompt, canon(l.content_en, l.content_pt)]);
+      }
 
-    (c.diffs || []).forEach((d, i) => {
-      const result = insertDiff.run(c.id, d.version, canon(d.note_en, d.note_pt), i);
-      const diffId = result.lastInsertRowid;
-      (d.lines || []).forEach((l, j) => insertDiffLine.run(diffId, j, l.line_type, l.prompt, canon(l.content_en, l.content_pt)));
-    });
-  }
+      for (const [i, d] of (c.diffs || []).entries()) {
+        const diffResult = await client.query('INSERT INTO command_diffs (command_id, version, note, sort_order) VALUES ($1, $2, $3, $4) RETURNING id', [c.id, d.version, canon(d.note_en, d.note_pt), i]);
+        const diffId = diffResult.rows[0].id;
+        for (const [j, l] of (d.lines || []).entries()) {
+          await client.query('INSERT INTO command_diff_lines (diff_id, sort_order, line_type, prompt, content) VALUES ($1, $2, $3, $4, $5)', [diffId, j, l.line_type, l.prompt, canon(l.content_en, l.content_pt)]);
+        }
+      }
+    }
+  });
+
+  const { rows } = await pool.query('SELECT COUNT(*) AS n FROM commands');
+  console.log(`Seed complete: ${rows[0].n} commands inserted.`);
+  await pool.end();
+}
+
+seed().catch(err => {
+  console.error('Seed failed:', err);
+  process.exit(1);
 });
-
-seed();
-
-const count = db.prepare('SELECT COUNT(*) AS n FROM commands').get().n;
-console.log(`Seed complete: ${count} commands inserted.`);

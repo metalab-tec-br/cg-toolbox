@@ -1,85 +1,44 @@
 # ════════════════════════════════════════════════════════════════════════
-# CG Toolbox — Docker image
+# CG Toolbox — backend image (cg-toolbox-backend)
 #
-# Multi-stage build:
-#   1) "deps"    — installs server/node_modules with compilers available
-#                  (better-sqlite3 has a native binary; if no prebuilt
-#                  matches this image's OS/arch it compiles from source here)
-#   2) final     — copies only the app + compiled node_modules into a lean
-#                  runtime image, no compilers left behind, runs as a
-#                  non-root user
+# Pure Node/Express REST API — no static frontend files here anymore (see
+# frontend/Dockerfile for the nginx image that serves those and reverse
+# proxies /api/* to this container). Talks to PostgreSQL (cg-toolbox-db, a
+# separate container — see docker-compose.yml) over the network, so there is
+# no native module to compile (no better-sqlite3 anymore) and no local
+# database file/volume for this image.
 #
-# The SQLite database is NOT baked into the image — DB_PATH (below) points
-# at /app/data, meant to be a mounted volume (see docker-compose.yml) so
-# your command catalog survives image rebuilds/container recreation.
+# `postgresql-client` is installed for the Backup & Restore feature (Settings
+# → System → Database), which shells out to `pg_dump`/`pg_restore` — see
+# server/index.js.
 # ════════════════════════════════════════════════════════════════════════
-
-# ---- stage 1: install dependencies ----------------------------------------
-FROM node:20-bookworm-slim AS deps
+FROM node:20-bookworm-slim
 WORKDIR /app/server
 
-# python3/make/g++ are only actually exercised if npm can't find a prebuilt
-# better-sqlite3 binary for this exact OS/arch and has to compile it itself.
-#
-# NOTE: if this build hangs on "apt-get update" with "Connection timed out"
-# on some host, that's very likely a PMTU black hole (ICMP "fragmentation
-# needed" being dropped somewhere on the path — common on VPNs/certain cloud
-# networks): small packets (TCP handshake, tiny HTTP responses) go through
-# fine, but anything requiring a full-size packet stalls forever, on BOTH
-# HTTP and HTTPS. That's a host/network-level issue, not something to route
-# around here — fix it on the Docker host with a TCP MSS clamp, e.g.:
-#   sudo iptables -t mangle -A OUTPUT -p tcp --tcp-flags SYN,RST SYN \
-#     -j TCPMSS --set-mss 1400
-# (see install-instructions.txt for the full explanation/verification steps).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 make g++ \
+    && apt-get install -y --no-install-recommends postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 COPY server/package.json server/package-lock.json ./
 RUN npm ci --omit=dev
 
-# ---- stage 2: runtime image -------------------------------------------
-FROM node:20-bookworm-slim
-WORKDIR /app
+COPY server/schema.sql server/db.js server/index.js server/seed.js ./
 
-# Frontend (static files served by Express — see server/index.js, FRONTEND_ROOT)
-COPY index.html ./index.html
-COPY css ./css
-COPY js ./js
-COPY img ./img
-
-# Server source (schema.sql, index.js, db.js, seed.js, package.json — NOT
-# commands.db or node_modules, both excluded via .dockerignore)
-COPY server ./server
-
-# Compiled dependencies from the "deps" stage — keeps python3/make/g++ out
-# of the final image entirely.
-COPY --from=deps /app/server/node_modules ./server/node_modules
-
-# Dedicated non-root user, same spirit as install-cgtoolbox.sh's systemd service
-# user — and a /app/data folder for the persistent-volume database.
+# Dedicated non-root user + a /app/backups folder for the Backup & Restore
+# feature (mounted as a named volume in docker-compose.yml, so dumps survive
+# image rebuilds/container recreation).
 RUN useradd --system --no-create-home --shell /usr/sbin/nologin cgtoolbox \
-    && mkdir -p /app/data \
+    && mkdir -p /app/backups \
     && chown -R cgtoolbox:cgtoolbox /app
 USER cgtoolbox
 
 ENV PORT=3000
-# HTTPS_PORT defaults to 443 in server/index.js — explicitly pinned to the
-# same value as PORT here so the container only opens ONE listener by
-# default. Binding a port <1024 as this non-root user would fail (EACCES);
-# reaching the app on 80/443 from outside is done via the HOST port mapping
-# in docker-compose.yml ("80:3000"), not by binding low ports in-container.
-# To terminate real TLS inside the container instead, override HTTPS_PORT to
-# a high port (e.g. 3443) + TLS_CERT_PATH/TLS_KEY_PATH, and map that port on
-# the host — see the commented block in docker-compose.yml.
-ENV HTTPS_PORT=3000
-ENV DB_PATH=/app/data/commands.db
+ENV BACKUP_DIR=/app/backups
 # Uncomment (or set at "docker run"/compose level) if this host is not on a
-# Windows domain — otherwise NTLM identification is attempted by default,
-# same as the bare-metal/systemd deployment (see server/index.js).
+# Windows domain — otherwise NTLM identification is attempted by default.
 # ENV NTLM_DISABLED=1
 
 EXPOSE 3000
-VOLUME ["/app/data"]
+VOLUME ["/app/backups"]
 
-CMD ["node", "server/index.js"]
+CMD ["node", "index.js"]

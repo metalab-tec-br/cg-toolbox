@@ -1,7 +1,7 @@
 {
-  "name": "cg-toolbox-server",
-  "version": "1.0.0",
-  "description": "Backend (Express + SQLite) for CG Toolbox, the multi-vendor network support tool — serves the command catalog from a shared relational database instead of hardcoded JS.",
+  "name": "cg-toolbox-backend",
+  "version": "2.0.0",
+  "description": "Backend (Express + PostgreSQL) for CG Toolbox, the multi-vendor network support tool — pure REST API, no static file serving (see cg-toolbox-frontend for that). Supports both NTLM-based browser sessions and API-key authenticated external integrations.",
   "private": true,
   "main": "index.js",
   "scripts": {
@@ -9,9 +9,9 @@
     "seed": "node seed.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0",
     "express": "^4.19.2",
     "express-ntlm": "^2.7.0",
-    "ldapts": "^9.0.0"
+    "ldapts": "^9.0.0",
+    "pg": "^8.13.0"
   }
 }

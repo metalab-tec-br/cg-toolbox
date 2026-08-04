@@ -2,20 +2,31 @@ COMO INSTALAR O CG TOOLBOX A PARTIR DO GITHUB
 ================================================
 
 Repositório: https://github.com/metalab-tec-br/downloads
-Servidor: Linux (Ubuntu/Debian), com acesso root/sudo.
+Servidor: Linux (Ubuntu/Debian), com acesso root/sudo, Docker + Docker Compose.
+
+A aplicação roda como 3 containers Docker (ver docker-compose.yml):
+  - cg-toolbox-db        PostgreSQL (banco de dados)
+  - cg-toolbox-backend   API REST (Node.js/Express)
+  - cg-toolbox-frontend  nginx (arquivos estáticos + proxy reverso de /api/*)
+
+Só o cg-toolbox-frontend tem porta publicada no host — é com ele que o
+navegador fala; cg-toolbox-backend e cg-toolbox-db não são alcançáveis de
+fora do host. Não há mais instalação bare-metal (systemd) — esta versão
+depende de um servidor Postgres próprio, então Docker Compose é o único
+caminho suportado.
 
 
 1) PRÉ-REQUISITOS
 ------------------
 - Acesso root ou sudo no servidor.
 - git instalado (se não tiver: sudo apt-get install -y git).
+- Docker + Docker Compose (se não tiver: sudo apt-get install -y docker.io docker-compose-plugin).
 
 
 2) CLONAR O REPOSITÓRIO
 ------------------------
-Evite clonar dentro do home de um usuário (ex.: /home/usuario/...) — isso
-costuma bloquear o serviço depois por permissão de pasta. Prefira um local
-neutro, como /opt:
+Evite clonar dentro do home de um usuário (ex.: /home/usuario/...) — prefira
+um local neutro, como /opt:
 
     sudo git clone https://github.com/metalab-tec-br/downloads.git /opt/cg-toolbox
     cd /opt/cg-toolbox
@@ -25,178 +36,141 @@ Se o git reclamar de "dubious ownership", rode:
     git config --global --add safe.directory /opt/cg-toolbox
 
 
-3) INSTALAR
------------
-    chmod +x install-cgtoolbox.sh
-    sudo ./install-cgtoolbox.sh
+3) INSTALAR (subir os 3 containers)
+--------------------------------------
+    sudo docker compose up -d --build
 
-Isso, sozinho, já faz tudo:
-  - instala o Node.js 20 (se não estiver instalado);
-  - instala as dependências da aplicação (server/npm install);
-  - cria um usuário de sistema dedicado ("cgtoolbox"), sem login, só para
-    rodar o serviço;
-  - registra e inicia um serviço systemd (reinicia sozinho se cair, sobe
-    junto com o servidor);
-  - libera as portas no firewall (ufw/firewalld), se algum estiver ativo.
+Isso constrói as imagens do backend e do frontend, baixa a imagem oficial
+do PostgreSQL, e sobe os 3 containers. O app fica disponível em:
 
-Por padrão, o app fica disponível em DUAS portas ao mesmo tempo, sem
-redirecionamento entre elas:
-  - http://<ip-do-servidor>        (porta 80)
-  - http://<ip-do-servidor>:443    (porta 443, também em HTTP até um
-    certificado ser configurado — ver item 5)
+    http://<ip-do-servidor>          (porta 80 — cg-toolbox-frontend)
+
+Numa instalação NOVA (catálogo vazio, "como em outra empresa"): não precisa
+fazer mais nada — o banco começa vazio e o backend aplica o schema (sem
+seed de dados) no primeiro boot. Cadastre os comandos depois pela própria
+aplicação (editor de comandos, ou Importar comandos via CSV), ou rode o
+seed inicial com os ~30 comandos de referência (opcional):
+
+    sudo docker compose exec cg-toolbox-backend node seed.js
 
 
-4) FLAGS OPCIONAIS
--------------------
-    sudo ./install-cgtoolbox.sh --http-port 8080 --https-port 8443
-        # usa outras portas em vez de 80/443
+4) VARIÁVEIS DE AMBIENTE (opcional)
+--------------------------------------
+Definidas num arquivo ".env" ao lado do docker-compose.yml, ou exportadas
+antes do "docker compose up":
 
-    sudo ./install-cgtoolbox.sh --user cgtoolbox
-        # nome do usuário de sistema que roda o serviço
+    POSTGRES_DB / POSTGRES_USER / POSTGRES_PASSWORD
+        # credenciais do banco (usadas por cg-toolbox-db E cg-toolbox-backend
+        # — mudar aqui já reflete nos dois). Troque a senha padrão em
+        # produção.
 
-    sudo ./install-cgtoolbox.sh --ntlm-disabled
-        # desliga a identificação automática de usuário via NTLM (login
-        # do Windows). Sem isso, se o servidor não estiver em domínio
-        # Windows, ou se acessarem de fora da rede/domínio confiável, o
-        # navegador mostra uma caixa pedindo usuário/senha. Com essa
-        # flag, ninguém recebe esse prompt, mas favoritos/preferências/
-        # auditoria por usuário deixam de identificar cada pessoa.
+    NTLM_DISABLED=1   (definido em cg-toolbox-backend, docker-compose.yml)
+        # desliga a identificação automática de usuário via NTLM (login do
+        # Windows) — use se o servidor não estiver num domínio Windows, ou
+        # se notar problemas de autenticação através do proxy reverso (ver
+        # nota sobre NTLM em frontend/nginx.conf). Sem NTLM, favoritos/
+        # preferências/auditoria por usuário deixam de identificar cada
+        # pessoa (cai no header x-dev-user ou no usuário do container).
 
-    sudo ./install-cgtoolbox.sh --skip-node-install
-        # não mexe no Node.js (use se já tiver a versão que quer instalada)
+    AD_DOMAIN_CONTROLLER / AD_BASE_DN / AD_BIND_DN / AD_BIND_PASSWORD
+        # opcional — resolve o UPN (nome@dominio) exibido na UI via consulta
+        # LDAP ao Active Directory. Sem isso, a UI mostra DOMÍNIO\usuario.
 
-    sudo ./install-cgtoolbox.sh --uninstall
-        # para e remove o serviço (não apaga os arquivos nem o banco de
-        # dados server/commands.db)
+Depois de mudar variáveis, recrie os containers:
+
+    sudo docker compose up -d --build
 
 
-5) HTTPS COM CERTIFICADO (opcional)
--------------------------------------
-Para habilitar HTTPS de verdade na porta 443 (em vez de HTTP puro),
-primeiro gere (ou obtenha) um certificado. Exemplo com autoassinado, para
-testar enquanto o certificado definitivo não chega:
+5) API KEYS (acesso programático externo)
+----------------------------------------------
+Scripts/integrações externas podem chamar a API enviando um header
+`X-API-Key` — isso pula o NTLM inteiramente. Crie/revogue chaves pela
+própria aplicação, em Configurações → System → "API access", ou direto:
 
-    sudo mkdir -p /etc/cg-toolbox/tls
+    curl -X POST http://<ip-do-servidor>/api/api-keys \
+      -H "Content-Type: application/json" -d '{"name": "minha integração"}'
+
+A key completa só aparece nessa resposta (uma vez) — guarde-a com cuidado;
+depois disso só o hash fica no banco.
+
+
+6) HTTPS COM CERTIFICADO (opcional)
+---------------------------------------
+TLS é terminado no cg-toolbox-frontend (nginx), não mais no backend. Para
+habilitar:
+
+    sudo mkdir -p ./tls
     sudo openssl req -x509 -nodes -newkey rsa:2048 -days 365 \
-      -keyout /etc/cg-toolbox/tls/key.pem \
-      -out /etc/cg-toolbox/tls/cert.pem \
+      -keyout ./tls/key.pem -out ./tls/cert.pem \
       -subj "/CN=<ip-ou-hostname-do-servidor>"
-    sudo chmod 600 /etc/cg-toolbox/tls/key.pem
 
-Depois, rode (ou re-rode) o instalador apontando para os arquivos:
+Depois:
+  1. Descomente o bloco "server { listen 443 ssl; ... }" em
+     frontend/nginx.conf (já vem pronto, só comentado).
+  2. Descomente o volume "./tls:/etc/nginx/tls:ro" e a porta "443:443" no
+     serviço cg-toolbox-frontend em docker-compose.yml.
+  3. Reconstrua: sudo docker compose up -d --build cg-toolbox-frontend
 
-    sudo ./install-cgtoolbox.sh --tls-cert /etc/cg-toolbox/tls/cert.pem --tls-key /etc/cg-toolbox/tls/key.pem
-
-O navegador vai mostrar aviso de segurança enquanto for autoassinado —
-normal. Quando tiver o certificado definitivo (emitido pela CA da empresa
-ou Let's Encrypt), é só sobrescrever os dois arquivos em
-/etc/cg-toolbox/tls/ e reiniciar o serviço (sudo systemctl restart
-cg-toolbox), sem precisar rodar o instalador de novo.
+O navegador vai mostrar aviso de segurança enquanto o certificado for
+autoassinado — normal. Substitua pelos arquivos definitivos (CA da empresa
+ou Let's Encrypt) em ./tls/ e rode "docker compose restart cg-toolbox-frontend".
 
 
-6) VERIFICAR A INSTALAÇÃO
----------------------------
-    sudo systemctl status cg-toolbox
+7) BACKUP & RESTORE
+------------------------
+Pela própria aplicação (Configurações → System → Database → "Backup &
+Restore"): cria um dump do Postgres (`pg_dump`, formato custom) guardado no
+volume "cg-toolbox-backups" (fora do container, sobrevive a rebuild).
+Também dá pra agendar backups automáticos (diário/semanal/mensal) na mesma
+tela.
+
+Backup manual via linha de comando (equivalente ao botão da UI):
+
+    sudo docker compose exec cg-toolbox-backend \
+      pg_dump -d "postgresql://cgtoolbox:cgtoolbox@cg-toolbox-db:5432/cgtoolbox" -F c -f /app/backups/manual.dump
+
+Para restaurar um dump trazido de outra instalação, copie o arquivo .dump
+para dentro do volume e restaure pela UI (Backup & Restore → Restore), ou:
+
+    sudo docker cp meu-backup.dump $(docker compose ps -q cg-toolbox-backend):/app/backups/meu-backup.dump
+    sudo docker compose exec cg-toolbox-backend \
+      pg_restore --clean --if-exists --no-owner -d "postgresql://cgtoolbox:cgtoolbox@cg-toolbox-db:5432/cgtoolbox" /app/backups/meu-backup.dump
+
+
+8) VERIFICAR A INSTALAÇÃO
+------------------------------
+    sudo docker compose ps
+    sudo docker compose logs -f cg-toolbox-backend    # deve mostrar "schema aplicado" e "listening"
     curl -I http://localhost
-    curl -k -I https://localhost   (se HTTPS estiver configurado)
 
 
-7) ATUALIZAR DEPOIS
----------------------
+9) ATUALIZAR DEPOIS
+------------------------
 Dentro da pasta do projeto:
 
     git pull
-    sudo ./install-cgtoolbox.sh
-
-É seguro rodar de novo quantas vezes precisar — ele trata como
-atualização (para o serviço, reinstala dependências, reinicia) e nunca
-mexe no banco de dados (server/commands.db).
-
-
-8) PROBLEMAS COMUNS
-----------------------
-- "npm: command not found" após instalar:
-      sudo apt-get install -y npm
-
-- Serviço em loop de reinício com erro "status=200/CHDIR" no
-  journalctl (comum quando o projeto foi clonado dentro do home de outro
-  usuário): dê permissão de trânsito na pasta pai, ex.:
-      sudo chmod o+x /home/<usuario>
-  (o instalador já detecta e avisa isso antes de tentar subir o serviço)
-
-- Erro "EACCES: permission denied" ao ler o certificado/chave TLS:
-  geralmente porque o arquivo foi criado com sudo (dono root) e o usuário
-  de serviço não consegue ler. Corrija com:
-      sudo chown cgtoolbox:cgtoolbox /etc/cg-toolbox/tls/key.pem /etc/cg-toolbox/tls/cert.pem
-  (o instalador também já confere isso antes de subir o serviço e avisa
-  na hora, com o comando exato para corrigir)
-
-- Ver logs detalhados do serviço:
-      sudo journalctl -u cg-toolbox -n 50 --no-pager
-      sudo journalctl -u cg-toolbox -f      (acompanhar em tempo real)
-
-
-9) ALTERNATIVA: INSTALAR VIA DOCKER
--------------------------------------
-Sem instalar Node.js nem systemd no host — só Docker + Docker Compose.
-
-    sudo apt-get install -y docker.io docker-compose-plugin   # se não tiver
-    sudo git clone https://github.com/metalab-tec-br/downloads.git /opt/cg-toolbox
-    cd /opt/cg-toolbox
     sudo docker compose up -d --build
 
-Isso constrói a imagem e sobe o container:
-  - app acessível em http://<ip-do-servidor> (porta 80 do host, mapeada
-    pra 3000 dentro do container — ver docker-compose.yml);
-  - banco de dados (commands.db) num volume Docker nomeado
-    ("cg-toolbox-data"), fora da imagem — sobrevive a rebuild/recreate do
-    container.
-
-Numa instalação NOVA (catálogo vazio, "como em outra empresa"): não precisa
-fazer nada além do "docker compose up -d --build" — o volume começa vazio e
-o servidor cria um commands.db novo (schema aplicado, zero comandos) no
-primeiro boot. Cadastre os comandos depois pela própria aplicação (editor de
-comandos, ou Importar comandos via CSV).
-
-Para trazer um commands.db já existente (ex.: migrando uma instalação
-bare-metal para Docker), copie o arquivo para dentro do volume ANTES do
-primeiro "up":
-    sudo docker compose up -d                     # cria o volume vazio
-    sudo docker compose stop
-    sudo docker cp ./server/commands.db.bak $(docker compose ps -q cg-toolbox):/app/data/commands.db
-    sudo docker compose start
-
-HTTPS de verdade dentro do container, backup/restore via volume, e outras
-opções: ver os comentários em docker-compose.yml.
-
-Comandos do dia a dia:
-    sudo docker compose logs -f cg-toolbox     # acompanhar logs
-    sudo docker compose restart cg-toolbox     # reiniciar
-    sudo docker compose down                   # parar (mantém o volume/dados)
-    sudo docker compose up -d --build          # atualizar depois de um "git pull"
-
-Atualizar pela própria aplicação (opcional): Configurações → System → "Check
-for updates"/"Update now" faz exatamente o "git pull" + "docker compose up -d
---build" acima, com 1 clique, direto pela interface — sem precisar de acesso
-SSH ao servidor. Isso só funciona porque o docker-compose.yml sobe um segundo
-serviço, "updater" (ver updater/Dockerfile e updater/server.js), dedicado
-só a isso: ele é o único container com acesso ao socket do Docker do host
-(/var/run/docker.sock) e a git — o container principal (cg-toolbox, exposto
-na porta 80) continua sem nenhum desses dois. Ainda assim, dar a QUALQUER
-container acesso ao docker.sock do host é, na prática, dar a ele controle
-total do Docker daquele host — avalie se esse trade-off faz sentido pro seu
-ambiente. Se preferir não ter esse serviço rodando, comente/remova o bloco
-"updater" e as duas linhas "UPDATER_*" do serviço cg-toolbox em
-docker-compose.yml — o botão passa a mostrar "Not available in this
-installation" e a atualização volta a ser 100% manual (comandos acima).
+É seguro rodar quantas vezes precisar — reconstrói só o que mudou e nunca
+mexe nos dados (volumes cg-toolbox-db-data e cg-toolbox-backups continuam
+intactos entre updates).
 
 
-9.1) BUILD TRAVA EM "apt-get update" (Connection timed out)
+10) COMANDOS DO DIA A DIA
+------------------------------
+    sudo docker compose logs -f cg-toolbox-backend    # acompanhar logs do backend
+    sudo docker compose logs -f cg-toolbox-frontend    # acompanhar logs do nginx
+    sudo docker compose restart cg-toolbox-backend     # reiniciar só o backend
+    sudo docker compose down                           # parar tudo (mantém os volumes/dados)
+    sudo docker compose down -v                         # parar E apagar os volumes (perde os dados!)
+
+
+11) BUILD TRAVA EM "apt-get update" (Connection timed out)
 --------------------------------------------------------------
-Sintoma: o build para na etapa "deps" (ver Dockerfile) baixando pacotes
-Debian, com "Get:1 ... InRelease" repetindo várias vezes e terminando em
-"Connection timed out", mesmo o host tendo internet normal (curl/apt do
-host funcionam sem problema).
+Sintoma: o build para na etapa de dependências do backend (ver Dockerfile),
+baixando pacotes Debian, com "Get:1 ... InRelease" repetindo várias vezes e
+terminando em "Connection timed out", mesmo o host tendo internet normal
+(curl/apt do host funcionam sem problema).
 
 Causa provável: PMTU black hole — algum ponto do caminho de rede (VPN,
 firewall, certas redes de nuvem) descarta os pacotes ICMP "fragmentação
@@ -222,4 +196,27 @@ host, com um "clamp" do MSS do TCP:
     sudo netfilter-persistent save
 
 Se 1400 não resolver, teste valores menores (1300, 1200) — o valor ideal
-depende de quanto overhead a rede/VPN em questão está adicionando.
+depende de quanto overhead a rede/VPN em questão está adicionando. Tanto o
+serviço cg-toolbox-backend quanto o cg-toolbox-frontend já usam
+"network: host" no build (ver docker-compose.yml) por causa disso.
+
+
+12) PROBLEMAS COMUNS
+------------------------
+- "cg-toolbox-backend" reiniciando em loop, log mostra "Failed to start:
+  could not connect to the database": o cg-toolbox-db ainda pode estar
+  inicializando (primeira vez que o volume é criado, o Postgres oficial
+  demora alguns segundos) — o backend tenta reconectar por ~1 minuto
+  sozinho (ver server/db.js); se persistir depois disso, confira
+  "docker compose logs cg-toolbox-db".
+
+- Login do Windows (NTLM) parou de funcionar depois da migração para 3
+  containers: o handshake NTLM agora passa por um hop a mais (o proxy
+  reverso do nginx) e isso é conhecido por ser frágil — ver a nota em
+  frontend/nginx.conf. Considere NTLM_DISABLED=1 ou usar API keys para
+  integrações programáticas.
+
+- Ver logs detalhados de um container específico:
+      sudo docker compose logs -f cg-toolbox-backend
+      sudo docker compose logs -f cg-toolbox-db
+      sudo docker compose logs -f cg-toolbox-frontend

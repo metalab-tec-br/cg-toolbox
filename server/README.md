@@ -1,33 +1,36 @@
-# CG Toolbox — Server
+# CG Toolbox — Backend
 
-Backend (Node.js + Express + better-sqlite3) for CG Toolbox, the multi-vendor network support tool.
-Replaces the hardcoded command catalog with a shared SQLite database (`server/commands.db`)
-so the whole support team sees the same commands, and exposes a REST API under `/api` that
-the frontend (and a future admin UI) can use to read/create/edit/delete commands.
+Backend (Node.js + Express + PostgreSQL, via `pg`) for CG Toolbox, the multi-vendor network
+support tool. This is a **pure REST API** under `/api` — it does not serve the static frontend
+anymore (see `../frontend/` for the nginx image that does that + reverse-proxies `/api/*` here).
+The whole app runs as 3 Docker containers (see `../docker-compose.yml`):
+`cg-toolbox-db` (PostgreSQL), `cg-toolbox-backend` (this), `cg-toolbox-frontend` (nginx).
 
-## Install & run
+## Install & run (standalone, without Docker)
 
 ```
 cd server
 npm install
+# point at your own Postgres instance:
+export PGHOST=localhost PGPORT=5432 PGDATABASE=cgtoolbox PGUSER=cgtoolbox PGPASSWORD=cgtoolbox
 npm start
 ```
 
-The server listens on `PORT` (env var, default `3000`) and serves both:
-- the static frontend (`index.html`, `css/`, `js/` one level up), and
-- the REST API at `/api/commands`.
+The server listens on `PORT` (env var, default `3000`) and exposes the REST API at
+`/api/*` only — no static files. On startup it connects to Postgres and applies
+`schema.sql` automatically (safe to re-run — uses `CREATE TABLE IF NOT EXISTS`). To
+(re)populate the ~30 built-in commands, run `node seed.js` once after `npm install`.
 
-On first run it creates `server/commands.db` and applies `schema.sql` automatically
-(safe to re-run — uses `CREATE TABLE IF NOT EXISTS`). To (re)populate the ~30 existing
-commands, run `node seed.js` once after `npm install`.
+In the normal Docker deployment (see `../docker-compose.yml`), none of this needs to be
+done manually — `docker compose up -d --build` builds and starts all 3 containers, and the
+backend waits for `cg-toolbox-db` to become healthy before applying the schema.
 
-## Important: this is no longer a static-file deployment
+## API keys (programmatic access)
 
-Previously this project was pure static files (`index.html` + `css/*` + `js/*`) that could
-be hosted anywhere (any static file server, no runtime). Now that the command catalog lives
-in a database with a REST API, **whichever machine hosts this app needs a Node.js runtime**
-(Node 18+ recommended) to run `server/index.js` — it can no longer be served from a plain
-static file host alone.
+External scripts/integrations can call the API by sending a `X-API-Key` header — this skips
+NTLM entirely and is authenticated against the `api_keys` table (hash only; the raw key is
+shown once, at creation time). Manage keys in the app under **Settings → System → API
+access**, or directly via `GET/POST /api/api-keys` and `DELETE /api/api-keys/:id`.
 
 ## Multiusuário (identificação do usuário Windows)
 

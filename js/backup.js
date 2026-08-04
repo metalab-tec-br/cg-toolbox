@@ -1,18 +1,18 @@
 // ════════════════════════════════════════════════
 // BACKUP & RESTORE — modal aberto pelo botão "🗄️ Backup & Restore" no rodapé
-// do modal de Configurações (só visível com Admin mode ligado — ver
-// body.hide-command-editing #backupManagerBtn em components.css). Cobre:
-//   1) Backup manual (POST /api/backups) — cópia .db consistente e completa,
-//      criada com Database#backup() (better-sqlite3) sem parar o servidor.
+// do modal de Configurações. Cobre:
+//   1) Backup manual (POST /api/backups) — dump consistente do PostgreSQL,
+//      gerado com `pg_dump` (formato "custom") sem parar o servidor.
 //   2) Agendamento diário/semanal/mensal (GET/PUT /api/backup-schedule) — o
 //      servidor checa a cada minuto (ver server/index.js: checkScheduledBackup).
 //   3) Lista de backups existentes com baixar/restaurar
 //      (GET /api/backups, GET /api/backups/:file/download,
 //      POST /api/backups/:file/restore).
 //
-// Restaurar substitui o commands.db atual pelo backup escolhido e reinicia o
-// serviço (ver comentário em server/index.js) — por isso passa por
-// openConfirmModal() antes, com aviso claro de que a página vai recarregar.
+// Restaurar substitui o conteúdo do banco pelo backup escolhido via
+// `pg_restore` (ver server/index.js) — ao contrário da versão antiga
+// (SQLite), não precisa reiniciar o processo; a página só recarrega para
+// mostrar os dados restaurados.
 // ════════════════════════════════════════════════
 
 let _backupScheduleState = { enabled: false, frequency: 'daily', weeklyDays: [], monthlyDay: 1, time: '02:00' };
@@ -116,7 +116,7 @@ async function backupNow() {
 
 function restoreBackup(filename) {
   openConfirmModal(
-    `Restore "${filename}"? This replaces the current database with this backup's contents. A safety copy of the current database is taken automatically first. The server will restart and the page will need to be reloaded.`,
+    `Restore "${filename}"? This replaces the current database with this backup's contents. A safety copy of the current database is taken automatically first.`,
     { danger: true }
   ).then(async ok => {
     if (!ok) return;
@@ -124,7 +124,8 @@ function restoreBackup(filename) {
       const res = await fetch(`/api/backups/${encodeURIComponent(filename)}/restore`, { method: 'POST' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      alert(data.message || 'Restore complete. The server is restarting — reload the page in a few seconds.');
+      alert(data.message || 'Restore complete.');
+      location.reload();
     } catch (err) {
       alert('Restore failed. Please try again.');
       console.error('Restore failed', err);

@@ -1,56 +1,86 @@
-// db.js — abre (ou cria) UM ÚNICO arquivo SQLite (commands.db) e aplica
-// schema.sql (idempotente — CREATE TABLE IF NOT EXISTS, então re-executar é
-// seguro). Antes existiam DOIS arquivos separados (commands.db "system" +
-// commands_user.db "usuário") para separar comandos de referência dos
-// criados por usuários — isso foi CONSOLIDADO num banco único: a distinção
-// System vs. usuário agora vive inteiramente na coluna `commands.created_by`
-// (ver schema.sql e server/index.js), não mais em qual arquivo o registro
-// mora. commands_user.db não é mais usado por esta aplicação.
+// db.js — abre um pool de conexões PostgreSQL (cg-toolbox-db, container
+// próprio — ver docker-compose.yml) e aplica schema.sql (idempotente —
+// CREATE TABLE IF NOT EXISTS, então reexecutar é seguro).
 //
-// Este banco NÃO é semeado automaticamente com dados de fábrica (catálogos,
-// comandos, etc.) — a pedido do usuário, todas as tabelas foram esvaziadas e
-// devem ser recadastradas manualmente (pela tela de administração de
-// catálogo e pelo editor/importação de comandos). Reiniciar o servidor nunca
-// recria nada sozinho.
+// Antes (SQLite/better-sqlite3) isto era síncrono e abria um arquivo local;
+// agora é assíncrono e conecta por rede/socket a um servidor Postgres
+// separado. `initDb()` precisa ser aguardado (await) antes do servidor HTTP
+// começar a aceitar requisições — ver server/index.js.
+//
+// Parâmetros de conexão: o driver `pg` já lê PGHOST/PGPORT/PGDATABASE/
+// PGUSER/PGPASSWORD do ambiente automaticamente (mesma convenção do
+// libpq/psql), então normalmente não é preciso passar nada explícito aqui —
+// só DATABASE_URL como alternativa de conveniência (ex.: um único env var).
 const path = require('path');
 const fs = require('fs');
-const Database = require('better-sqlite3');
+const { Pool } = require('pg');
 
-// DB_PATH pode ser sobrescrito por variável de ambiente — usado no Docker
-// para apontar o banco para um volume persistente (ex.: /app/data/commands.db)
-// em vez do arquivo dentro da própria imagem. Sem a variável, comportamento
-// idêntico a antes (server/commands.db, ao lado deste arquivo).
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'commands.db');
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 
-// Garante que a pasta do banco exista (relevante só para DB_PATH custom
-// apontando para um volume ainda vazio, ex.: /app/data/ recém-criado).
-const dbDir = path.dirname(DB_PATH);
-if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+const CONN = {
+  host: process.env.PGHOST || process.env.DB_HOST || 'cg-toolbox-db',
+  port: Number(process.env.PGPORT || process.env.DB_PORT || 5432),
+  database: process.env.PGDATABASE || process.env.DB_NAME || 'cgtoolbox',
+  user: process.env.PGUSER || process.env.DB_USER || 'cgtoolbox',
+  password: process.env.PGPASSWORD || process.env.DB_PASSWORD || 'cgtoolbox',
+};
 
-const db = new Database(DB_PATH);
-db.pragma('foreign_keys = ON');
+const pool = new Pool(process.env.DATABASE_URL ? { connectionString: process.env.DATABASE_URL } : CONN);
 
-const schemaSql = fs.readFileSync(SCHEMA_PATH, 'utf8');
-db.exec(schemaSql);
+// Monta uma connection string a partir dos MESMOS parâmetros usados pelo pool
+// acima — usada por server/index.js para invocar `pg_dump`/`pg_restore` (CLI
+// externa, ver seção de Backup/Restore) com a garantia de apontar para
+// exatamente o mesmo banco, mesmo se DATABASE_URL (e não as variáveis PG*
+// individuais) tiver sido a forma usada para configurar a conexão.
+function getConnectionString() {
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+  const { host, port, database, user, password } = CONN;
+  return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
+}
 
-// ════════════════════════════════════════════════
-// Migrações leves pós-schema — CREATE TABLE IF NOT EXISTS (acima) não
-// adiciona colunas novas a uma tabela que já existe de uma instalação
-// anterior, então colunas acrescentadas depois do lançamento inicial de uma
-// tabela entram aqui, uma vez cada, checando antes se já existem (idempotente
-// — seguro rodar a cada boot do servidor, inclusive sem nenhuma mudança
-// pendente). Evita depender de rodar um script de migração à parte no
-// servidor de produção (que só é acessado via git pull + restart do serviço).
-// ════════════════════════════════════════════════
-function ensureColumn(table, column, ddl) {
-  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
-  if (!cols.includes(column)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+pool.on('error', err => {
+  // Erros em conexões OCIOSAS do pool (ex.: o servidor Postgres derrubou a
+  // conexão) não devem derrubar o processo Node inteiro — só logar. Erros de
+  // uma query em andamento continuam sendo relançados normalmente para quem
+  // chamou pool.query()/client.query().
+  console.error('[db] Erro inesperado numa conexão ociosa do pool:', err.message);
+});
+
+// Tenta conectar/aplicar o schema a cada 2s até o Postgres responder — no
+// docker-compose, o container cg-toolbox-db pode ainda estar inicializando
+// quando cg-toolbox-backend sobe (mesmo com `depends_on` + healthcheck, é uma
+// rede real, não um arquivo local — vale ter uma margem de segurança aqui).
+async function initDb({ retries = 30, delayMs = 2000 } = {}) {
+  const schemaSql = fs.readFileSync(SCHEMA_PATH, 'utf8');
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await pool.query(schemaSql);
+      console.log('[db] Conectado ao PostgreSQL e schema aplicado.');
+      return;
+    } catch (err) {
+      if (attempt === retries) throw err;
+      console.warn(`[db] Falha ao conectar/aplicar schema (tentativa ${attempt}/${retries}): ${err.message} — tentando de novo em ${delayMs}ms...`);
+      await new Promise(r => setTimeout(r, delayMs));
+    }
   }
 }
-// image_data (command_lines): suporte à linha de tipo 'image' (nome exibido
-// + captura de tela colada/enviada) — ver schema.sql e js/command-editor.js.
-ensureColumn('command_lines', 'image_data', 'image_data TEXT');
 
-module.exports = { db, DB_PATH };
+// Executa `fn(client)` dentro de uma transação (BEGIN/COMMIT/ROLLBACK) usando
+// um único client dedicado do pool — equivalente ao antigo `db.transaction()`
+// síncrono do better-sqlite3, só que explícito e assíncrono.
+async function withTransaction(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (e) { /* conexão já pode ter caído */ }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { pool, initDb, withTransaction, getConnectionString };

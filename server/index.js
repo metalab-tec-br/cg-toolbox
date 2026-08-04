@@ -1,56 +1,36 @@
-// index.js — Express app: serves the static frontend (project root) and exposes
-// the /api/commands REST API backed by SQLite (better-sqlite3), db.js.
-// Banco ÚNICO (`db`) — antes havia dois arquivos separados (System/usuário,
-// ver histórico em server/db.js); a distinção hoje é só a coluna
-// `commands.created_by`. Regra de PERMISSÃO: PUT/DELETE /api/commands/:id só
-// são permitidos quando `created_by` do comando é igual ao usuário atual
-// (ver getCurrentUsername abaixo) — ninguém pode alterar/excluir o comando de
-// outro usuário. Duplicar (POST, via "Duplicate command" no editor) sempre
-// funciona para qualquer comando visível, e a cópia nasce com created_by =
-// quem duplicou, então passa a ser editável por essa pessoa. Não há
-// autenticação própria além da identificação NTLM (mesmo modelo de confiança
-// de sempre) — isto impede edição ACIDENTAL/indevida entre usuários, não é
-// uma fronteira de segurança contra alguém decidido a burlar.
+// index.js — Express app: expõe SÓ a API REST /api/* (PostgreSQL via
+// server/db.js, node-postgres). Não serve mais o frontend estático — isso
+// agora é responsabilidade do container cg-toolbox-frontend (nginx), que
+// também faz proxy reverso de /api/* para este backend (cg-toolbox-backend)
+// — ver docker-compose.yml e frontend/nginx.conf. O browser nunca fala
+// direto com este processo.
+//
+// Autenticação/identificação de quem está chamando a API, em ordem de
+// prioridade:
+//   1) Header `X-API-Key` — acesso programático externo (integrações,
+//      scripts). Ver api_keys em schema.sql e a seção "API keys" abaixo.
+//      Quando presente, o handshake NTLM é pulado inteiramente (um cliente
+//      HTTP simples como curl não sabe negociar NTLM).
+//   2) NTLM — login do Windows de quem está no navegador (silencioso, sem
+//      prompt de senha, desde que o site esteja na zona "Intranet local").
+//   3) Fallback dev: header x-dev-user / query __user / usuário do SO.
+//
+// Regra de PERMISSÃO: PUT/DELETE /api/commands/:id não têm restrição de dono
+// (task #291) — qualquer usuário autenticado pode editar/excluir qualquer
+// comando, inclusive os de referência (created_by='System'). `modified_by`
+// sempre registra quem fez a última alteração, e toda criação/edição/exclusão
+// fica no audit_log (ver logAudit()).
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
-const http = require('http');
-const https = require('https');
+const crypto = require('crypto');
+const { execFile } = require('child_process');
 const express = require('express');
-const { db, DB_PATH } = require('./db');
+const { pool, initDb, withTransaction, getConnectionString } = require('./db');
 
 const app = express();
-const FRONTEND_ROOT = path.join(__dirname, '..');
 
-// Duas portas ativas em paralelo (sem redirecionamento entre elas — cada
-// uma serve a aplicação diretamente):
-//   - HTTP_PORT (padrão 80): sempre em HTTP puro.
-//   - HTTPS_PORT (padrão 443): em HTTPS de verdade SE TLS_CERT_PATH e
-//     TLS_KEY_PATH apontarem para um certificado/chave válidos; caso
-//     contrário sobe em HTTP puro também (com aviso no log), para nunca
-//     ficar indisponível enquanto o certificado definitivo não chega — só
-//     trocar os arquivos e reiniciar o serviço depois, sem mudar código.
-// PORT (variável antiga, de instalações anteriores a essa mudança) continua
-// funcionando como alias de HTTP_PORT, para compatibilidade.
-// No Docker (ver Dockerfile/docker-compose.yml), o container roda como
-// usuário não-root e por padrão HTTP_PORT=HTTPS_PORT=3000 (via PORT=3000) —
-// portas <1024 exigem privilégio, então lá o "80"/"443" de fora vem do
-// mapeamento de porta do host (docker-compose "80:3000"), não de bind direto
-// dentro do container.
-const HTTP_PORT = process.env.HTTP_PORT || process.env.PORT || 80;
-const HTTPS_PORT = process.env.HTTPS_PORT || 443;
-const TLS_CERT_PATH = process.env.TLS_CERT_PATH;
-const TLS_KEY_PATH = process.env.TLS_KEY_PATH;
-
-// Botão "Check for updates"/"Update now" (Settings → System) — este
-// processo (container cg-toolbox) não tem git nem Docker CLI de propósito
-// (imagem enxuta/non-root, ver Dockerfile); quem sabe fazer isso é o
-// serviço companion "updater" (ver updater/server.js e docker-compose.yml),
-// alcançável só pela rede interna do compose. Sem UPDATER_URL configurado
-// (ex.: instalação sem Docker), os dois endpoints abaixo respondem 501 e o
-// botão no frontend mostra "not available nesta instalação".
-const UPDATER_URL = process.env.UPDATER_URL || null;
-const UPDATER_TOKEN = process.env.UPDATER_TOKEN || '';
+const PORT = process.env.PORT || process.env.HTTP_PORT || 3000;
 
 // Limite maior que o padrão do Express (100kb) para caber o payload de um
 // comando com uma ou mais linhas de imagem (screenshots de configuração,
@@ -59,26 +39,66 @@ const UPDATER_TOKEN = process.env.UPDATER_TOKEN || '';
 app.use(express.json({ limit: '15mb' }));
 
 // ════════════════════════════════════════════════
-// Identificação do usuário (multiusuário — servidor central compartilhado)
-// Em produção, o handshake NTLM identifica o login do Windows de quem está
-// acessando (silencioso no navegador, sem prompt de senha, desde que o site
-// esteja na zona "Intranet local" do Windows/domínio). Definir NTLM_DISABLED=1
-// no ambiente desliga isso (útil para desenvolvimento fora de um domínio
-// Windows) — nesse caso aceita um header/query de teste ou cai para o usuário
-// do sistema operacional rodando o processo Node.
+// API keys — autenticação para acesso programático externo (ver api_keys em
+// schema.sql e a seção CRUD mais abaixo). Verificado ANTES do NTLM: uma
+// chamada com X-API-Key nunca deve travar num handshake NTLM.
+// ════════════════════════════════════════════════
+function hashApiKey(rawKey) {
+  return crypto.createHash('sha256').update(rawKey).digest('hex');
+}
+function generateApiKey() {
+  // Prefixo "cgtb_" (CG Toolbox) só facilita reconhecer o tipo de segredo em
+  // logs/scanners — o valor que importa é o restante, aleatório (32 bytes).
+  return 'cgtb_' + crypto.randomBytes(32).toString('hex');
+}
+async function authenticateApiKey(rawKey) {
+  const hash = hashApiKey(rawKey);
+  const { rows } = await pool.query('SELECT * FROM api_keys WHERE key_hash = $1 AND revoked_at IS NULL', [hash]);
+  if (!rows.length) return null;
+  // Best-effort — não bloqueia a resposta por causa disso.
+  pool.query('UPDATE api_keys SET last_used_at = NOW() WHERE id = $1', [rows[0].id]).catch(() => {});
+  return rows[0];
+}
+
+app.use(async (req, res, next) => {
+  const provided = req.headers['x-api-key'];
+  if (!provided) return next();
+  try {
+    const keyRow = await authenticateApiKey(String(provided));
+    if (!keyRow) return res.status(401).json({ error: 'invalid_api_key', message: 'Invalid or revoked API key' });
+    req.apiKey = keyRow;
+    req.currentUser = `api:${keyRow.name}`;
+    next();
+  } catch (err) {
+    console.error('API key auth failed:', err);
+    res.status(500).json({ error: 'internal_error', message: 'Failed to validate API key' });
+  }
+});
+
+// ════════════════════════════════════════════════
+// NTLM (identificação do login do Windows, navegador) — pulado inteiramente
+// quando a chamada já veio autenticada por API key (middleware acima).
+// Definir NTLM_DISABLED=1 desliga isso (útil para desenvolvimento fora de um
+// domínio Windows) — nesse caso aceita um header/query de teste ou cai para
+// o usuário do sistema operacional rodando o processo Node.
 // ════════════════════════════════════════════════
 const NTLM_DISABLED = process.env.NTLM_DISABLED === '1';
 if (!NTLM_DISABLED) {
   const ntlm = require('express-ntlm');
-  app.use(ntlm({
+  const ntlmMiddleware = ntlm({
     domain: process.env.NTLM_DOMAIN || undefined,
     // domaincontroller não configurado de propósito: identifica o usuário pelo
     // handshake NTLM do próprio Windows, sem validar contra o Active Directory —
     // suficiente aqui, já que isto é só identificação/conveniência (favoritos,
     // preferências), não uma barreira de segurança.
-  }));
+  });
+  app.use((req, res, next) => {
+    if (req.currentUser) return next(); // já autenticado por API key acima
+    return ntlmMiddleware(req, res, next);
+  });
 }
 function getCurrentUsername(req) {
+  if (req.currentUser) return req.currentUser; // API key (ver middleware acima)
   if (req.ntlm && req.ntlm.UserName) {
     return req.ntlm.DomainName ? `${req.ntlm.DomainName}\\${req.ntlm.UserName}` : req.ntlm.UserName;
   }
@@ -93,12 +113,13 @@ function getCurrentUsername(req) {
 // linhas mais antigas que isso, sem precisar de job/cron separado.
 // ════════════════════════════════════════════════
 const AUDIT_LOG_RETENTION_DAYS = 30;
-function logAudit(username, action, commandId, commandName) {
+async function logAudit(username, action, commandId, commandName) {
   try {
-    db.prepare(
-      'INSERT INTO audit_log (username, action, command_id, command_name) VALUES (?,?,?,?)'
-    ).run(username || null, action, commandId || null, commandName || null);
-    db.prepare(`DELETE FROM audit_log WHERE ts < datetime('now', '-${AUDIT_LOG_RETENTION_DAYS} days')`).run();
+    await pool.query(
+      'INSERT INTO audit_log (username, action, command_id, command_name) VALUES ($1,$2,$3,$4)',
+      [username || null, action, commandId || null, commandName || null]
+    );
+    await pool.query(`DELETE FROM audit_log WHERE ts < NOW() - INTERVAL '${AUDIT_LOG_RETENTION_DAYS} days'`);
   } catch (e) {
     console.error('logAudit failed:', e);
   }
@@ -107,6 +128,7 @@ function logAudit(username, action, commandId, commandName) {
 // sAMAccountName "puro" (sem DOMÍNIO\), usado como chave de busca no Active
 // Directory — o NTLM já entrega isso separado do domínio (req.ntlm.UserName).
 function getCurrentSamAccountName(req) {
+  if (req.apiKey) return req.currentUser; // não há AD a consultar para uma API key
   if (req.ntlm && req.ntlm.UserName) return req.ntlm.UserName;
   const devUser = req.headers['x-dev-user'] || req.query.__user;
   if (devUser) return String(devUser).split('\\').pop();
@@ -166,55 +188,29 @@ async function lookupUpnFromAD(samAccountName) {
   }
 }
 
-// ── static frontend (index.html, css/, js/) ─────────────────────────────
-app.use(express.static(FRONTEND_ROOT));
-
 // ════════════════════════════════════════════════
-// Helpers
+// Helpers de leitura de comandos
 // ════════════════════════════════════════════════
-// Aplicação é 100% em inglês (sem i18n) — não há mais parâmetro de idioma a
-// resolver; todo texto do banco já é um único campo canônico.
-function shapeCommand(row) {
-  const tags = db.prepare(
-    'SELECT css_class, label FROM command_tags WHERE command_id = ? ORDER BY sort_order, id'
-  ).all(row.id).map(t => ({ css_class: t.css_class, label: t.label }));
+async function shapeCommand(row) {
+  const [tagsQ, vendorsQ, systemsQ, versionsQ, envQ, topicsQ, favQ, linesQ, diffsQ] = await Promise.all([
+    pool.query('SELECT css_class, label FROM command_tags WHERE command_id = $1 ORDER BY sort_order, id', [row.id]),
+    pool.query('SELECT vendor FROM command_vendors WHERE command_id = $1 ORDER BY vendor', [row.id]),
+    pool.query('SELECT system FROM command_systems WHERE command_id = $1 ORDER BY system', [row.id]),
+    pool.query('SELECT version FROM command_versions WHERE command_id = $1 ORDER BY version', [row.id]),
+    pool.query('SELECT environment FROM command_environments WHERE command_id = $1 ORDER BY environment', [row.id]),
+    pool.query('SELECT topic FROM command_topics WHERE command_id = $1 ORDER BY topic', [row.id]),
+    pool.query('SELECT username FROM user_favorites WHERE command_id = $1 ORDER BY username', [row.id]),
+    pool.query('SELECT variant, sort_order, line_type, prompt, content, supports_export, image_data FROM command_lines WHERE command_id = $1 ORDER BY variant, sort_order, id', [row.id]),
+    pool.query('SELECT id, version, note, sort_order FROM command_diffs WHERE command_id = $1 ORDER BY sort_order, id', [row.id]),
+  ]);
 
-  // Fabricante/Sistema — topo da hierarquia multi-fabricante
-  // (Vendor → Sistema → Versão → Ambiente → Tópico). Mesma semântica de
-  // versions/environments abaixo: ausência de linhas = "aplica a todos".
-  const vendors = db.prepare(
-    'SELECT vendor FROM command_vendors WHERE command_id = ? ORDER BY vendor'
-  ).all(row.id).map(v => v.vendor);
-
-  const systemList = db.prepare(
-    'SELECT system FROM command_systems WHERE command_id = ? ORDER BY system'
-  ).all(row.id).map(s => s.system);
-
-  const versions = db.prepare(
-    'SELECT version FROM command_versions WHERE command_id = ? ORDER BY version'
-  ).all(row.id).map(v => v.version);
-
-  const environments = db.prepare(
-    'SELECT environment FROM command_environments WHERE command_id = ? ORDER BY environment'
-  ).all(row.id).map(e => e.environment);
-
-  // Um comando pode pertencer a mais de um Tópico (command_topics); `topic` (singular)
-  // é mantido só por compatibilidade (= topics[0], o "tópico primário").
-  const topics = db.prepare(
-    'SELECT topic FROM command_topics WHERE command_id = ? ORDER BY topic'
-  ).all(row.id).map(t => t.topic);
-
-  // Favoritos são compartilhados entre usuários (ver user_favorites) — todo
-  // card traz quantos e QUAIS usuários o favoritaram, para a estrela mostrar
-  // a contagem e o hover listar os nomes (independe de quem está olhando a
-  // tela agora, e independe de quem criou o comando).
-  const favoritedBy = db.prepare(
-    'SELECT username FROM user_favorites WHERE command_id = ? ORDER BY username'
-  ).all(row.id).map(f => f.username);
-
-  const lineRows = db.prepare(
-    'SELECT variant, sort_order, line_type, prompt, content, supports_export, image_data FROM command_lines WHERE command_id = ? ORDER BY variant, sort_order, id'
-  ).all(row.id);
+  const tags = tagsQ.rows.map(t => ({ css_class: t.css_class, label: t.label }));
+  const vendors = vendorsQ.rows.map(v => v.vendor);
+  const systemList = systemsQ.rows.map(s => s.system);
+  const versions = versionsQ.rows.map(v => v.version);
+  const environments = envQ.rows.map(e => e.environment);
+  const topics = topicsQ.rows.map(t => t.topic);
+  const favoritedBy = favQ.rows.map(f => f.username);
 
   const shapeLine = l => ({
     line_type: l.line_type,
@@ -225,22 +221,18 @@ function shapeCommand(row) {
   });
 
   const lines = {
-    default: lineRows.filter(l => l.variant === 'default').map(shapeLine),
-    empty: lineRows.filter(l => l.variant === 'empty').map(shapeLine),
+    default: linesQ.rows.filter(l => l.variant === 'default').map(shapeLine),
+    empty: linesQ.rows.filter(l => l.variant === 'empty').map(shapeLine),
   };
 
-  const diffRows = db.prepare(
-    'SELECT id, version, note, sort_order FROM command_diffs WHERE command_id = ? ORDER BY sort_order, id'
-  ).all(row.id);
-
-  const diffLineStmt = db.prepare(
-    'SELECT sort_order, line_type, prompt, content FROM command_diff_lines WHERE diff_id = ? ORDER BY sort_order, id'
+  const diffRows = diffsQ.rows;
+  const diffLineResults = await Promise.all(
+    diffRows.map(d => pool.query('SELECT sort_order, line_type, prompt, content FROM command_diff_lines WHERE diff_id = $1 ORDER BY sort_order, id', [d.id]))
   );
-
-  const diffs = diffRows.map(d => ({
+  const diffs = diffRows.map((d, i) => ({
     version: d.version,
     note: d.note,
-    lines: diffLineStmt.all(d.id).map(shapeLine),
+    lines: diffLineResults[i].rows.map(shapeLine),
   }));
 
   return {
@@ -274,83 +266,72 @@ function shapeCommand(row) {
     diffs,
     created_at: row.created_at,
     updated_at: row.updated_at,
-    // Autoria/auditoria + PERMISSÃO (ver comentário em schema.sql e no topo
-    // deste arquivo): PUT/DELETE /api/commands/:id só são aceitos quando o
-    // usuário atual é igual a `created_by`. A UI usa `created_by` (comparado
-    // com o usuário logado, ver CURRENT_USER em js/user-sync.js) para decidir
-    // se mostra o botão "Edit" no card (ver terminal-renderer.js: card()) —
-    // "Duplicate" sempre aparece para qualquer comando. Sem 1ª edição ainda,
-    // modified_by cai em created_by (ninguém alterou = o criador é, por
-    // definição, quem fez a "última alteração"). `is_system` é só um atalho
-    // de leitura (created_by === 'System') mantido para o toggle "System
-    // commands" da sidebar (ver SHOW_SYSTEM_COMMANDS em js/render.js).
     created_by: row.created_by || null,
     modified_by: row.modified_by || row.created_by || null,
     is_system: row.created_by === 'System',
   };
 }
 
-function findCommand(id) {
-  return db.prepare('SELECT * FROM commands WHERE id = ?').get(id);
+async function findCommand(id) {
+  const { rows } = await pool.query('SELECT * FROM commands WHERE id = $1', [id]);
+  return rows[0] || null;
 }
 
 // Mantido para compatibilidade com os poucos lugares que só precisam saber SE
 // o comando existe (ex.: POST /api/favorites).
-function getCommandRow(id) {
+async function getCommandRow(id) {
   return findCommand(id);
 }
 
 // ════════════════════════════════════════════════
 // GET /api/commands
 // ════════════════════════════════════════════════
-app.get('/api/commands', (req, res) => {
+app.get('/api/commands', async (req, res) => {
   try {
     const { topic, version, environment, vendor, system: systemParam, sort } = req.query;
 
     let sql = 'SELECT * FROM commands WHERE 1=1';
-    const params = {};
+    const params = [];
     if (topic) {
-      // Um comando pode ter vários tópicos (command_topics) — casa se QUALQUER um bater
-      // (diferente de versão/ambiente: aqui não existe "nenhum marcado = todos").
-      sql += ` AND EXISTS (SELECT 1 FROM command_topics ct WHERE ct.command_id = commands.id AND ct.topic = @topic)`;
-      params.topic = topic;
+      params.push(topic);
+      // Um comando pode ter vários tópicos (command_topics) — casa se QUALQUER um bater.
+      sql += ` AND EXISTS (SELECT 1 FROM command_topics ct WHERE ct.command_id = commands.id AND ct.topic = $${params.length})`;
     }
     if (vendor) {
+      params.push(vendor);
       sql += ` AND (
         NOT EXISTS (SELECT 1 FROM command_vendors cv WHERE cv.command_id = commands.id)
-        OR EXISTS (SELECT 1 FROM command_vendors cv WHERE cv.command_id = commands.id AND cv.vendor = @vendor)
+        OR EXISTS (SELECT 1 FROM command_vendors cv WHERE cv.command_id = commands.id AND cv.vendor = $${params.length})
       )`;
-      params.vendor = vendor;
     }
     if (systemParam) {
+      params.push(systemParam);
       sql += ` AND (
         NOT EXISTS (SELECT 1 FROM command_systems cs WHERE cs.command_id = commands.id)
-        OR EXISTS (SELECT 1 FROM command_systems cs WHERE cs.command_id = commands.id AND cs.system = @system)
+        OR EXISTS (SELECT 1 FROM command_systems cs WHERE cs.command_id = commands.id AND cs.system = $${params.length})
       )`;
-      params.system = systemParam;
     }
     if (version) {
+      params.push(version);
       sql += ` AND (
         NOT EXISTS (SELECT 1 FROM command_versions cv WHERE cv.command_id = commands.id)
-        OR EXISTS (SELECT 1 FROM command_versions cv WHERE cv.command_id = commands.id AND cv.version = @version)
+        OR EXISTS (SELECT 1 FROM command_versions cv WHERE cv.command_id = commands.id AND cv.version = $${params.length})
       )`;
-      params.version = version;
     }
     if (environment) {
+      params.push(environment);
       sql += ` AND (
         NOT EXISTS (SELECT 1 FROM command_environments ce WHERE ce.command_id = commands.id)
-        OR EXISTS (SELECT 1 FROM command_environments ce WHERE ce.command_id = commands.id AND ce.environment = @environment)
+        OR EXISTS (SELECT 1 FROM command_environments ce WHERE ce.command_id = commands.id AND ce.environment = $${params.length})
       )`;
-      params.environment = environment;
     }
     // Ordenação padrão é a curatorial (sort_order/id) de sempre. `?sort=creator`
-    // reordena a lista por quem cadastrou o comando (created_by) — pedido do
-    // usuário para poder ver/agrupar visualmente os comandos por autor; dentro
-    // de cada autor mantém a ordem curatorial normal como desempate.
+    // reordena a lista por quem cadastrou o comando (created_by).
     sql += (sort === 'creator') ? ' ORDER BY created_by, sort_order, id' : ' ORDER BY sort_order, id';
 
-    const rows = db.prepare(sql).all(params).map(r => shapeCommand(r));
-    res.json(rows);
+    const { rows } = await pool.query(sql, params);
+    const shaped = await Promise.all(rows.map(r => shapeCommand(r)));
+    res.json(shaped);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
@@ -360,11 +341,11 @@ app.get('/api/commands', (req, res) => {
 // ════════════════════════════════════════════════
 // GET /api/commands/:id
 // ════════════════════════════════════════════════
-app.get('/api/commands/:id', (req, res) => {
+app.get('/api/commands/:id', async (req, res) => {
   try {
-    const row = findCommand(req.params.id);
+    const row = await findCommand(req.params.id);
     if (!row) return res.status(404).json({ error: 'not_found', message: `Command '${req.params.id}' not found` });
-    res.json(shapeCommand(row));
+    res.json(await shapeCommand(row));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
@@ -372,13 +353,13 @@ app.get('/api/commands/:id', (req, res) => {
 });
 
 // ════════════════════════════════════════════════
-// GET /api/me — usuário identificado (login do Windows via NTLM, ou fallback dev)
+// GET /api/me — usuário identificado (login do Windows via NTLM, API key, ou fallback dev)
 // ════════════════════════════════════════════════
 app.get('/api/me', async (req, res) => {
-  const username = getCurrentUsername(req); // ex.: 'CG2000\\rsilva' — chave interna (favoritos/preferências), nunca muda
+  const username = getCurrentUsername(req);
   let upn = null;
   try { upn = await lookupUpnFromAD(getCurrentSamAccountName(req)); } catch (e) { /* já logado em lookupUpnFromAD */ }
-  res.json({ username, upn: upn || username }); // upn: exibido na UI; cai em `username` se AD não configurado/indisponível
+  res.json({ username, upn: upn || username });
 });
 
 // ════════════════════════════════════════════════
@@ -386,10 +367,10 @@ app.get('/api/me', async (req, res) => {
 // já traz favorite_count/favorited_by agregados de TODOS os usuários; estes
 // endpoints são só para ler/alterar os favoritos do usuário ATUAL.
 // ════════════════════════════════════════════════
-app.get('/api/favorites', (req, res) => {
+app.get('/api/favorites', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
-    const rows = db.prepare('SELECT command_id FROM user_favorites WHERE username = ? ORDER BY created_at').all(username);
+    const { rows } = await pool.query('SELECT command_id FROM user_favorites WHERE username = $1 ORDER BY created_at', [username]);
     res.json(rows.map(r => r.command_id));
   } catch (err) {
     console.error(err);
@@ -397,12 +378,12 @@ app.get('/api/favorites', (req, res) => {
   }
 });
 
-app.post('/api/favorites/:commandId', (req, res) => {
+app.post('/api/favorites/:commandId', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
     const { commandId } = req.params;
-    if (!getCommandRow(commandId)) return res.status(404).json({ error: 'not_found', message: `Command '${commandId}' not found` });
-    db.prepare('INSERT OR IGNORE INTO user_favorites (username, command_id) VALUES (?, ?)').run(username, commandId);
+    if (!(await getCommandRow(commandId))) return res.status(404).json({ error: 'not_found', message: `Command '${commandId}' not found` });
+    await pool.query('INSERT INTO user_favorites (username, command_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [username, commandId]);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -410,10 +391,10 @@ app.post('/api/favorites/:commandId', (req, res) => {
   }
 });
 
-app.delete('/api/favorites/:commandId', (req, res) => {
+app.delete('/api/favorites/:commandId', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
-    db.prepare('DELETE FROM user_favorites WHERE username = ? AND command_id = ?').run(username, req.params.commandId);
+    await pool.query('DELETE FROM user_favorites WHERE username = $1 AND command_id = $2', [username, req.params.commandId]);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -423,22 +404,17 @@ app.delete('/api/favorites/:commandId', (req, res) => {
 
 // ════════════════════════════════════════════════
 // GET /api/audit-log — lista as alterações de comando (criar/editar/excluir)
-// dos últimos 30 dias (ver audit_log em schema.sql e logAudit() acima), mais
-// recente primeiro. Consumido pelo botão "View audit log" em Configurações
-// (js/audit-log.js). Sem filtro de usuário — qualquer usuário autenticado
-// pode ver o log inteiro (é uma trilha de auditoria compartilhada, não
-// pessoal). Teto de 1000 linhas por segurança, embora a retenção de 30 dias
-// já deva manter o volume bem abaixo disso na prática.
+// dos últimos 30 dias, mais recente primeiro. Teto de 1000 linhas.
 // ════════════════════════════════════════════════
-app.get('/api/audit-log', (req, res) => {
+app.get('/api/audit-log', async (req, res) => {
   try {
-    const rows = db.prepare(
+    const { rows } = await pool.query(
       `SELECT id, ts, username, action, command_id, command_name
        FROM audit_log
-       WHERE ts >= datetime('now', '-${AUDIT_LOG_RETENTION_DAYS} days')
+       WHERE ts >= NOW() - INTERVAL '${AUDIT_LOG_RETENTION_DAYS} days'
        ORDER BY ts DESC, id DESC
        LIMIT 1000`
-    ).all();
+    );
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -451,10 +427,10 @@ app.get('/api/audit-log', (req, res) => {
 // user_data e js/user-sync.js). GET devolve tudo que existe para o usuário atual
 // num único objeto {chave: valor}; PUT faz upsert parcial (só as chaves enviadas).
 // ════════════════════════════════════════════════
-app.get('/api/user-data', (req, res) => {
+app.get('/api/user-data', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
-    const rows = db.prepare('SELECT data_key, value FROM user_data WHERE username = ?').all(username);
+    const { rows } = await pool.query('SELECT data_key, value FROM user_data WHERE username = $1', [username]);
     const out = {};
     rows.forEach(r => { out[r.data_key] = r.value; });
     res.json(out);
@@ -464,25 +440,24 @@ app.get('/api/user-data', (req, res) => {
   }
 });
 
-app.put('/api/user-data', (req, res) => {
+app.put('/api/user-data', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
     const body = req.body;
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return res.status(400).json({ error: 'validation_error', message: 'Request body must be a JSON object of {key: value}' });
     }
-    const upsert = db.prepare(`
-      INSERT INTO user_data (username, data_key, value, updated_at) VALUES (?, ?, ?, datetime('now'))
-      ON CONFLICT(username, data_key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-    `);
-    const tx = db.transaction(() => {
-      Object.keys(body).forEach(key => {
+    await withTransaction(async client => {
+      for (const key of Object.keys(body)) {
         const val = body[key];
-        if (val === null || val === undefined) return;
-        upsert.run(username, key, String(val));
-      });
+        if (val === null || val === undefined) continue;
+        await client.query(
+          `INSERT INTO user_data (username, data_key, value, updated_at) VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (username, data_key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
+          [username, key, String(val)]
+        );
+      }
     });
-    tx();
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -492,21 +467,14 @@ app.put('/api/user-data', (req, res) => {
 
 // ════════════════════════════════════════════════
 // Configurações padrão do administrador ("Admin mode" no modal de
-// Configurações — ver js/settings.js) — reaproveita a MESMA tabela user_data
-// (sem alterar o schema), só que sob um username reservado/sentinela que
-// nunca corresponde a um login de verdade. Ao contrário de /api/user-data
-// (por usuário), isto é um valor ÚNICO para todo mundo: quando um usuário
-// carrega o app pela 1ª vez e ainda não tem preferência própria salva
-// (ver hasExplicitSetting() em settings.js), ele herda o default definido
-// aqui em vez de um valor fixo no código. Depois que o usuário mexe no
-// próprio toggle, a preferência pessoal dele passa a valer sempre — mudar o
-// default aqui não afeta retroativamente quem já tem uma escolha própria.
+// Configurações) — reaproveita a MESMA tabela user_data sob um username
+// reservado/sentinela que nunca corresponde a um login de verdade.
 // ════════════════════════════════════════════════
 const GLOBAL_SETTINGS_USER = '__global_defaults__';
 
-app.get('/api/global-settings', (req, res) => {
+app.get('/api/global-settings', async (req, res) => {
   try {
-    const rows = db.prepare('SELECT data_key, value FROM user_data WHERE username = ?').all(GLOBAL_SETTINGS_USER);
+    const { rows } = await pool.query('SELECT data_key, value FROM user_data WHERE username = $1', [GLOBAL_SETTINGS_USER]);
     const out = {};
     rows.forEach(r => { out[r.data_key] = r.value; });
     res.json(out);
@@ -516,24 +484,80 @@ app.get('/api/global-settings', (req, res) => {
   }
 });
 
-app.put('/api/global-settings', (req, res) => {
+app.put('/api/global-settings', async (req, res) => {
   try {
     const body = req.body;
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return res.status(400).json({ error: 'validation_error', message: 'Request body must be a JSON object of {key: value}' });
     }
-    const upsert = db.prepare(`
-      INSERT INTO user_data (username, data_key, value, updated_at) VALUES (?, ?, ?, datetime('now'))
-      ON CONFLICT(username, data_key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-    `);
-    const tx = db.transaction(() => {
-      Object.keys(body).forEach(key => {
+    await withTransaction(async client => {
+      for (const key of Object.keys(body)) {
         const val = body[key];
-        if (val === null || val === undefined) return;
-        upsert.run(GLOBAL_SETTINGS_USER, key, String(val));
-      });
+        if (val === null || val === undefined) continue;
+        await client.query(
+          `INSERT INTO user_data (username, data_key, value, updated_at) VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (username, data_key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
+          [GLOBAL_SETTINGS_USER, key, String(val)]
+        );
+      }
     });
-    tx();
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// ════════════════════════════════════════════════
+// API keys — acesso programático externo (ver api_keys em schema.sql e o
+// middleware de autenticação no topo deste arquivo). Gerenciável pela UI em
+// Settings → System → API access (ver js/api-keys.js). A key em texto puro só
+// existe na resposta do POST — depois disso só o hash (SHA-256) fica
+// guardado; perder a key mostrada significa revogar e criar uma nova.
+// ════════════════════════════════════════════════
+app.get('/api/api-keys', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, key_prefix, created_by, created_at, last_used_at, revoked_at
+       FROM api_keys ORDER BY (revoked_at IS NULL) DESC, created_at DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+app.post('/api/api-keys', async (req, res) => {
+  const { name } = req.body || {};
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ error: 'validation_error', message: '"name" is required' });
+  }
+  try {
+    const rawKey = generateApiKey();
+    const keyHash = hashApiKey(rawKey);
+    const keyPrefix = rawKey.slice(0, 12);
+    const createdBy = getCurrentUsername(req);
+    const { rows } = await pool.query(
+      `INSERT INTO api_keys (name, key_prefix, key_hash, created_by)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, name, key_prefix, created_by, created_at, last_used_at, revoked_at`,
+      [name.trim(), keyPrefix, keyHash, createdBy]
+    );
+    res.status(201).json({ ...rows[0], key: rawKey });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+app.delete('/api/api-keys/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'validation_error', message: 'Invalid id' });
+  try {
+    const { rows } = await pool.query('SELECT id FROM api_keys WHERE id = $1', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'not_found', message: `API key '${id}' not found` });
+    await pool.query('UPDATE api_keys SET revoked_at = NOW() WHERE id = $1 AND revoked_at IS NULL', [id]);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -544,22 +568,12 @@ app.put('/api/global-settings', (req, res) => {
 // ════════════════════════════════════════════════
 // Validation + write helpers
 // ════════════════════════════════════════════════
-// Um comando pode ter vários Tópicos (body.topics, array — preferido) ou, por
-// compatibilidade com chamadas antigas, um único body.topic (string). Sempre
-// retorna um array não vazio (ou [] se nada foi informado, tratado como erro
-// de validação abaixo).
 function resolveTopics(body) {
   if (Array.isArray(body.topics) && body.topics.length) return body.topics;
   if (body.topic && typeof body.topic === 'string') return [body.topic];
   return [];
 }
 
-// "Nenhum marcado = aplica a todos" é uma convenção que só existe do lado do
-// FILTRO (sidebar/Configurações — "All"/toggle mestre) — no cadastro de um
-// comando, essas 4 listas (junto com Topic) são obrigatórias: precisa marcar
-// pelo menos um Vendor, um System, uma Version e um Environment. Isso evita
-// um comando "genérico demais" (aplicável a qualquer fabricante/sistema/
-// versão/ambiente) ser criado sem intenção explícita.
 function isNonEmptyArray(val) {
   return Array.isArray(val) && val.length > 0;
 }
@@ -568,10 +582,6 @@ function validateBody(body) {
   const errors = [];
   if (!body || typeof body !== 'object') return ['Request body must be a JSON object'];
   if (!body.id || typeof body.id !== 'string') errors.push('"id" is required');
-  // A command belongs to exactly one vendor (unlike systems/versions/environments/
-  // topics, which a command can have several of) — the client enforces this with a
-  // single-select control (see _ceBindVendorSeg in js/command-editor.js), this is
-  // the server-side backstop.
   if (!isNonEmptyArray(body.vendors)) errors.push('"vendors" is required (exactly one vendor)');
   else if (body.vendors.length > 1) errors.push('"vendors" must contain exactly one vendor (a command belongs to a single vendor)');
   if (!isNonEmptyArray(body.systems)) errors.push('"systems" is required (at least one system)');
@@ -582,29 +592,17 @@ function validateBody(body) {
   return errors;
 }
 
-// Nullable (pode legitimamente estar ausente — ex.: name_empty para comandos
-// que não mudam quando SRC/DST estão vazios).
 const NULLABLE_TEXT_FIELDS = ['name_empty', 'desc_empty'];
-// Sempre string (NOT NULL DEFAULT '' em schema.sql).
 const REQUIRED_TEXT_FIELDS = ['name', 'desc', 'about_purpose', 'about_when', 'about_obs'];
 
 function buildCommandColumns(body) {
-  // `topic` (coluna, singular) é mantido em paralelo = topics[0], só por
-  // compatibilidade — a lista completa vive em command_topics (ver insertChildren).
   const topics = resolveTopics(body);
   // Guarda estrutural: requires_ips/requires_ip_port fazem buildCardHtmlForRow
   // (js/db-render-engine.js) trocar para um "empty state" quando SRC/DST (ou
-  // IP/Porta genéricos) não estão preenchidos — e se não existir NENHUMA linha
-  // variant='empty' cadastrada, buildEmptyStateCard retorna null e o card
-  // desaparece da tela por completo, sem erro nenhum visível (bug real: um
-  // comando importado via CSV com "Requires IP/Port"=Yes ficou invisível,
-  // porque a importação por CSV nunca cria linhas variant='empty' — só o
-  // editor manual, tela Avançado, tem esse campo). Por isso o server nunca
-  // aceita requires_ips/requires_ip_port=1 sem pelo menos uma linha empty com
-  // conteúdo — se vier assim, a flag é rebaixada para 0 em vez de deixar o
-  // comando entrar num estado "invisível por design". Vale tanto pra CSV
-  // import quanto pro editor manual (mesmo payload shape), é a única fonte de
-  // verdade.
+  // IP/Porta genéricos) não estão preenchidos — se não existir NENHUMA linha
+  // variant='empty' cadastrada, o card desaparece da tela sem erro visível.
+  // Por isso o server nunca aceita requires_ips/requires_ip_port=1 sem pelo
+  // menos uma linha empty com conteúdo.
   const hasEmptyLines = Array.isArray(body.lines) && body.lines.some(l => l && l.variant === 'empty' && String(l.content || '').trim());
   const cols = {
     id: body.id,
@@ -622,103 +620,113 @@ function buildCommandColumns(body) {
   return cols;
 }
 
-// Banco único (ver server/db.js) — todas as tabelas filhas moram em `db`.
-function insertChildren(id, body) {
-  const tagStmt = db.prepare(
-    'INSERT INTO command_tags (command_id, css_class, label, sort_order) VALUES (?, ?, ?, ?)'
-  );
-  (body.tags || []).forEach((tag, i) => {
-    tagStmt.run(id, tag.css_class, tag.label, Number.isInteger(tag.sort_order) ? tag.sort_order : i);
-  });
-
-  const topicStmt = db.prepare('INSERT INTO command_topics (command_id, topic) VALUES (?, ?)');
-  resolveTopics(body).forEach(tp => topicStmt.run(id, tp));
-
-  const vendorStmt = db.prepare('INSERT INTO command_vendors (command_id, vendor) VALUES (?, ?)');
-  (body.vendors || []).forEach(v => vendorStmt.run(id, v));
-
-  const systemStmt = db.prepare('INSERT INTO command_systems (command_id, system) VALUES (?, ?)');
-  (body.systems || []).forEach(s => systemStmt.run(id, s));
-
-  const versionStmt = db.prepare('INSERT INTO command_versions (command_id, version) VALUES (?, ?)');
-  (body.versions || []).forEach(v => versionStmt.run(id, v));
-
-  const envStmt = db.prepare('INSERT INTO command_environments (command_id, environment) VALUES (?, ?)');
-  (body.environments || []).forEach(e => envStmt.run(id, e));
-
-  const lineStmt = db.prepare(
-    `INSERT INTO command_lines (command_id, variant, sort_order, line_type, prompt, content, supports_export, image_data)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  );
-  (body.lines || []).forEach((line, i) => {
-    lineStmt.run(
-      id,
-      line.variant || 'default',
-      Number.isInteger(line.sort_order) ? line.sort_order : i,
-      line.line_type || 'cmd',
-      line.prompt || null,
-      line.content || '',
-      line.supports_export ? 1 : 0,
-      line.line_type === 'image' ? (line.image_data || null) : null
+// Insere todas as tabelas filhas de um comando, dentro da MESMA transação
+// (client) do INSERT/UPDATE de `commands` que chamou isto.
+async function insertChildren(client, id, body) {
+  const tags = body.tags || [];
+  for (let i = 0; i < tags.length; i++) {
+    const tag = tags[i];
+    await client.query(
+      'INSERT INTO command_tags (command_id, css_class, label, sort_order) VALUES ($1, $2, $3, $4)',
+      [id, tag.css_class, tag.label, Number.isInteger(tag.sort_order) ? tag.sort_order : i]
     );
-  });
+  }
 
-  const diffStmt = db.prepare(
-    'INSERT INTO command_diffs (command_id, version, note, sort_order) VALUES (?, ?, ?, ?)'
-  );
-  const diffLineStmt = db.prepare(
-    `INSERT INTO command_diff_lines (diff_id, sort_order, line_type, prompt, content)
-     VALUES (?, ?, ?, ?, ?)`
-  );
-  (body.diffs || []).forEach((diff, i) => {
-    const result = diffStmt.run(id, diff.version, diff.note || '', Number.isInteger(diff.sort_order) ? diff.sort_order : i);
-    const diffId = result.lastInsertRowid;
-    (diff.lines || []).forEach((line, j) => {
-      diffLineStmt.run(diffId, Number.isInteger(line.sort_order) ? line.sort_order : j, line.line_type || 'cmd', line.prompt || null, line.content || '');
-    });
-  });
+  for (const tp of resolveTopics(body)) {
+    await client.query('INSERT INTO command_topics (command_id, topic) VALUES ($1, $2)', [id, tp]);
+  }
+  for (const v of (body.vendors || [])) {
+    await client.query('INSERT INTO command_vendors (command_id, vendor) VALUES ($1, $2)', [id, v]);
+  }
+  for (const s of (body.systems || [])) {
+    await client.query('INSERT INTO command_systems (command_id, system) VALUES ($1, $2)', [id, s]);
+  }
+  for (const v of (body.versions || [])) {
+    await client.query('INSERT INTO command_versions (command_id, version) VALUES ($1, $2)', [id, v]);
+  }
+  for (const e of (body.environments || [])) {
+    await client.query('INSERT INTO command_environments (command_id, environment) VALUES ($1, $2)', [id, e]);
+  }
+
+  const lines = body.lines || [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    await client.query(
+      `INSERT INTO command_lines (command_id, variant, sort_order, line_type, prompt, content, supports_export, image_data)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        id,
+        line.variant || 'default',
+        Number.isInteger(line.sort_order) ? line.sort_order : i,
+        line.line_type || 'cmd',
+        line.prompt || null,
+        line.content || '',
+        line.supports_export ? 1 : 0,
+        line.line_type === 'image' ? (line.image_data || null) : null,
+      ]
+    );
+  }
+
+  const diffs = body.diffs || [];
+  for (let i = 0; i < diffs.length; i++) {
+    const diff = diffs[i];
+    const diffResult = await client.query(
+      'INSERT INTO command_diffs (command_id, version, note, sort_order) VALUES ($1, $2, $3, $4) RETURNING id',
+      [id, diff.version, diff.note || '', Number.isInteger(diff.sort_order) ? diff.sort_order : i]
+    );
+    const diffId = diffResult.rows[0].id;
+    const diffLines = diff.lines || [];
+    for (let j = 0; j < diffLines.length; j++) {
+      const line = diffLines[j];
+      await client.query(
+        'INSERT INTO command_diff_lines (diff_id, sort_order, line_type, prompt, content) VALUES ($1, $2, $3, $4, $5)',
+        [diffId, Number.isInteger(line.sort_order) ? line.sort_order : j, line.line_type || 'cmd', line.prompt || null, line.content || '']
+      );
+    }
+  }
 }
 
 // ════════════════════════════════════════════════
 // POST /api/commands — create
 // ════════════════════════════════════════════════
-app.post('/api/commands', (req, res) => {
-  const errors = validateBody(req.body);
-  if (errors.length) return res.status(400).json({ error: 'validation_error', message: errors.join('; ') });
-
-  const { id } = req.body;
-  const existing = findCommand(id);
-  if (existing) return res.status(409).json({ error: 'conflict', message: `Command '${id}' already exists` });
-
+app.post('/api/commands', async (req, res) => {
   try {
+    const errors = validateBody(req.body);
+    if (errors.length) return res.status(400).json({ error: 'validation_error', message: errors.join('; ') });
+
+    const { id } = req.body;
+    const existing = await findCommand(id);
+    if (existing) return res.status(409).json({ error: 'conflict', message: `Command '${id}' already exists` });
+
     const cols = buildCommandColumns(req.body);
-    // Todo comando criado por esta API (inclusive via "Duplicate command", que
-    // salva como create — ver command-editor.js) é atribuído ao usuário atual
-    // (created_by = modified_by = quem está autenticado). Não existe mais a
-    // opção de gravar como 'System' por aqui — ver comentário no topo do
-    // arquivo sobre a remoção do gesto Ctrl+Alt/Admin mode.
+    // Todo comando criado por esta API é atribuído ao usuário atual
+    // (created_by = modified_by = quem está autenticado).
     const username = getCurrentUsername(req);
     cols.created_by = username;
     cols.modified_by = username;
-    const create = db.transaction(() => {
-      db.prepare(
+
+    await withTransaction(async client => {
+      await client.query(
         `INSERT INTO commands (
           id, topic, icon, sort_order, requires_ips, requires_ip_port, placeholder_resolver, raw_template,
-          name, name_empty, desc, desc_empty,
+          name, name_empty, "desc", desc_empty,
           about_icon, about_purpose, about_when, about_obs,
           created_by, modified_by
-        ) VALUES (
-          @id, @topic, @icon, @sort_order, @requires_ips, @requires_ip_port, @placeholder_resolver, @raw_template,
-          @name, @name_empty, @desc, @desc_empty,
-          @about_icon, @about_purpose, @about_when, @about_obs,
-          @created_by, @modified_by
-        )`
-      ).run(cols);
-      insertChildren(id, req.body);
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+        [
+          cols.id, cols.topic, cols.icon, cols.sort_order, cols.requires_ips, cols.requires_ip_port,
+          cols.placeholder_resolver, cols.raw_template,
+          cols.name, cols.name_empty, cols.desc, cols.desc_empty,
+          cols.about_icon, cols.about_purpose, cols.about_when, cols.about_obs,
+          cols.created_by, cols.modified_by,
+        ]
+      );
+      await insertChildren(client, id, req.body);
     });
-    create();
-    logAudit(username, 'create', id, cols.name);
-    res.status(201).json(shapeCommand(db.prepare('SELECT * FROM commands WHERE id = ?').get(id)));
+
+    await logAudit(username, 'create', id, cols.name);
+    const row = await findCommand(id);
+    res.status(201).json(await shapeCommand(row));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
@@ -728,55 +736,64 @@ app.post('/api/commands', (req, res) => {
 // ════════════════════════════════════════════════
 // PUT /api/commands/:id — full update (replace children)
 // ════════════════════════════════════════════════
-app.put('/api/commands/:id', (req, res) => {
+app.put('/api/commands/:id', async (req, res) => {
   const id = req.params.id;
-  const found = findCommand(id);
-  if (!found) return res.status(404).json({ error: 'not_found', message: `Command '${id}' not found` });
-
-  // Sem restrição de dono: qualquer usuário autenticado pode editar qualquer
-  // comando (inclusive os de referência created_by='System') — a pedido do
-  // usuário. `modified_by` abaixo continua registrando quem fez a última
-  // alteração, e cada edição fica registrada no audit_log (ver logAudit()).
-  const currentUser = getCurrentUsername(req);
-
-  const bodyForValidation = { ...req.body, id: req.body.id || id };
-  const errors = validateBody(bodyForValidation);
-  if (errors.length) return res.status(400).json({ error: 'validation_error', message: errors.join('; ') });
-
-  if (req.body.id && req.body.id !== id) {
-    return res.status(400).json({ error: 'validation_error', message: 'Body "id" does not match URL id and cannot be changed' });
-  }
-
   try {
+    const found = await findCommand(id);
+    if (!found) return res.status(404).json({ error: 'not_found', message: `Command '${id}' not found` });
+
+    // Sem restrição de dono: qualquer usuário autenticado pode editar qualquer
+    // comando (inclusive os de referência created_by='System').
+    const currentUser = getCurrentUsername(req);
+
+    const bodyForValidation = { ...req.body, id: req.body.id || id };
+    const errors = validateBody(bodyForValidation);
+    if (errors.length) return res.status(400).json({ error: 'validation_error', message: errors.join('; ') });
+
+    if (req.body.id && req.body.id !== id) {
+      return res.status(400).json({ error: 'validation_error', message: 'Body "id" does not match URL id and cannot be changed' });
+    }
+
     const cols = buildCommandColumns({ ...req.body, id });
     cols.modified_by = currentUser;
-    const update = db.transaction(() => {
-      db.prepare(
+
+    await withTransaction(async client => {
+      await client.query(
         `UPDATE commands SET
-          topic = @topic, icon = @icon, sort_order = @sort_order, requires_ips = @requires_ips,
-          requires_ip_port = @requires_ip_port,
-          placeholder_resolver = @placeholder_resolver, raw_template = @raw_template,
-          name = @name, name_empty = @name_empty, desc = @desc, desc_empty = @desc_empty,
-          about_icon = @about_icon, about_purpose = @about_purpose, about_when = @about_when, about_obs = @about_obs,
-          modified_by = @modified_by,
-          updated_at = datetime('now')
-        WHERE id = @id`
-      ).run(cols);
+          topic = $1, icon = $2, sort_order = $3, requires_ips = $4,
+          requires_ip_port = $5,
+          placeholder_resolver = $6, raw_template = $7,
+          name = $8, name_empty = $9, "desc" = $10, desc_empty = $11,
+          about_icon = $12, about_purpose = $13, about_when = $14, about_obs = $15,
+          modified_by = $16,
+          updated_at = NOW()
+        WHERE id = $17`,
+        [
+          cols.topic, cols.icon, cols.sort_order, cols.requires_ips,
+          cols.requires_ip_port,
+          cols.placeholder_resolver, cols.raw_template,
+          cols.name, cols.name_empty, cols.desc, cols.desc_empty,
+          cols.about_icon, cols.about_purpose, cols.about_when, cols.about_obs,
+          cols.modified_by,
+          id,
+        ]
+      );
 
-      db.prepare('DELETE FROM command_tags WHERE command_id = ?').run(id);
-      db.prepare('DELETE FROM command_topics WHERE command_id = ?').run(id);
-      db.prepare('DELETE FROM command_vendors WHERE command_id = ?').run(id);
-      db.prepare('DELETE FROM command_systems WHERE command_id = ?').run(id);
-      db.prepare('DELETE FROM command_versions WHERE command_id = ?').run(id);
-      db.prepare('DELETE FROM command_environments WHERE command_id = ?').run(id);
-      db.prepare('DELETE FROM command_lines WHERE command_id = ?').run(id);
-      db.prepare('DELETE FROM command_diffs WHERE command_id = ?').run(id); // cascades to command_diff_lines
+      await client.query('DELETE FROM command_tags WHERE command_id = $1', [id]);
+      await client.query('DELETE FROM command_topics WHERE command_id = $1', [id]);
+      await client.query('DELETE FROM command_vendors WHERE command_id = $1', [id]);
+      await client.query('DELETE FROM command_systems WHERE command_id = $1', [id]);
+      await client.query('DELETE FROM command_versions WHERE command_id = $1', [id]);
+      await client.query('DELETE FROM command_environments WHERE command_id = $1', [id]);
+      await client.query('DELETE FROM command_lines WHERE command_id = $1', [id]);
+      await client.query('DELETE FROM command_diffs WHERE command_id = $1', [id]); // cascades to command_diff_lines
 
-      insertChildren(id, req.body);
+      await insertChildren(client, id, req.body);
     });
-    update();
-    logAudit(currentUser, 'update', id, cols.name);
-    res.json(shapeCommand(db.prepare('SELECT * FROM commands WHERE id = ?').get(id)));
+
+    await logAudit(currentUser, 'update', id, cols.name);
+    const row = await findCommand(id);
+    res.json(await shapeCommand(row));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
@@ -786,20 +803,17 @@ app.put('/api/commands/:id', (req, res) => {
 // ════════════════════════════════════════════════
 // DELETE /api/commands/:id
 // ════════════════════════════════════════════════
-app.delete('/api/commands/:id', (req, res) => {
+app.delete('/api/commands/:id', async (req, res) => {
   const id = req.params.id;
-  const found = findCommand(id);
-  if (!found) return res.status(404).json({ error: 'not_found', message: `Command '${id}' not found` });
-  // Sem restrição de dono (mesma decisão do PUT acima) — qualquer usuário
-  // autenticado pode excluir qualquer comando. Fica registrado no audit_log
-  // (ver logAudit()) para haver rastro de quem excluiu o quê.
-  const currentUser = getCurrentUsername(req);
   try {
-    // command_id em user_favorites agora tem FK ON DELETE CASCADE (ver
-    // schema.sql) — apagar o comando já limpa os favoritos sozinho, sem
-    // limpeza manual.
-    db.prepare('DELETE FROM commands WHERE id = ?').run(id);
-    logAudit(currentUser, 'delete', id, found.name);
+    const found = await findCommand(id);
+    if (!found) return res.status(404).json({ error: 'not_found', message: `Command '${id}' not found` });
+    // Sem restrição de dono (mesma decisão do PUT acima).
+    const currentUser = getCurrentUsername(req);
+    // command_id em user_favorites tem FK ON DELETE CASCADE (ver schema.sql)
+    // — apagar o comando já limpa os favoritos sozinho.
+    await pool.query('DELETE FROM commands WHERE id = $1', [id]);
+    await logAudit(currentUser, 'delete', id, found.name);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -808,28 +822,15 @@ app.delete('/api/commands/:id', (req, res) => {
 });
 
 // ════════════════════════════════════════════════
-// Catálogos administráveis — Versão / Ambiente / Tópico
-// Antes eram listas fixas no front-end (VERSION_KEYS/ENV_KEYS/TYPE_KEYS em
-// js/state.js); agora ficam nas tabelas versions/environments/topics
-// (server/schema.sql + seed inicial em server/db.js) e podem ser cadastradas,
-// editadas e excluídas pelo "Modo administrador" (mesmo toggle
-// enableCommandEditing já usado para comandos — ver js/settings.js). Sem
-// autenticação própria além do NTLM de identificação, igual ao resto da API
-// hoje (ver comentário em getCurrentUsername acima).
-//
-// `key` nunca é editável depois de criado (é o valor gravado em
-// command_versions.version / command_environments.environment /
-// command_topics.topic) — só label/cor/ícone/ordem. Exclusão é bloqueada com
-// 409 quando o valor está em uso por pelo menos um comando, ou (só para
-// tópicos) quando é protegido (is_protected=1, ex.: 'environment').
+// Catálogos administráveis — Vendor / Sistema / Versão / Ambiente / Tópico /
+// Parâmetro. `key` nunca é editável depois de criado — só label/cor/ordem.
+// Exclusão é bloqueada com 409 quando o valor está em uso por pelo menos um
+// comando, ou (só para tópicos) quando é protegido (is_protected=1).
 // ════════════════════════════════════════════════
 const CATALOG_KEY_RE = /^[A-Za-z0-9._-]{1,40}$/;
 
 // `key` de Vendor/System/Version/Environment/Topic é sempre gerado no servidor
-// a partir do `label` (slug) — o usuário nunca digita/vê um "ID" separado no
-// admin de catálogo (só o label, aparente na UI). Isso é diferente de
-// Parameters, cujo `key` continua digitado manualmente porque é o próprio
-// token {{key}}/prefixo de busca que o usuário precisa conhecer e usar.
+// a partir do `label` (slug) — o usuário nunca digita/vê um "ID" separado.
 function slugifyCatalogKey(label) {
   let s = String(label == null ? '' : label).trim().toLowerCase()
     .replace(/[^a-z0-9._-]+/g, '-')
@@ -838,45 +839,52 @@ function slugifyCatalogKey(label) {
   if (!s) s = 'item';
   return s.slice(0, 40);
 }
-// Acrescenta -2/-3/... até `existsFn(candidate)` retornar false. `existsFn`
-// recebe a chave candidata e deve checar unicidade no escopo certo (global
-// para vendors/environments/topics/systems; por vendor para versions).
-function uniqueCatalogKey(base, existsFn) {
+// Acrescenta -2/-3/... até `existsFn(candidate)` (async) retornar false.
+async function uniqueCatalogKey(base, existsFn) {
   let candidate = base;
   let n = 2;
-  while (existsFn(candidate)) {
+  while (await existsFn(candidate)) {
     const suffix = '-' + n;
     candidate = base.slice(0, Math.max(1, 40 - suffix.length)) + suffix;
     n++;
   }
   return candidate;
 }
-
-// Conta quantos comandos usam uma versão/ambiente/tópico/vendor/sistema —
-// banco único (ver server/db.js), então é uma contagem simples.
-function countAcrossBothDbs(table, column, key) {
-  return db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${column} = ?`).get(key).n;
+async function keyExists(table, key) {
+  const { rows } = await pool.query(`SELECT 1 FROM ${table} WHERE key = $1`, [key]);
+  return rows.length > 0;
 }
 
-// GET /api/catalogs — os 3 catálogos de uma vez (usado no boot do front-end e
-// para recarregar a UI depois de qualquer criação/edição/exclusão no modal admin).
-app.get('/api/catalogs', (req, res) => {
+// Conta quantos comandos usam uma versão/ambiente/tópico/vendor/sistema.
+// COUNT(*) volta como bigint (string) no driver `pg` — Number() normaliza.
+async function countUsage(table, column, key) {
+  const { rows } = await pool.query(`SELECT COUNT(*) AS n FROM ${table} WHERE ${column} = $1`, [key]);
+  return Number(rows[0].n);
+}
+
+// GET /api/catalogs — todos os catálogos de uma vez (usado no boot do
+// front-end e para recarregar a UI depois de qualquer criação/edição/exclusão).
+app.get('/api/catalogs', async (req, res) => {
   try {
+    const [vendors, systems, versions, environments, topics, parameters, versionEnvironments, environmentTopics] = await Promise.all([
+      pool.query('SELECT * FROM vendors ORDER BY sort_order, key'),
+      pool.query('SELECT * FROM systems ORDER BY sort_order, key'),
+      pool.query('SELECT * FROM versions ORDER BY sort_order, key'),
+      pool.query('SELECT * FROM environments ORDER BY sort_order, key'),
+      pool.query('SELECT * FROM topics ORDER BY sort_order, key'),
+      pool.query('SELECT * FROM parameters ORDER BY sort_order, key'),
+      pool.query('SELECT version, environment FROM version_environments'),
+      pool.query('SELECT environment, topic FROM environment_topics'),
+    ]);
     res.json({
-      vendors: db.prepare('SELECT * FROM vendors ORDER BY sort_order, key').all(),
-      systems: db.prepare('SELECT * FROM systems ORDER BY sort_order, key').all(),
-      versions: db.prepare('SELECT * FROM versions ORDER BY sort_order, key').all(),
-      environments: db.prepare('SELECT * FROM environments ORDER BY sort_order, key').all(),
-      topics: db.prepare('SELECT * FROM topics ORDER BY sort_order, key').all(),
-      parameters: db.prepare('SELECT * FROM parameters ORDER BY sort_order, key').all(),
-      // Versão ↔ Ambiente e Ambiente ↔ Tópico continuam N:N (ver schema.sql) —
-      // usados pelo front-end para restringir as opções mostradas na cascata
-      // de filtros (js/catalogs.js monta um mapa a partir destas listas
-      // planas). Vendor → Sistema → Versão NÃO usa mais vínculo N:N — agora é
-      // FK direta (systems.vendor / versions.system), já incluída nos objetos
-      // `systems`/`versions` acima.
-      version_environments: db.prepare('SELECT version, environment FROM version_environments').all(),
-      environment_topics: db.prepare('SELECT environment, topic FROM environment_topics').all(),
+      vendors: vendors.rows,
+      systems: systems.rows,
+      versions: versions.rows,
+      environments: environments.rows,
+      topics: topics.rows,
+      parameters: parameters.rows,
+      version_environments: versionEnvironments.rows,
+      environment_topics: environmentTopics.rows,
     });
   } catch (err) {
     console.error(err);
@@ -885,53 +893,55 @@ app.get('/api/catalogs', (req, res) => {
 });
 
 // Substitui (delete+insert) o conjunto de pais vinculados a um item filho —
-// usado pela cascata N:N Versão ↔ Ambiente / Ambiente ↔ Tópico (ver
-// comentário em schema.sql). `parentKeys` vazio/ausente = remove todos os
-// vínculos (item volta a ficar "sem restrição conhecida").
-function replaceScopeLinks(joinTable, childCol, childKey, parentCol, parentKeys) {
-  db.prepare(`DELETE FROM ${joinTable} WHERE ${childCol} = ?`).run(childKey);
-  const ins = db.prepare(`INSERT OR IGNORE INTO ${joinTable} (${childCol}, ${parentCol}) VALUES (?, ?)`);
-  (Array.isArray(parentKeys) ? parentKeys : []).forEach(pk => ins.run(childKey, pk));
+// usado pela cascata N:N Versão ↔ Ambiente / Ambiente ↔ Tópico.
+async function replaceScopeLinks(joinTable, childCol, childKey, parentCol, parentKeys) {
+  await pool.query(`DELETE FROM ${joinTable} WHERE ${childCol} = $1`, [childKey]);
+  for (const pk of (Array.isArray(parentKeys) ? parentKeys : [])) {
+    await pool.query(`INSERT INTO ${joinTable} (${childCol}, ${parentCol}) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [childKey, pk]);
+  }
 }
 
 // ── Fabricantes (Vendor) ──────────────────────────
-app.post('/api/vendors', (req, res) => {
+app.post('/api/vendors', async (req, res) => {
   const { label, color } = req.body || {};
   if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
-  const key = uniqueCatalogKey(slugifyCatalogKey(label), k => !!db.prepare('SELECT 1 FROM vendors WHERE key = ?').get(k));
   try {
-    const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM vendors').get().m;
-    db.prepare('INSERT INTO vendors (key, label, color, sort_order) VALUES (?, ?, ?, ?)').run(key, label, color || '#8B949E', maxOrder + 1);
-    res.status(201).json(db.prepare('SELECT * FROM vendors WHERE key = ?').get(key));
+    const key = await uniqueCatalogKey(slugifyCatalogKey(label), k => keyExists('vendors', k));
+    const maxRes = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS m FROM vendors');
+    await pool.query('INSERT INTO vendors (key, label, color, sort_order) VALUES ($1, $2, $3, $4)', [key, label, color || '#8B949E', maxRes.rows[0].m + 1]);
+    const { rows } = await pool.query('SELECT * FROM vendors WHERE key = $1', [key]);
+    res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
-app.put('/api/vendors/:key', (req, res) => {
+app.put('/api/vendors/:key', async (req, res) => {
   const key = req.params.key;
-  const existing = db.prepare('SELECT * FROM vendors WHERE key = ?').get(key);
-  if (!existing) return res.status(404).json({ error: 'not_found', message: `Vendor '${key}' not found` });
-  const label = req.body.label != null ? req.body.label : existing.label;
-  const color = req.body.color != null ? req.body.color : existing.color;
-  const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : existing.sort_order;
-  if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
   try {
-    db.prepare('UPDATE vendors SET label = ?, color = ?, sort_order = ? WHERE key = ?').run(label, color, sortOrder, key);
-    res.json(db.prepare('SELECT * FROM vendors WHERE key = ?').get(key));
+    const { rows: existingRows } = await pool.query('SELECT * FROM vendors WHERE key = $1', [key]);
+    const existing = existingRows[0];
+    if (!existing) return res.status(404).json({ error: 'not_found', message: `Vendor '${key}' not found` });
+    const label = req.body.label != null ? req.body.label : existing.label;
+    const color = req.body.color != null ? req.body.color : existing.color;
+    const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : existing.sort_order;
+    if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
+    await pool.query('UPDATE vendors SET label = $1, color = $2, sort_order = $3 WHERE key = $4', [label, color, sortOrder, key]);
+    const { rows } = await pool.query('SELECT * FROM vendors WHERE key = $1', [key]);
+    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
-app.delete('/api/vendors/:key', (req, res) => {
+app.delete('/api/vendors/:key', async (req, res) => {
   const key = req.params.key;
-  const existing = db.prepare('SELECT * FROM vendors WHERE key = ?').get(key);
-  if (!existing) return res.status(404).json({ error: 'not_found', message: `Vendor '${key}' not found` });
-  const count = countAcrossBothDbs('command_vendors', 'vendor', key);
-  if (count > 0) return res.status(409).json({ error: 'in_use', message: `Vendor '${key}' is used by ${count} command(s)`, count });
   try {
-    db.prepare('DELETE FROM vendors WHERE key = ?').run(key); // cascades systems (and, por sua vez, versions)
+    const { rows: existingRows } = await pool.query('SELECT * FROM vendors WHERE key = $1', [key]);
+    if (!existingRows.length) return res.status(404).json({ error: 'not_found', message: `Vendor '${key}' not found` });
+    const count = await countUsage('command_vendors', 'vendor', key);
+    if (count > 0) return res.status(409).json({ error: 'in_use', message: `Vendor '${key}' is used by ${count} command(s)`, count });
+    await pool.query('DELETE FROM vendors WHERE key = $1', [key]); // cascades systems (and, por sua vez, versions)
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -940,54 +950,54 @@ app.delete('/api/vendors/:key', (req, res) => {
 });
 
 // ── Sistemas ───────────────────────────────────────
-// Hierarquia estrita (ver comentário em schema.sql): um Sistema pertence a
-// exatamente um Vendor — `vendor` é obrigatório em toda criação/edição (não é
-// mais um vínculo N:N opcional como o antigo vendor_os).
-app.post('/api/systems', (req, res) => {
+// Hierarquia estrita: um Sistema pertence a exatamente um Vendor.
+app.post('/api/systems', async (req, res) => {
   const { label, color, vendor } = req.body || {};
   if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
   if (!vendor || typeof vendor !== 'string') return res.status(400).json({ error: 'validation_error', message: '"vendor" is required' });
-  if (!db.prepare('SELECT 1 FROM vendors WHERE key = ?').get(vendor)) return res.status(400).json({ error: 'validation_error', message: `Vendor '${vendor}' not found` });
-  const key = uniqueCatalogKey(slugifyCatalogKey(label), k => !!db.prepare('SELECT 1 FROM systems WHERE key = ?').get(k));
   try {
-    const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM systems').get().m;
-    db.prepare('INSERT INTO systems (key, vendor, label, color, sort_order) VALUES (?, ?, ?, ?, ?)').run(key, vendor, label, color || '#8B949E', maxOrder + 1);
-    res.status(201).json(db.prepare('SELECT * FROM systems WHERE key = ?').get(key));
+    if (!(await keyExists('vendors', vendor))) return res.status(400).json({ error: 'validation_error', message: `Vendor '${vendor}' not found` });
+    const key = await uniqueCatalogKey(slugifyCatalogKey(label), k => keyExists('systems', k));
+    const maxRes = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS m FROM systems');
+    await pool.query('INSERT INTO systems (key, vendor, label, color, sort_order) VALUES ($1, $2, $3, $4, $5)', [key, vendor, label, color || '#8B949E', maxRes.rows[0].m + 1]);
+    const { rows } = await pool.query('SELECT * FROM systems WHERE key = $1', [key]);
+    res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
-app.put('/api/systems/:key', (req, res) => {
+app.put('/api/systems/:key', async (req, res) => {
   const key = req.params.key;
-  const existing = db.prepare('SELECT * FROM systems WHERE key = ?').get(key);
-  if (!existing) return res.status(404).json({ error: 'not_found', message: `System '${key}' not found` });
-  const label = req.body.label != null ? req.body.label : existing.label;
-  const color = req.body.color != null ? req.body.color : existing.color;
-  const vendor = req.body.vendor != null ? req.body.vendor : existing.vendor;
-  const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : existing.sort_order;
-  if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
-  if (!vendor || typeof vendor !== 'string') return res.status(400).json({ error: 'validation_error', message: '"vendor" is required' });
-  if (!db.prepare('SELECT 1 FROM vendors WHERE key = ?').get(vendor)) return res.status(400).json({ error: 'validation_error', message: `Vendor '${vendor}' not found` });
   try {
-    db.prepare('UPDATE systems SET label = ?, color = ?, vendor = ?, sort_order = ? WHERE key = ?').run(label, color, vendor, sortOrder, key);
-    // Reatribuir o vendor do Sistema mantém versions.vendor em sincronia (coluna
-    // denormalizada usada só para o UNIQUE(vendor, key) — ver schema.sql).
-    db.prepare('UPDATE versions SET vendor = ? WHERE system = ?').run(vendor, key);
-    res.json(db.prepare('SELECT * FROM systems WHERE key = ?').get(key));
+    const { rows: existingRows } = await pool.query('SELECT * FROM systems WHERE key = $1', [key]);
+    const existing = existingRows[0];
+    if (!existing) return res.status(404).json({ error: 'not_found', message: `System '${key}' not found` });
+    const label = req.body.label != null ? req.body.label : existing.label;
+    const color = req.body.color != null ? req.body.color : existing.color;
+    const vendor = req.body.vendor != null ? req.body.vendor : existing.vendor;
+    const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : existing.sort_order;
+    if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
+    if (!vendor || typeof vendor !== 'string') return res.status(400).json({ error: 'validation_error', message: '"vendor" is required' });
+    if (!(await keyExists('vendors', vendor))) return res.status(400).json({ error: 'validation_error', message: `Vendor '${vendor}' not found` });
+    await pool.query('UPDATE systems SET label = $1, color = $2, vendor = $3, sort_order = $4 WHERE key = $5', [label, color, vendor, sortOrder, key]);
+    // Reatribuir o vendor do Sistema mantém versions.vendor em sincronia.
+    await pool.query('UPDATE versions SET vendor = $1 WHERE system = $2', [vendor, key]);
+    const { rows } = await pool.query('SELECT * FROM systems WHERE key = $1', [key]);
+    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
-app.delete('/api/systems/:key', (req, res) => {
+app.delete('/api/systems/:key', async (req, res) => {
   const key = req.params.key;
-  const existing = db.prepare('SELECT * FROM systems WHERE key = ?').get(key);
-  if (!existing) return res.status(404).json({ error: 'not_found', message: `System '${key}' not found` });
-  const count = countAcrossBothDbs('command_systems', 'system', key);
-  if (count > 0) return res.status(409).json({ error: 'in_use', message: `System '${key}' is used by ${count} command(s)`, count });
   try {
-    db.prepare('DELETE FROM systems WHERE key = ?').run(key); // cascades versions (system FK)
+    const { rows: existingRows } = await pool.query('SELECT * FROM systems WHERE key = $1', [key]);
+    if (!existingRows.length) return res.status(404).json({ error: 'not_found', message: `System '${key}' not found` });
+    const count = await countUsage('command_systems', 'system', key);
+    if (count > 0) return res.status(409).json({ error: 'in_use', message: `System '${key}' is used by ${count} command(s)`, count });
+    await pool.query('DELETE FROM systems WHERE key = $1', [key]); // cascades versions (system FK)
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -995,28 +1005,26 @@ app.delete('/api/systems/:key', (req, res) => {
   }
 });
 
-// ── Vínculos N:N Versão ↔ Ambiente / Ambiente ↔ Tópico — usados pela tela de
-// administração de catálogo para curar a cascata sem duplicar cadastro. Cada
-// endpoint substitui o conjunto completo de pais do item indicado. (Vendor →
-// Sistema → Versão não usa mais vínculo N:N — a FK direta é gravada em
-// POST/PUT /api/systems e /api/versions.) ──
-app.put('/api/environments/:key/versions', (req, res) => {
+// ── Vínculos N:N Versão ↔ Ambiente / Ambiente ↔ Tópico ──
+app.put('/api/environments/:key/versions', async (req, res) => {
   const key = req.params.key;
-  if (!db.prepare('SELECT 1 FROM environments WHERE key = ?').get(key)) return res.status(404).json({ error: 'not_found', message: `Environment '${key}' not found` });
   try {
-    replaceScopeLinks('version_environments', 'environment', key, 'version', req.body && req.body.versions);
-    res.json({ environment: key, versions: db.prepare('SELECT version FROM version_environments WHERE environment = ?').all(key).map(r => r.version) });
+    if (!(await keyExists('environments', key))) return res.status(404).json({ error: 'not_found', message: `Environment '${key}' not found` });
+    await replaceScopeLinks('version_environments', 'environment', key, 'version', req.body && req.body.versions);
+    const { rows } = await pool.query('SELECT version FROM version_environments WHERE environment = $1', [key]);
+    res.json({ environment: key, versions: rows.map(r => r.version) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
-app.put('/api/topics/:key/environments', (req, res) => {
+app.put('/api/topics/:key/environments', async (req, res) => {
   const key = req.params.key;
-  if (!db.prepare('SELECT 1 FROM topics WHERE key = ?').get(key)) return res.status(404).json({ error: 'not_found', message: `Topic '${key}' not found` });
   try {
-    replaceScopeLinks('environment_topics', 'topic', key, 'environment', req.body && req.body.environments);
-    res.json({ topic: key, environments: db.prepare('SELECT environment FROM environment_topics WHERE topic = ?').all(key).map(r => r.environment) });
+    if (!(await keyExists('topics', key))) return res.status(404).json({ error: 'not_found', message: `Topic '${key}' not found` });
+    await replaceScopeLinks('environment_topics', 'topic', key, 'environment', req.body && req.body.environments);
+    const { rows } = await pool.query('SELECT environment FROM environment_topics WHERE topic = $1', [key]);
+    res.json({ topic: key, environments: rows.map(r => r.environment) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
@@ -1024,62 +1032,73 @@ app.put('/api/topics/:key/environments', (req, res) => {
 });
 
 // ── Versões ──────────────────────────────────────
-// `key` sozinho não é mais globalmente único (ver comentário em schema.sql) —
-// a chave primária real é composta (system, key). `system` é obrigatório na
-// criação; `vendor` é sempre derivado no servidor a partir do sistema
-// informado (nunca aceito do cliente), o que garante o UNIQUE(vendor, key).
-app.post('/api/versions', (req, res) => {
+// `key` sozinho não é globalmente único — a PK real é composta (system, key).
+app.post('/api/versions', async (req, res) => {
   const { label, color, system } = req.body || {};
   if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
   if (!system || typeof system !== 'string') return res.status(400).json({ error: 'validation_error', message: '"system" is required' });
-  const systemRow = db.prepare('SELECT * FROM systems WHERE key = ?').get(system);
-  if (!systemRow) return res.status(400).json({ error: 'validation_error', message: `System '${system}' not found` });
-  // UNIQUE(vendor, key) — a checagem de unicidade precisa cobrir todo o vendor,
-  // não só o system informado (ver comentário em schema.sql).
-  const key = uniqueCatalogKey(slugifyCatalogKey(label), k => !!db.prepare('SELECT 1 FROM versions WHERE vendor = ? AND key = ?').get(systemRow.vendor, k));
   try {
-    const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM versions').get().m;
-    db.prepare('INSERT INTO versions (system, vendor, key, label, color, sort_order) VALUES (?, ?, ?, ?, ?, ?)').run(system, systemRow.vendor, key, label, color || '#8B949E', maxOrder + 1);
-    res.status(201).json(db.prepare('SELECT * FROM versions WHERE system = ? AND key = ?').get(system, key));
+    const { rows: systemRows } = await pool.query('SELECT * FROM systems WHERE key = $1', [system]);
+    const systemRow = systemRows[0];
+    if (!systemRow) return res.status(400).json({ error: 'validation_error', message: `System '${system}' not found` });
+    // UNIQUE(vendor, key) — a checagem de unicidade precisa cobrir todo o vendor.
+    const key = await uniqueCatalogKey(slugifyCatalogKey(label), async k => {
+      const { rows } = await pool.query('SELECT 1 FROM versions WHERE vendor = $1 AND key = $2', [systemRow.vendor, k]);
+      return rows.length > 0;
+    });
+    const maxRes = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS m FROM versions');
+    await pool.query(
+      'INSERT INTO versions (system, vendor, key, label, color, sort_order) VALUES ($1, $2, $3, $4, $5, $6)',
+      [system, systemRow.vendor, key, label, color || '#8B949E', maxRes.rows[0].m + 1]
+    );
+    const { rows } = await pool.query('SELECT * FROM versions WHERE system = $1 AND key = $2', [system, key]);
+    res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
-app.put('/api/versions/:system/:key', (req, res) => {
+app.put('/api/versions/:system/:key', async (req, res) => {
   const { system, key } = req.params;
-  const existing = db.prepare('SELECT * FROM versions WHERE system = ? AND key = ?').get(system, key);
-  if (!existing) return res.status(404).json({ error: 'not_found', message: `Version '${key}' not found under system '${system}'` });
-  const label = req.body.label != null ? req.body.label : existing.label;
-  const color = req.body.color != null ? req.body.color : existing.color;
-  const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : existing.sort_order;
-  const newSystem = req.body.system != null ? req.body.system : system;
-  if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
-  let newVendor = existing.vendor;
-  if (newSystem !== system) {
-    const systemRow = db.prepare('SELECT * FROM systems WHERE key = ?').get(newSystem);
-    if (!systemRow) return res.status(400).json({ error: 'validation_error', message: `System '${newSystem}' not found` });
-    newVendor = systemRow.vendor;
-    if (db.prepare('SELECT 1 FROM versions WHERE system = ? AND key = ?').get(newSystem, key)) return res.status(409).json({ error: 'conflict', message: `Version '${key}' already exists under system '${newSystem}'` });
-    if (db.prepare('SELECT 1 FROM versions WHERE vendor = ? AND key = ? AND system != ?').get(newVendor, key, system)) return res.status(409).json({ error: 'conflict', message: `Version '${key}' already exists under another system of vendor '${newVendor}'` });
-  }
   try {
-    db.prepare('UPDATE versions SET label = ?, color = ?, sort_order = ?, system = ?, vendor = ? WHERE system = ? AND key = ?')
-      .run(label, color, sortOrder, newSystem, newVendor, system, key);
-    res.json(db.prepare('SELECT * FROM versions WHERE system = ? AND key = ?').get(newSystem, key));
+    const { rows: existingRows } = await pool.query('SELECT * FROM versions WHERE system = $1 AND key = $2', [system, key]);
+    const existing = existingRows[0];
+    if (!existing) return res.status(404).json({ error: 'not_found', message: `Version '${key}' not found under system '${system}'` });
+    const label = req.body.label != null ? req.body.label : existing.label;
+    const color = req.body.color != null ? req.body.color : existing.color;
+    const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : existing.sort_order;
+    const newSystem = req.body.system != null ? req.body.system : system;
+    if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
+    let newVendor = existing.vendor;
+    if (newSystem !== system) {
+      const { rows: systemRows } = await pool.query('SELECT * FROM systems WHERE key = $1', [newSystem]);
+      const systemRow = systemRows[0];
+      if (!systemRow) return res.status(400).json({ error: 'validation_error', message: `System '${newSystem}' not found` });
+      newVendor = systemRow.vendor;
+      const { rows: dupRows1 } = await pool.query('SELECT 1 FROM versions WHERE system = $1 AND key = $2', [newSystem, key]);
+      if (dupRows1.length) return res.status(409).json({ error: 'conflict', message: `Version '${key}' already exists under system '${newSystem}'` });
+      const { rows: dupRows2 } = await pool.query('SELECT 1 FROM versions WHERE vendor = $1 AND key = $2 AND system != $3', [newVendor, key, system]);
+      if (dupRows2.length) return res.status(409).json({ error: 'conflict', message: `Version '${key}' already exists under another system of vendor '${newVendor}'` });
+    }
+    await pool.query(
+      'UPDATE versions SET label = $1, color = $2, sort_order = $3, system = $4, vendor = $5 WHERE system = $6 AND key = $7',
+      [label, color, sortOrder, newSystem, newVendor, system, key]
+    );
+    const { rows } = await pool.query('SELECT * FROM versions WHERE system = $1 AND key = $2', [newSystem, key]);
+    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
-app.delete('/api/versions/:system/:key', (req, res) => {
+app.delete('/api/versions/:system/:key', async (req, res) => {
   const { system, key } = req.params;
-  const existing = db.prepare('SELECT * FROM versions WHERE system = ? AND key = ?').get(system, key);
-  if (!existing) return res.status(404).json({ error: 'not_found', message: `Version '${key}' not found under system '${system}'` });
-  const count = countAcrossBothDbs('command_versions', 'version', key);
-  if (count > 0) return res.status(409).json({ error: 'in_use', message: `Version '${key}' is used by ${count} command(s)`, count });
   try {
-    db.prepare('DELETE FROM versions WHERE system = ? AND key = ?').run(system, key);
+    const { rows: existingRows } = await pool.query('SELECT * FROM versions WHERE system = $1 AND key = $2', [system, key]);
+    if (!existingRows.length) return res.status(404).json({ error: 'not_found', message: `Version '${key}' not found under system '${system}'` });
+    const count = await countUsage('command_versions', 'version', key);
+    if (count > 0) return res.status(409).json({ error: 'in_use', message: `Version '${key}' is used by ${count} command(s)`, count });
+    await pool.query('DELETE FROM versions WHERE system = $1 AND key = $2', [system, key]);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -1088,43 +1107,46 @@ app.delete('/api/versions/:system/:key', (req, res) => {
 });
 
 // ── Ambientes ────────────────────────────────────
-app.post('/api/environments', (req, res) => {
+app.post('/api/environments', async (req, res) => {
   const { label, color } = req.body || {};
   if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
-  const key = uniqueCatalogKey(slugifyCatalogKey(label), k => !!db.prepare('SELECT 1 FROM environments WHERE key = ?').get(k));
   try {
-    const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM environments').get().m;
-    db.prepare('INSERT INTO environments (key, label, color, sort_order) VALUES (?, ?, ?, ?)').run(key, label, color || '#8B949E', maxOrder + 1);
-    res.status(201).json(db.prepare('SELECT * FROM environments WHERE key = ?').get(key));
+    const key = await uniqueCatalogKey(slugifyCatalogKey(label), k => keyExists('environments', k));
+    const maxRes = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS m FROM environments');
+    await pool.query('INSERT INTO environments (key, label, color, sort_order) VALUES ($1, $2, $3, $4)', [key, label, color || '#8B949E', maxRes.rows[0].m + 1]);
+    const { rows } = await pool.query('SELECT * FROM environments WHERE key = $1', [key]);
+    res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
-app.put('/api/environments/:key', (req, res) => {
+app.put('/api/environments/:key', async (req, res) => {
   const key = req.params.key;
-  const existing = db.prepare('SELECT * FROM environments WHERE key = ?').get(key);
-  if (!existing) return res.status(404).json({ error: 'not_found', message: `Environment '${key}' not found` });
-  const label = req.body.label != null ? req.body.label : existing.label;
-  const color = req.body.color != null ? req.body.color : existing.color;
-  const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : existing.sort_order;
-  if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
   try {
-    db.prepare('UPDATE environments SET label = ?, color = ?, sort_order = ? WHERE key = ?').run(label, color, sortOrder, key);
-    res.json(db.prepare('SELECT * FROM environments WHERE key = ?').get(key));
+    const { rows: existingRows } = await pool.query('SELECT * FROM environments WHERE key = $1', [key]);
+    const existing = existingRows[0];
+    if (!existing) return res.status(404).json({ error: 'not_found', message: `Environment '${key}' not found` });
+    const label = req.body.label != null ? req.body.label : existing.label;
+    const color = req.body.color != null ? req.body.color : existing.color;
+    const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : existing.sort_order;
+    if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
+    await pool.query('UPDATE environments SET label = $1, color = $2, sort_order = $3 WHERE key = $4', [label, color, sortOrder, key]);
+    const { rows } = await pool.query('SELECT * FROM environments WHERE key = $1', [key]);
+    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
-app.delete('/api/environments/:key', (req, res) => {
+app.delete('/api/environments/:key', async (req, res) => {
   const key = req.params.key;
-  const existing = db.prepare('SELECT * FROM environments WHERE key = ?').get(key);
-  if (!existing) return res.status(404).json({ error: 'not_found', message: `Environment '${key}' not found` });
-  const count = countAcrossBothDbs('command_environments', 'environment', key);
-  if (count > 0) return res.status(409).json({ error: 'in_use', message: `Environment '${key}' is used by ${count} command(s)`, count });
   try {
-    db.prepare('DELETE FROM environments WHERE key = ?').run(key);
+    const { rows: existingRows } = await pool.query('SELECT * FROM environments WHERE key = $1', [key]);
+    if (!existingRows.length) return res.status(404).json({ error: 'not_found', message: `Environment '${key}' not found` });
+    const count = await countUsage('command_environments', 'environment', key);
+    if (count > 0) return res.status(409).json({ error: 'in_use', message: `Environment '${key}' is used by ${count} command(s)`, count });
+    await pool.query('DELETE FROM environments WHERE key = $1', [key]);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -1133,52 +1155,52 @@ app.delete('/api/environments/:key', (req, res) => {
 });
 
 // ── Tópicos ──────────────────────────────────────
-// Mesmos campos de Environments (label/color) — sem section_title (removido,
-// ver comentário em schema.sql). Única diferença real é is_protected.
-app.post('/api/topics', (req, res) => {
+app.post('/api/topics', async (req, res) => {
   const { label, color } = req.body || {};
   if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
-  const key = uniqueCatalogKey(slugifyCatalogKey(label), k => !!db.prepare('SELECT 1 FROM topics WHERE key = ?').get(k));
   try {
-    const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM topics WHERE is_protected = 0').get().m;
-    db.prepare(
-      `INSERT INTO topics (key, label, color, sort_order, is_protected)
-       VALUES (?, ?, ?, ?, 0)`
-    ).run(key, label, color || '#8B949E', maxOrder + 1);
-    res.status(201).json(db.prepare('SELECT * FROM topics WHERE key = ?').get(key));
+    const key = await uniqueCatalogKey(slugifyCatalogKey(label), k => keyExists('topics', k));
+    const maxRes = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS m FROM topics WHERE is_protected = 0');
+    await pool.query(
+      `INSERT INTO topics (key, label, color, sort_order, is_protected) VALUES ($1, $2, $3, $4, 0)`,
+      [key, label, color || '#8B949E', maxRes.rows[0].m + 1]
+    );
+    const { rows } = await pool.query('SELECT * FROM topics WHERE key = $1', [key]);
+    res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
-app.put('/api/topics/:key', (req, res) => {
+app.put('/api/topics/:key', async (req, res) => {
   const key = req.params.key;
-  const existing = db.prepare('SELECT * FROM topics WHERE key = ?').get(key);
-  if (!existing) return res.status(404).json({ error: 'not_found', message: `Topic '${key}' not found` });
-  const label = req.body.label != null ? req.body.label : existing.label;
-  const color = req.body.color != null ? req.body.color : existing.color;
-  const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : existing.sort_order;
-  if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
-  // is_protected nunca é alterável por esta API (só o seed inicial define 'environment' como protegido).
   try {
-    db.prepare(
-      'UPDATE topics SET label = ?, color = ?, sort_order = ? WHERE key = ?'
-    ).run(label, color, sortOrder, key);
-    res.json(db.prepare('SELECT * FROM topics WHERE key = ?').get(key));
+    const { rows: existingRows } = await pool.query('SELECT * FROM topics WHERE key = $1', [key]);
+    const existing = existingRows[0];
+    if (!existing) return res.status(404).json({ error: 'not_found', message: `Topic '${key}' not found` });
+    const label = req.body.label != null ? req.body.label : existing.label;
+    const color = req.body.color != null ? req.body.color : existing.color;
+    const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : existing.sort_order;
+    if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
+    // is_protected nunca é alterável por esta API.
+    await pool.query('UPDATE topics SET label = $1, color = $2, sort_order = $3 WHERE key = $4', [label, color, sortOrder, key]);
+    const { rows } = await pool.query('SELECT * FROM topics WHERE key = $1', [key]);
+    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
-app.delete('/api/topics/:key', (req, res) => {
+app.delete('/api/topics/:key', async (req, res) => {
   const key = req.params.key;
-  const existing = db.prepare('SELECT * FROM topics WHERE key = ?').get(key);
-  if (!existing) return res.status(404).json({ error: 'not_found', message: `Topic '${key}' not found` });
-  if (existing.is_protected) return res.status(409).json({ error: 'protected', message: `Topic '${key}' is a protected system topic and cannot be deleted` });
-  const count = countAcrossBothDbs('command_topics', 'topic', key);
-  if (count > 0) return res.status(409).json({ error: 'in_use', message: `Topic '${key}' is used by ${count} command(s)`, count });
   try {
-    db.prepare('DELETE FROM topics WHERE key = ?').run(key);
+    const { rows: existingRows } = await pool.query('SELECT * FROM topics WHERE key = $1', [key]);
+    const existing = existingRows[0];
+    if (!existing) return res.status(404).json({ error: 'not_found', message: `Topic '${key}' not found` });
+    if (existing.is_protected) return res.status(409).json({ error: 'protected', message: `Topic '${key}' is a protected system topic and cannot be deleted` });
+    const count = await countUsage('command_topics', 'topic', key);
+    if (count > 0) return res.status(409).json({ error: 'in_use', message: `Topic '${key}' is used by ${count} command(s)`, count });
+    await pool.query('DELETE FROM topics WHERE key = $1', [key]);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -1190,86 +1212,80 @@ app.delete('/api/topics/:key', (req, res) => {
 // Conta em quantos comandos DISTINTOS o placeholder {{key}} aparece de verdade
 // (raw_template, linhas normais e linhas de diff) — usado para bloquear
 // exclusão de um parâmetro que algum comando ainda referencia no texto.
-function countParameterTemplateUsage(key) {
+async function countParameterTemplateUsage(key) {
   const needle = `{{${key}}}`;
   const usedBy = new Set();
-  db.prepare('SELECT id, raw_template FROM commands').all().forEach(r => {
-    if (r.raw_template && r.raw_template.includes(needle)) usedBy.add(r.id);
-  });
-  db.prepare('SELECT command_id, content FROM command_lines').all().forEach(r => {
-    if (r.content && r.content.includes(needle)) usedBy.add(r.command_id);
-  });
-  db.prepare(
+  const cmds = await pool.query('SELECT id, raw_template FROM commands');
+  cmds.rows.forEach(r => { if (r.raw_template && r.raw_template.includes(needle)) usedBy.add(r.id); });
+  const lines = await pool.query('SELECT command_id, content FROM command_lines');
+  lines.rows.forEach(r => { if (r.content && r.content.includes(needle)) usedBy.add(r.command_id); });
+  const diffLines = await pool.query(
     `SELECT cd.command_id AS command_id, cdl.content AS content
      FROM command_diff_lines cdl JOIN command_diffs cd ON cd.id = cdl.diff_id`
-  ).all().forEach(r => {
-    if (r.content && r.content.includes(needle)) usedBy.add(r.command_id);
-  });
+  );
+  diffLines.rows.forEach(r => { if (r.content && r.content.includes(needle)) usedBy.add(r.command_id); });
   return usedBy.size;
 }
 // 'src_ip'/'dst_ip' e 'ip'/'port' são lidos DIRETO (não via {{token}}) pela
-// lógica de estado vazio do card (requires_ips/requires_ip_port em commands,
-// hasIPs/hasIpPort em render.js e db-render-engine.js) — excluí-los quebraria
-// essa lógica para todo comando marcado com a respectiva flag, mesmo que
-// nenhum {{src_ip}}/{{ip}} literal apareça no texto. Por isso o bloqueio aqui
-// é independente da busca textual acima.
-function parameterStructuralDependencyCount(key) {
-  if (key === 'src_ip' || key === 'dst_ip') {
-    return db.prepare('SELECT COUNT(*) AS n FROM commands WHERE requires_ips = 1').get().n;
-  }
-  if (key === 'ip' || key === 'port') {
-    return db.prepare('SELECT COUNT(*) AS n FROM commands WHERE requires_ip_port = 1').get().n;
-  }
+// lógica de estado vazio do card (requires_ips/requires_ip_port em commands) —
+// excluí-los quebraria essa lógica para todo comando marcado com a respectiva
+// flag, mesmo que nenhum {{src_ip}}/{{ip}} literal apareça no texto.
+async function parameterStructuralDependencyCount(key) {
+  if (key === 'src_ip' || key === 'dst_ip') return countUsage('commands', 'requires_ips', 1);
+  if (key === 'ip' || key === 'port') return countUsage('commands', 'requires_ip_port', 1);
   return 0;
 }
 
-app.post('/api/parameters', (req, res) => {
+app.post('/api/parameters', async (req, res) => {
   const { key, label, sort_order } = req.body || {};
   if (!key || !CATALOG_KEY_RE.test(key)) return res.status(400).json({ error: 'validation_error', message: '"key" is required (letters, numbers, dot, underscore, hyphen only)' });
   if (!label) return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
-  if (db.prepare('SELECT 1 FROM parameters WHERE key = ?').get(key)) return res.status(409).json({ error: 'conflict', message: `Parameter '${key}' already exists` });
   try {
-    const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM parameters').get().m;
-    const order = Number.isInteger(sort_order) ? sort_order : maxOrder + 1;
-    db.prepare('INSERT INTO parameters (key, label, sort_order) VALUES (?, ?, ?)').run(key, label, order);
-    res.status(201).json(db.prepare('SELECT * FROM parameters WHERE key = ?').get(key));
+    if (await keyExists('parameters', key)) return res.status(409).json({ error: 'conflict', message: `Parameter '${key}' already exists` });
+    const maxRes = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS m FROM parameters');
+    const order = Number.isInteger(sort_order) ? sort_order : maxRes.rows[0].m + 1;
+    await pool.query('INSERT INTO parameters (key, label, sort_order) VALUES ($1, $2, $3)', [key, label, order]);
+    const { rows } = await pool.query('SELECT * FROM parameters WHERE key = $1', [key]);
+    res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
-app.put('/api/parameters/:key', (req, res) => {
+app.put('/api/parameters/:key', async (req, res) => {
   const key = req.params.key;
-  const existing = db.prepare('SELECT * FROM parameters WHERE key = ?').get(key);
-  if (!existing) return res.status(404).json({ error: 'not_found', message: `Parameter '${key}' not found` });
-  const label = req.body.label != null ? req.body.label : existing.label;
-  const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : existing.sort_order;
-  if (!label) return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
-  // `key` nunca é alterável por esta API (ver comentário em schema.sql).
   try {
-    db.prepare('UPDATE parameters SET label = ?, sort_order = ? WHERE key = ?').run(label, sortOrder, key);
-    res.json(db.prepare('SELECT * FROM parameters WHERE key = ?').get(key));
+    const { rows: existingRows } = await pool.query('SELECT * FROM parameters WHERE key = $1', [key]);
+    const existing = existingRows[0];
+    if (!existing) return res.status(404).json({ error: 'not_found', message: `Parameter '${key}' not found` });
+    const label = req.body.label != null ? req.body.label : existing.label;
+    const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : existing.sort_order;
+    if (!label) return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
+    // `key` nunca é alterável por esta API.
+    await pool.query('UPDATE parameters SET label = $1, sort_order = $2 WHERE key = $3', [label, sortOrder, key]);
+    const { rows } = await pool.query('SELECT * FROM parameters WHERE key = $1', [key]);
+    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
-app.delete('/api/parameters/:key', (req, res) => {
+app.delete('/api/parameters/:key', async (req, res) => {
   const key = req.params.key;
-  const existing = db.prepare('SELECT * FROM parameters WHERE key = ?').get(key);
-  if (!existing) return res.status(404).json({ error: 'not_found', message: `Parameter '${key}' not found` });
-  const structCount = parameterStructuralDependencyCount(key);
-  if (structCount > 0) {
-    return res.status(409).json({
-      error: 'structural_dependency',
-      message: `Parameter '${key}' is read directly by ${structCount} command(s)' empty-state logic (requires_ips/requires_ip_port) and cannot be deleted`,
-      count: structCount,
-    });
-  }
-  const usage = countParameterTemplateUsage(key);
-  if (usage > 0) return res.status(409).json({ error: 'in_use', message: `Parameter '${key}' is used by ${usage} command(s)`, count: usage });
   try {
-    db.prepare('DELETE FROM parameters WHERE key = ?').run(key);
+    const { rows: existingRows } = await pool.query('SELECT * FROM parameters WHERE key = $1', [key]);
+    if (!existingRows.length) return res.status(404).json({ error: 'not_found', message: `Parameter '${key}' not found` });
+    const structCount = await parameterStructuralDependencyCount(key);
+    if (structCount > 0) {
+      return res.status(409).json({
+        error: 'structural_dependency',
+        message: `Parameter '${key}' is read directly by ${structCount} command(s)' empty-state logic (requires_ips/requires_ip_port) and cannot be deleted`,
+        count: structCount,
+      });
+    }
+    const usage = await countParameterTemplateUsage(key);
+    if (usage > 0) return res.status(409).json({ error: 'in_use', message: `Parameter '${key}' is used by ${usage} command(s)`, count: usage });
+    await pool.query('DELETE FROM parameters WHERE key = $1', [key]);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -1279,21 +1295,32 @@ app.delete('/api/parameters/:key', (req, res) => {
 
 // ════════════════════════════════════════════════
 // Backup e restauração do banco de dados (menu Configurações → "Backup &
-// Restore" — ver js/backup.js). Os arquivos ficam numa pasta "backup" ao
-// lado do commands.db (server/backup/ por padrão; ou {DB_PATH}/../backup no
-// Docker, já dentro do volume persistente cg-toolbox-data — sobrevive a
-// rebuild/restart). Cada arquivo é uma cópia .db completa e consistente,
-// gerada com Database#backup() do better-sqlite3 (backup "a quente", sem
-// precisar parar o servidor).
+// Restore" — ver js/backup.js). Convertido para usar `pg_dump`/`pg_restore`
+// (CLI do PostgreSQL — precisa estar instalada na imagem do backend, ver
+// Dockerfile: pacote `postgresql-client`) em vez do antigo Database#backup()
+// do better-sqlite3. Os arquivos ficam num volume dedicado (BACKUP_DIR, por
+// padrão /app/backups no Docker — ver docker-compose.yml), fora do container
+// da própria aplicação, então sobrevivem a rebuild/restart.
 //
-// O agendamento (diário/semanal/mensal + horário) é guardado nas MESMAS
-// chaves de /api/global-settings (tabela user_data, username sentinela
-// GLOBAL_SETTINGS_USER) — reaproveita a infra já existente em vez de criar
-// tabela/arquivo novo. Isso também significa que restaurar um backup antigo
-// pode trazer de volta uma configuração de agendamento antiga — aceitável,
-// pois é parte do mesmo "estado do sistema" sendo restaurado.
+// Diferente da versão SQLite antiga, restaurar NÃO precisa derrubar o
+// processo: pg_restore --clean recria as tabelas via uma conexão própria
+// (fora do pool do Node), então basta a resposta HTTP confirmar sucesso — o
+// próprio pool já enxerga os dados novos na próxima query.
+//
+// O agendamento (diário/semanal/mensal + horário) continua guardado nas
+// MESMAS chaves de /api/global-settings (tabela user_data, username
+// sentinela GLOBAL_SETTINGS_USER).
 // ════════════════════════════════════════════════
-const BACKUP_DIR = path.join(path.dirname(DB_PATH), 'backup');
+const BACKUP_DIR = process.env.BACKUP_DIR || path.join(__dirname, 'backup');
+
+function runCli(cmd, args) {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, { maxBuffer: 1024 * 1024 * 64 }, (err, stdout, stderr) => {
+      if (err) { err.stderr = stderr; return reject(err); }
+      resolve({ stdout, stderr });
+    });
+  });
+}
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 
@@ -1303,15 +1330,18 @@ function backupTimestamp(d = new Date()) {
 
 async function performBackup(prefix = 'backup') {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
-  const filename = `${prefix}-${backupTimestamp()}.db`;
-  await db.backup(path.join(BACKUP_DIR, filename));
+  const filename = `${prefix}-${backupTimestamp()}.dump`;
+  const full = path.join(BACKUP_DIR, filename);
+  // Formato "custom" (-F c): comprimido e restaurável com pg_restore
+  // (permite --clean/--if-exists na restauração, ao contrário do -F p).
+  await runCli('pg_dump', ['-d', getConnectionString(), '-F', 'c', '-f', full]);
   return filename;
 }
 
 function listBackupFiles() {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
   return fs.readdirSync(BACKUP_DIR)
-    .filter(f => f.endsWith('.db'))
+    .filter(f => f.endsWith('.dump'))
     .map(f => {
       const st = fs.statSync(path.join(BACKUP_DIR, f));
       return { filename: f, sizeBytes: st.size, createdAt: st.mtime.toISOString() };
@@ -1329,16 +1359,17 @@ function resolveBackupPath(filename) {
   return full;
 }
 
-function readGlobalSetting(key, fallback) {
-  const row = db.prepare('SELECT value FROM user_data WHERE username = ? AND data_key = ?').get(GLOBAL_SETTINGS_USER, key);
-  return row ? row.value : fallback;
+async function readGlobalSetting(key, fallback) {
+  const { rows } = await pool.query('SELECT value FROM user_data WHERE username = $1 AND data_key = $2', [GLOBAL_SETTINGS_USER, key]);
+  return rows.length ? rows[0].value : fallback;
 }
 
-function writeGlobalSetting(key, value) {
-  db.prepare(`
-    INSERT INTO user_data (username, data_key, value, updated_at) VALUES (?, ?, ?, datetime('now'))
-    ON CONFLICT(username, data_key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-  `).run(GLOBAL_SETTINGS_USER, key, String(value));
+async function writeGlobalSetting(key, value) {
+  await pool.query(
+    `INSERT INTO user_data (username, data_key, value, updated_at) VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (username, data_key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
+    [GLOBAL_SETTINGS_USER, key, String(value)]
+  );
 }
 
 app.get('/api/backups', (req, res) => {
@@ -1356,7 +1387,7 @@ app.post('/api/backups', async (req, res) => {
     res.status(201).json({ filename });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'internal_error', message: err.message });
+    res.status(500).json({ error: 'internal_error', message: err.stderr || err.message });
   }
 });
 
@@ -1380,33 +1411,27 @@ app.delete('/api/backups/:filename', (req, res) => {
 
 // Restaura um backup existente. Por segurança, tira uma foto do banco ATUAL
 // antes de sobrescrever (prefixo "pre-restore-"), para permitir desfazer.
-// Depois de trocar o arquivo, o processo encerra de propósito — o systemd
-// (ou o "restart: unless-stopped" do Docker) sobe o serviço de novo sozinho,
-// já lendo o arquivo restaurado (evita ter que "hot-swap" a conexão
-// better-sqlite3 em uso pelo resto deste arquivo).
 app.post('/api/backups/:filename/restore', async (req, res) => {
   const full = resolveBackupPath(req.params.filename);
   if (!full) return res.status(404).json({ error: 'not_found' });
   try {
     await performBackup('pre-restore');
-    db.close();
-    fs.copyFileSync(full, DB_PATH);
-    res.json({ ok: true, message: 'Restore concluído. O serviço vai reiniciar em instantes — recarregue a página em alguns segundos.' });
-    setTimeout(() => process.exit(0), 400);
+    await runCli('pg_restore', ['--clean', '--if-exists', '--no-owner', '-d', getConnectionString(), full]);
+    res.json({ ok: true, message: 'Restore complete. Reload the page to see the restored data.' });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'internal_error', message: err.message });
+    res.status(500).json({ error: 'internal_error', message: err.stderr || err.message });
   }
 });
 
-app.get('/api/backup-schedule', (req, res) => {
+app.get('/api/backup-schedule', async (req, res) => {
   try {
     res.json({
-      enabled: readGlobalSetting('backupScheduleEnabled', '0') === '1',
-      frequency: readGlobalSetting('backupScheduleFrequency', 'daily'),
-      weeklyDays: (readGlobalSetting('backupScheduleWeeklyDays', '') || '').split(',').map(s => s.trim()).filter(Boolean).map(Number),
-      monthlyDay: parseInt(readGlobalSetting('backupScheduleMonthlyDay', '1'), 10) || 1,
-      time: readGlobalSetting('backupScheduleTime', '02:00'),
+      enabled: (await readGlobalSetting('backupScheduleEnabled', '0')) === '1',
+      frequency: await readGlobalSetting('backupScheduleFrequency', 'daily'),
+      weeklyDays: ((await readGlobalSetting('backupScheduleWeeklyDays', '')) || '').split(',').map(s => s.trim()).filter(Boolean).map(Number),
+      monthlyDay: parseInt(await readGlobalSetting('backupScheduleMonthlyDay', '1'), 10) || 1,
+      time: await readGlobalSetting('backupScheduleTime', '02:00'),
     });
   } catch (err) {
     console.error(err);
@@ -1414,18 +1439,18 @@ app.get('/api/backup-schedule', (req, res) => {
   }
 });
 
-app.put('/api/backup-schedule', (req, res) => {
+app.put('/api/backup-schedule', async (req, res) => {
   try {
     const body = req.body || {};
     const frequency = ['daily', 'weekly', 'monthly'].includes(body.frequency) ? body.frequency : 'daily';
     const weeklyDays = Array.isArray(body.weeklyDays) ? body.weeklyDays.map(Number).filter(n => n >= 0 && n <= 6) : [];
     const monthlyDay = Math.min(31, Math.max(1, parseInt(body.monthlyDay, 10) || 1));
     const time = /^\d{2}:\d{2}$/.test(body.time) ? body.time : '02:00';
-    writeGlobalSetting('backupScheduleEnabled', body.enabled ? '1' : '0');
-    writeGlobalSetting('backupScheduleFrequency', frequency);
-    writeGlobalSetting('backupScheduleWeeklyDays', weeklyDays.join(','));
-    writeGlobalSetting('backupScheduleMonthlyDay', String(monthlyDay));
-    writeGlobalSetting('backupScheduleTime', time);
+    await writeGlobalSetting('backupScheduleEnabled', body.enabled ? '1' : '0');
+    await writeGlobalSetting('backupScheduleFrequency', frequency);
+    await writeGlobalSetting('backupScheduleWeeklyDays', weeklyDays.join(','));
+    await writeGlobalSetting('backupScheduleMonthlyDay', String(monthlyDay));
+    await writeGlobalSetting('backupScheduleTime', time);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -1433,153 +1458,53 @@ app.put('/api/backup-schedule', (req, res) => {
   }
 });
 
-// ════════════════════════════════════════════════
-// UPDATE CHECK / APPLY — só repassam pro serviço companion "updater" (ver
-// UPDATER_URL acima e updater/server.js). Este processo nunca roda git nem
-// docker diretamente. Timeout curto no check (é só git fetch+rev-parse);
-// timeout maior não faz sentido no apply porque a resposta do updater
-// chega antes do rebuild terminar (ver updater/server.js — responde 202 e
-// continua em background), então aqui só repassamos essa resposta rápida.
-// ════════════════════════════════════════════════
-async function callUpdater(path, options) {
-  if (!UPDATER_URL) {
-    const err = new Error('not_configured');
-    err.notConfigured = true;
-    throw err;
-  }
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
-  try {
-    const res = await fetch(`${UPDATER_URL}${path}`, {
-      ...options,
-      headers: { ...(options && options.headers), 'X-Updater-Token': UPDATER_TOKEN },
-      signal: controller.signal,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const err = new Error(data.message || `updater responded ${res.status}`);
-      err.status = res.status;
-      throw err;
-    }
-    return data;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-app.get('/api/system/update-check', async (req, res) => {
-  try {
-    const data = await callUpdater('/status', { method: 'GET' });
-    res.json(data);
-  } catch (err) {
-    if (err.notConfigured) return res.status(501).json({ error: 'not_configured', message: 'Update checking isn\'t available in this installation.' });
-    console.error('update-check failed:', err);
-    res.status(502).json({ error: 'updater_unreachable', message: 'Could not reach the updater service. Check that it is running (docker compose ps).' });
-  }
-});
-
-app.post('/api/system/update-apply', async (req, res) => {
-  try {
-    const data = await callUpdater('/apply', { method: 'POST' });
-    res.status(202).json(data);
-  } catch (err) {
-    if (err.notConfigured) return res.status(501).json({ error: 'not_configured', message: 'Updating isn\'t available in this installation.' });
-    console.error('update-apply failed:', err);
-    res.status(502).json({ error: 'updater_unreachable', message: 'Could not reach the updater service. Check that it is running (docker compose ps).' });
-  }
-});
-
 // Checagem a cada minuto — dispara o backup automático quando o horário
-// configurado bate com o horário atual, respeitando a frequência (diário
-// sempre; semanal só nos dias da semana marcados — 0=domingo..6=sábado;
-// mensal só no dia do mês configurado, com ajuste para meses mais curtos,
-// ex.: dia 31 configurado roda no último dia de fevereiro/abril/etc.).
+// configurado bate com o horário atual, respeitando a frequência.
 // backupScheduleLastRunDate evita rodar mais de uma vez no mesmo dia.
 function checkScheduledBackup() {
-  try {
-    if (readGlobalSetting('backupScheduleEnabled', '0') !== '1') return;
-    const time = readGlobalSetting('backupScheduleTime', '02:00');
-    const now = new Date();
-    if (`${pad2(now.getHours())}:${pad2(now.getMinutes())}` !== time) return;
+  (async () => {
+    try {
+      if ((await readGlobalSetting('backupScheduleEnabled', '0')) !== '1') return;
+      const time = await readGlobalSetting('backupScheduleTime', '02:00');
+      const now = new Date();
+      if (`${pad2(now.getHours())}:${pad2(now.getMinutes())}` !== time) return;
 
-    const todayKey = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
-    if (readGlobalSetting('backupScheduleLastRunDate', '') === todayKey) return;
+      const todayKey = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+      if ((await readGlobalSetting('backupScheduleLastRunDate', '')) === todayKey) return;
 
-    const frequency = readGlobalSetting('backupScheduleFrequency', 'daily');
-    if (frequency === 'weekly') {
-      const days = (readGlobalSetting('backupScheduleWeeklyDays', '') || '').split(',').map(s => s.trim()).filter(Boolean).map(Number);
-      if (!days.includes(now.getDay())) return;
-    } else if (frequency === 'monthly') {
-      const configuredDay = parseInt(readGlobalSetting('backupScheduleMonthlyDay', '1'), 10) || 1;
-      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      if (now.getDate() !== Math.min(configuredDay, lastDayOfMonth)) return;
+      const frequency = await readGlobalSetting('backupScheduleFrequency', 'daily');
+      if (frequency === 'weekly') {
+        const days = ((await readGlobalSetting('backupScheduleWeeklyDays', '')) || '').split(',').map(s => s.trim()).filter(Boolean).map(Number);
+        if (!days.includes(now.getDay())) return;
+      } else if (frequency === 'monthly') {
+        const configuredDay = parseInt(await readGlobalSetting('backupScheduleMonthlyDay', '1'), 10) || 1;
+        const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        if (now.getDate() !== Math.min(configuredDay, lastDayOfMonth)) return;
+      }
+
+      const filename = await performBackup('scheduled');
+      await writeGlobalSetting('backupScheduleLastRunDate', todayKey);
+      console.log(`[backup] Backup agendado criado: ${filename}`);
+    } catch (err) {
+      console.error('[backup] Erro ao checar agendamento de backup:', err);
     }
-
-    performBackup('scheduled')
-      .then(filename => {
-        writeGlobalSetting('backupScheduleLastRunDate', todayKey);
-        console.log(`[backup] Backup agendado criado: ${filename}`);
-      })
-      .catch(err => console.error('[backup] Falha ao criar backup agendado:', err));
-  } catch (err) {
-    console.error('[backup] Erro ao checar agendamento de backup:', err);
-  }
+  })();
 }
 setInterval(checkScheduledBackup, 60 * 1000);
 checkScheduledBackup();
 
-// Loga e derruba SÓ esse listener em caso de erro de bind (porta ocupada,
-// ou sem permissão — ex.: tentar abrir a porta 443 dentro de um container
-// Docker rodando como usuário não-root, onde portas <1024 exigem root/
-// CAP_NET_BIND_SERVICE). Sem isso, um erro de 'listen' não tratado derruba
-// o processo inteiro (Node relança como excessão não capturada), tirando
-// do ar até a porta que tinha dado bind certo.
-function onListenError(port, label) {
-  return err => {
-    if (err.code === 'EADDRINUSE') {
-      console.error(`Erro: a porta ${port} já está em uso por outro processo — ${label} não vai subir nesta porta.`);
-    } else if (err.code === 'EACCES') {
-      console.error(`Erro: sem permissão para abrir a porta ${port} (${label}). Portas < 1024 exigem root/CAP_NET_BIND_SERVICE — ` +
-        `em Docker, prefira mapear a porta do host para uma porta alta no container (ver docker-compose.yml) em vez de usar HTTP_PORT/HTTPS_PORT < 1024 diretamente.`);
-    } else {
-      console.error(`Erro ao abrir a porta ${port} (${label}):`, err);
-    }
-  };
-}
-
-function startPlainHttp(port, extraLabel) {
-  http.createServer(app)
-    .on('error', onListenError(port, 'HTTP'))
-    .listen(port, () => {
-      console.log(`CG Toolbox server listening on port ${port} (HTTP)${extraLabel ? ' ' + extraLabel : ''}`);
+// ════════════════════════════════════════════════
+// Startup — aguarda o Postgres (cg-toolbox-db) responder e o schema ser
+// aplicado antes de começar a aceitar requisições HTTP.
+// ════════════════════════════════════════════════
+(async () => {
+  try {
+    await initDb();
+    app.listen(PORT, () => {
+      console.log(`CG Toolbox backend listening on port ${PORT}`);
     });
-}
-
-// Porta HTTP — sempre ativa.
-startPlainHttp(HTTP_PORT);
-
-// Porta HTTPS — ativa em paralelo, só se for diferente da porta HTTP acima
-// (evita tentar abrir a mesma porta duas vezes).
-if (Number(HTTPS_PORT) !== Number(HTTP_PORT)) {
-  const certConfigurado = Boolean(TLS_CERT_PATH && TLS_KEY_PATH);
-  const certValido = certConfigurado && fs.existsSync(TLS_CERT_PATH) && fs.existsSync(TLS_KEY_PATH);
-
-  if (certValido) {
-    const credentials = {
-      cert: fs.readFileSync(TLS_CERT_PATH, 'utf8'),
-      key: fs.readFileSync(TLS_KEY_PATH, 'utf8'),
-    };
-    https.createServer(credentials, app)
-      .on('error', onListenError(HTTPS_PORT, 'HTTPS'))
-      .listen(HTTPS_PORT, () => {
-        console.log(`CG Toolbox server listening on port ${HTTPS_PORT} (HTTPS)`);
-      });
-  } else {
-    if (certConfigurado) {
-      console.warn(`Aviso: TLS_CERT_PATH/TLS_KEY_PATH configurados, mas o(s) arquivo(s) não foi(ram) encontrado(s) (cert: ${TLS_CERT_PATH}, key: ${TLS_KEY_PATH}) — porta ${HTTPS_PORT} vai subir em HTTP puro (sem cadeado) até isso ser corrigido.`);
-    } else {
-      console.warn(`Aviso: nenhum certificado configurado (TLS_CERT_PATH/TLS_KEY_PATH) — porta ${HTTPS_PORT} está respondendo em HTTP puro, não HTTPS. Configure um certificado (--tls-cert/--tls-key no install-cgtoolbox.sh) para habilitar HTTPS de verdade nesta porta.`);
-    }
-    startPlainHttp(HTTPS_PORT, '— sem TLS, configure um certificado quando disponível');
+  } catch (err) {
+    console.error('Failed to start: could not connect to the database.', err);
+    process.exit(1);
   }
-}
+})();

@@ -1,108 +1,100 @@
 services:
-  cg-toolbox:
+  # ── BANCO DE DADOS ──
+  # PostgreSQL "de verdade" (não mais SQLite num volume) — server/db.js
+  # conecta nele via rede (PGHOST=cg-toolbox-db) e aplica server/schema.sql a
+  # cada boot do backend (idempotente). Sem "ports:" — não é alcançável de
+  # fora do host, só pelo cg-toolbox-backend via rede interna do compose.
+  cg-toolbox-db:
+    image: postgres:16-alpine
+    container_name: cg-toolbox-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-cgtoolbox}"
+      POSTGRES_USER: "${POSTGRES_USER:-cgtoolbox}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-cgtoolbox}"
+    volumes:
+      - cg-toolbox-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cgtoolbox} -d ${POSTGRES_DB:-cgtoolbox}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── BACKEND ──
+  # API REST pura (Express + PostgreSQL) — não serve mais o frontend estático
+  # (isso é o cg-toolbox-frontend abaixo). Também aceita chamadas externas
+  # autenticadas por API key (header X-API-Key — ver Settings → System →
+  # API access na UI, e api_keys em server/schema.sql). Sem "ports:" — só o
+  # cg-toolbox-frontend fala com ele (proxy reverso /api/*, ver
+  # frontend/nginx.conf).
+  cg-toolbox-backend:
     build:
       context: .
+      dockerfile: Dockerfile
+      # Ver nota de MTU/rede no serviço cg-toolbox-frontend abaixo — mesmo
+      # racional (apt-get durante o build precisa da rede do host nesta VM).
+      network: host
+    image: cg-toolbox-backend:latest
+    container_name: cg-toolbox-backend
+    restart: unless-stopped
+    depends_on:
+      cg-toolbox-db:
+        condition: service_healthy
+    environment:
+      PGHOST: cg-toolbox-db
+      PGPORT: "5432"
+      PGDATABASE: "${POSTGRES_DB:-cgtoolbox}"
+      PGUSER: "${POSTGRES_USER:-cgtoolbox}"
+      PGPASSWORD: "${POSTGRES_PASSWORD:-cgtoolbox}"
+      # Descomente se este host não estiver num domínio Windows — sem NTLM,
+      # os usuários são identificados por um header x-dev-user (ou caem no
+      # usuário do sistema operacional rodando o Node dentro do container),
+      # o que quebra favoritos por pessoa. Ver também a nota sobre NTLM
+      # através do proxy reverso em frontend/nginx.conf.
+      # NTLM_DISABLED: "1"
+      #
+      # Active Directory (opcional) — resolve o UPN (nome@dominio) exibido na
+      # UI a partir do login NTLM; sem isso, a UI mostra DOMÍNIO\usuario.
+      # AD_DOMAIN_CONTROLLER: "ldap://dc01.empresa.local"
+      # AD_BASE_DN: "DC=empresa,DC=local"
+      # AD_BIND_DN: ""
+      # AD_BIND_PASSWORD: ""
+    volumes:
+      # Dumps do Backup & Restore (Settings → System → Database) — pg_dump/
+      # pg_restore, fora do volume de dados do Postgres, sobrevive a
+      # rebuild/restart deste container.
+      - cg-toolbox-backups:/app/backups
+
+  # ── FRONTEND ──
+  # nginx: serve os arquivos estáticos (index.html/css/js/img) e faz proxy
+  # reverso de /api/* para o cg-toolbox-backend — ver frontend/nginx.conf.
+  # ÚNICO container com porta publicada; é com ele que o navegador fala.
+  cg-toolbox-frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
       # "network: host" faz o build usar a rede do próprio host em vez da
       # bridge padrão do Docker — em alguns servidores/VPNs a bridge do
       # Docker tem um MTU incompatível com a rede real, e etapas do build
-      # que baixam pacotes (apt-get update/install da imagem "deps", ver
-      # Dockerfile) travam com "Connection timed out" mesmo com internet
-      # funcionando normalmente no host. Com host network, o build usa a
-      # mesma interface/MTU que o "curl"/"apt" do host já usam sem problema.
+      # que baixam pacotes travam com "Connection timed out" mesmo com
+      # internet funcionando normalmente no host.
       network: host
-    image: cg-toolbox:latest
+    image: cg-toolbox-frontend:latest
+    container_name: cg-toolbox-frontend
     restart: unless-stopped
+    depends_on:
+      - cg-toolbox-backend
     ports:
-      # Host:container — o container escuta em 3000 (não-root não pode abrir
-      # <1024, ver Dockerfile); "80" aqui é só o mapeamento do host, então o
-      # app fica acessível em http://<ip-do-servidor> (sem porta na URL) do
-      # mesmo jeito que a instalação bare-metal (install-cgtoolbox.sh).
-      - "80:3000"
-      # Descomente se quiser acessar também direto pela porta 3000 (além da 80):
-      # - "3000:3000"
-      #
-      # --- HTTPS de verdade dentro do container (opcional) ---
-      # 1) Gere/obtenha um certificado e monte-o em /app/tls (ex.: volume ou
-      #    bind mount para /etc/cg-toolbox/tls do host);
-      # 2) Descomente a porta abaixo e as variáveis TLS_CERT_PATH/TLS_KEY_PATH
-      #    e HTTPS_PORT no bloco "environment";
-      # 3) "443:3443" mapeia a porta 443 do host pra 3443 do container (porta
-      #    alta — não precisa de root/capability dentro do container).
-      # - "443:3443"
-    environment:
-      PORT: "3000"
-      # Ver comentário no Dockerfile — mantém as duas portas iguais por
-      # padrão (só HTTP, sem tentar abrir 443 dentro do container). Para
-      # habilitar HTTPS de verdade, descomente as 3 linhas abaixo (e a porta
-      # "443:3443" acima):
-      # HTTPS_PORT: "3443"
-      # TLS_CERT_PATH: "/app/tls/cert.pem"
-      # TLS_KEY_PATH: "/app/tls/key.pem"
-      #
-      # Descomente se este host não estiver num domínio Windows — sem NTLM,
-      # os usuários são identificados por um header x-dev-user (ou caem no
-      # usuário do sistema operacional rodando o Node dentro do container,
-      # ex.: "node"), o que quebra favoritos por pessoa.
-      # NTLM_DISABLED: "1"
-      #
-      # Botão "Check for updates"/"Update now" (Settings → System) — fala
-      # com o serviço "updater" abaixo pela rede interna do compose (nome do
-      # serviço = hostname). UPDATER_TOKEN é opcional: só faz sentido setar
-      # se este compose alguma vez publicar a porta do updater ou rodar numa
-      # rede compartilhada com outros containers não confiáveis; deixando em
-      # branco (padrão), a proteção já vem de o updater não ter porta
-      # publicada pro host (ver serviço "updater" abaixo).
-      UPDATER_URL: "http://updater:8080"
-      UPDATER_TOKEN: "${UPDATER_TOKEN:-}"
-    volumes:
-      # Banco de dados (commands.db) num volume nomeado, fora da imagem —
-      # sobrevive a "docker compose down"/rebuild da imagem. Numa instalação
-      # nova, o volume começa vazio e o servidor cria um commands.db novo
-      # (schema aplicado, sem dados) no primeiro boot — ver server/db.js.
-      # Para trazer um catálogo já existente, copie o arquivo .db para dentro
-      # do volume antes do primeiro "docker compose up" (ver
-      # install-instructions.txt, seção Docker).
-      - cg-toolbox-data:/app/data
-      # Descomente junto com o bloco de HTTPS acima, apontando para a pasta
-      # com cert.pem/key.pem no host:
-      # - /etc/cg-toolbox/tls:/app/tls:ro
-
-  # ── UPDATER (companion) ──
-  # Único motivo de existir: dar ao botão "Check for updates"/"Update now"
-  # acesso a git + docker CLI SEM dar esse acesso ao container público
-  # cg-toolbox (ver updater/server.js e updater/Dockerfile para o racional
-  # de segurança completo). Isolado de propósito:
-  #   - SEM "ports:" — não é alcançável de fora do host, só pelo cg-toolbox
-  #     via rede interna do compose (DNS "updater", porta 8080);
-  #   - só sabe fazer duas coisas fixas (checar/aplicar update) — não recebe
-  #     nenhum comando arbitrário do chamador;
-  #   - roda com o socket do Docker do host montado, então tecnicamente tem
-  #     controle total do Docker do host — é o trade-off aceito para ter
-  #     "1 clique" de update sem dar esse mesmo acesso ao container exposto.
-  # Se preferir não correr nem esse risco, comente/remova este serviço e as
-  # 2 linhas UPDATER_* acima — o botão passa a mostrar "not available" e a
-  # atualização volta a ser 100% manual (git pull + docker compose up -d
-  # --build, ver comando no próprio README/install-instructions.txt).
-  updater:
-    build:
-      context: ./updater
-      # Mesmo motivo do serviço cg-toolbox acima: o build baixa pacotes via
-      # apt e um binário via curl (plugin docker compose), e a bridge padrão
-      # do Docker pode ter MTU incompatível com a rede real do host em
-      # alguns ambientes.
-      network: host
-    image: cg-toolbox-updater:latest
-    restart: unless-stopped
-    environment:
-      UPDATER_TOKEN: "${UPDATER_TOKEN:-}"
-    volumes:
-      # Socket do Docker do host — é isto que dá ao "docker compose" rodado
-      # DENTRO deste container poder de gerenciar containers do HOST.
-      - /var/run/docker.sock:/var/run/docker.sock
-      # O repositório inteiro (bind mount, não volume nomeado) — "git pull"
-      # aqui dentro escreve direto nos arquivos do host, e "docker compose
-      # up --build" usa este mesmo diretório como contexto de build.
-      - .:/repo
+      # Host:container — único ponto de entrada da aplicação, em
+      # http://<ip-do-servidor> (sem porta na URL).
+      - "80:80"
+      # Para HTTPS de verdade, veja o bloco comentado em frontend/nginx.conf
+      # (monte um certificado e descomente o server block "listen 443 ssl"),
+      # depois publique a porta aqui também:
+      # - "443:443"
+      # volumes:
+      #   - ./tls:/etc/nginx/tls:ro
 
 volumes:
-  cg-toolbox-data:
+  cg-toolbox-db-data:
+  cg-toolbox-backups:
