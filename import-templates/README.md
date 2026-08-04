@@ -22,9 +22,11 @@ template de lá — `Configurações → Cadastro → Import commands → Downlo
 template` — para conferir a lista atual e um exemplo preenchido):
 
 ```
-ID (optional);Name;Description;Vendor;System;Topics;Versions;Environments;Tags;Requires IP/Port;Prompt;Command;Note;Purpose;When to use;Notes
+Name;Description;Vendor;System;Topics;Versions;Environments;Tags;Requires IP/Port;Prompt;Command;Note;Purpose;When to use;Notes
 ```
 
+- Sem coluna de ID — é um detalhe interno, sempre gerado automaticamente a
+  partir do `Name` (igual ao editor manual de comandos).
 - Delimitador `;` (não vírgula), arquivo em UTF-8 com BOM.
 - `Vendor` aceita **um único** valor. `System`, `Topics`, `Versions` e
   `Environments` aceitam vários, separados por vírgula.

@@ -76,18 +76,22 @@ function getCell(obj, ...names) {
 
 // ── Template para download — mesmas colunas usadas na exportação (Topic,
 // Versions, Environments, Purpose/When to use/Notes — ver CSV_COLUMNS em
-// csv-export.js), mais as colunas específicas de importação (ID opcional,
-// Requires IP/Port, Prompt, Command, Note). Uma linha de exemplo real ajuda
-// mais que uma linha de instruções — os detalhes ficam no texto do modal. ──
+// csv-export.js), mais as colunas específicas de importação (Requires
+// IP/Port, Prompt, Command, Note). SEM coluna de ID — o id é sempre gerado
+// automaticamente a partir do Name (ver slugifyName/buildImportPayload
+// abaixo), é um detalhe interno, igual ao editor manual (ver
+// _ceBindVendorSeg em js/command-editor.js, onde o ID também é oculto/
+// auto-gerado). Uma linha de exemplo real ajuda mais que uma linha de
+// instruções — os detalhes ficam no texto do modal. ──
 const IMPORT_HEADERS = [
-  'ID (optional)', 'Name', 'Description', 'Vendor', 'System', 'Topics', 'Versions', 'Environments',
+  'Name', 'Description', 'Vendor', 'System', 'Topics', 'Versions', 'Environments',
   'Tags', 'Requires IP/Port', 'Prompt', 'Command', 'Note', 'Purpose', 'When to use', 'Notes',
 ];
 // Vendor/System/Version/Environment/Topics são todos obrigatórios agora (ver
 // buildImportPayload abaixo) — "all" não é mais um valor aceito nestas 4
 // colunas, por isso o exemplo usa valores reais e concretos do catálogo.
 const IMPORT_EXAMPLE_ROW = [
-  '', 'Check WatchDog process status', 'Shows whether a monitored WatchDog process is alive',
+  'Check WatchDog process status', 'Shows whether a monitored WatchDog process is alive',
   'Check Point', 'Gaia',
   'System Monitoring', 'R82', 'Standalone',
   'monitoring', 'No', '[Expert@FW]#', 'cpwd_admin list', '',
@@ -182,8 +186,10 @@ function buildImportPayload(obj, existingIdsInBatch) {
   const topics = resolveTopics(getCell(obj, 'Topics', 'Topic'), warnings);
   if (!topics.length) return { error: 'No valid "Topics" (must match an existing topic)' };
 
-  let id = getCell(obj, 'ID (optional)', 'ID').trim();
-  if (!id) id = slugifyName(name);
+  // id é sempre auto-gerado a partir do Name — detalhe interno, nunca lido
+  // do CSV (mesmo se o arquivo vier de um "Export commands" reaproveitado,
+  // que tem uma coluna "ID" — ela é simplesmente ignorada aqui).
+  let id = slugifyName(name);
   if (existingIdsInBatch.has(id)) {
     let n = 2;
     while (existingIdsInBatch.has(`${id}-${n}`)) n++;
