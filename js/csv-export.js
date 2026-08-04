@@ -39,7 +39,7 @@ function csvCommandLines(lines) {
 // próprio id como fallback se o tópico não for encontrado (ex.: 'environment').
 function csvTopicLabel(topic) {
   const tp = (typeof CATALOGS !== 'undefined' && CATALOGS.topics || []).find(x => x.key === topic);
-  return tp ? tp.section_title : topic;
+  return tp ? tp.label : topic;
 }
 
 // Rótulos de Vendor/Sistema a partir do catálogo (mesmo padrão de

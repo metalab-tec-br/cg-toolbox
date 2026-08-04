@@ -365,14 +365,16 @@ async function catAdminAddEnvironment() {
 }
 
 // ── Topics ───────────────────────────────────────
+// Mesmos campos de Environments (label/color) — sem section_title (removido
+// a pedido do usuário, ver comentário em schema.sql); a única diferença real
+// é is_protected (badge/gate de exclusão do tópico especial 'environment').
 function renderCatAdminTopics() {
   const list = _cat('catTopicsList');
   if (!list) return;
   list.innerHTML = (CATALOGS.topics || []).map(tp => `
     <div class="tag-row">
       ${tp.is_protected ? `<span class="cat-protected-badge">${_catEscHtml('protected')}</span>` : ''}
-      <input class="set-input" id="catT_label_${_catEscAttr(tp.key)}" value="${_catEscAttr(tp.label)}" style="flex:1;min-width:100px;">
-      <input class="set-input" id="catT_section_${_catEscAttr(tp.key)}" value="${_catEscAttr(tp.section_title)}" placeholder="Section title" style="flex:1;min-width:140px;">
+      <input class="set-input" id="catT_label_${_catEscAttr(tp.key)}" value="${_catEscAttr(tp.label)}" style="flex:1;min-width:120px;">
       <input type="color" class="cat-color-input" id="catT_color_${_catEscAttr(tp.key)}" value="${_catEscAttr(tp.color || '#8B949E')}">
       <div class="cat-row-actions">
         <button type="button" class="edit-btn" onclick="catAdminSaveTopic('${_catEscAttr(tp.key)}')" title="Save">💾</button>
@@ -382,13 +384,12 @@ function renderCatAdminTopics() {
 }
 async function catAdminSaveTopic(key) {
   const label = _cat('catT_label_' + key).value.trim();
-  const section_title = _cat('catT_section_' + key).value.trim();
   const color = _cat('catT_color_' + key).value;
   if (!label) { catAdminMsg('Fill in the required label(s).', 'err'); return; }
   try {
     const res = await fetch('/api/topics/' + encodeURIComponent(key), {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label, section_title, color }),
+      body: JSON.stringify({ label, color }),
     });
     if (!res.ok) return catAdminHandleError(res);
     catAdminMsg('Saved.', 'ok');
@@ -407,17 +408,15 @@ async function catAdminDeleteTopic(key) {
 }
 async function catAdminAddTopic() {
   const label = _cat('catTNewLabel').value.trim();
-  const section_title = _cat('catTNewSection').value.trim() || label;
   const color = _cat('catTNewColor').value;
   if (!label) { catAdminMsg('Fill in the required label(s).', 'err'); return; }
   try {
     const res = await fetch('/api/topics', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label, section_title, color }),
+      body: JSON.stringify({ label, color }),
     });
     if (!res.ok) return catAdminHandleError(res);
-    _cat('catTNewLabel').value = '';
-    _cat('catTNewSection').value = ''; _cat('catTNewColor').value = '#8B949E';
+    _cat('catTNewLabel').value = ''; _cat('catTNewColor').value = '#8B949E';
     catAdminMsg('Added.', 'ok');
     catAdminRefreshCatalogs();
   } catch (e) { catAdminMsg('Something went wrong. Please try again.', 'err'); }

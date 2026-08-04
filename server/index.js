@@ -1104,16 +1104,18 @@ app.delete('/api/environments/:key', (req, res) => {
 });
 
 // ── Tópicos ──────────────────────────────────────
+// Mesmos campos de Environments (label/color) — sem section_title (removido,
+// ver comentário em schema.sql). Única diferença real é is_protected.
 app.post('/api/topics', (req, res) => {
-  const { label, section_title, color } = req.body || {};
+  const { label, color } = req.body || {};
   if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
   const key = uniqueCatalogKey(slugifyCatalogKey(label), k => !!db.prepare('SELECT 1 FROM topics WHERE key = ?').get(k));
   try {
     const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM topics WHERE is_protected = 0').get().m;
     db.prepare(
-      `INSERT INTO topics (key, label, section_title, color, sort_order, is_protected)
-       VALUES (?, ?, ?, ?, ?, 0)`
-    ).run(key, label, section_title || label, color || '#8B949E', maxOrder + 1);
+      `INSERT INTO topics (key, label, color, sort_order, is_protected)
+       VALUES (?, ?, ?, ?, 0)`
+    ).run(key, label, color || '#8B949E', maxOrder + 1);
     res.status(201).json(db.prepare('SELECT * FROM topics WHERE key = ?').get(key));
   } catch (err) {
     console.error(err);
@@ -1125,15 +1127,14 @@ app.put('/api/topics/:key', (req, res) => {
   const existing = db.prepare('SELECT * FROM topics WHERE key = ?').get(key);
   if (!existing) return res.status(404).json({ error: 'not_found', message: `Topic '${key}' not found` });
   const label = req.body.label != null ? req.body.label : existing.label;
-  const sectionTitle = req.body.section_title != null ? req.body.section_title : existing.section_title;
   const color = req.body.color != null ? req.body.color : existing.color;
   const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : existing.sort_order;
   if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
   // is_protected nunca é alterável por esta API (só o seed inicial define 'environment' como protegido).
   try {
     db.prepare(
-      'UPDATE topics SET label = ?, section_title = ?, color = ?, sort_order = ? WHERE key = ?'
-    ).run(label, sectionTitle, color, sortOrder, key);
+      'UPDATE topics SET label = ?, color = ?, sort_order = ? WHERE key = ?'
+    ).run(label, color, sortOrder, key);
     res.json(db.prepare('SELECT * FROM topics WHERE key = ?').get(key));
   } catch (err) {
     console.error(err);

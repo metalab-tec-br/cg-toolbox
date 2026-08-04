@@ -146,7 +146,7 @@ function resolveTopics(cell, warnings) {
   const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
   const keys = [];
   parts.forEach(p => {
-    const found = matchCatalogItem(p, (CATALOGS.topics || []).filter(t => !t.is_protected), ['section_title']);
+    const found = matchCatalogItem(p, (CATALOGS.topics || []).filter(t => !t.is_protected), ['label']);
     if (found) keys.push(found.key);
     else warnings.push(`Topic "${p}" not found — ignored`);
   });

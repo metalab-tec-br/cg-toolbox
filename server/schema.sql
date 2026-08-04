@@ -205,18 +205,21 @@ CREATE TABLE IF NOT EXISTS version_environments (
   PRIMARY KEY (version, environment)
 );
 
--- Tópicos (ex.: capture, vpn) têm rótulo curto (usado nos filtros/editor) e um
--- título de seção mais longo (usado no cabeçalho da seção em render.js) — cada
--- um com um único idioma (sem _pt/_en), a pedido do usuário, e sem ícone
--- próprio (removido do cadastro e de qualquer lugar onde era exibido).
--- `is_protected` = 1 marca o tópico especial 'environment' (usado
+-- Tópicos (ex.: capture, vpn) — mesmos campos de Environments (key/label/
+-- color/sort_order), a pedido do usuário: o antigo `section_title` (título de
+-- seção separado, usado no cabeçalho em render.js) foi removido — `label` é
+-- usado tanto no filtro/editor quanto no cabeçalho da seção (os dois valores
+-- já eram sempre idênticos na prática; ver catAdminAddTopic em
+-- js/catalog-admin.js, que preenchia section_title = label quando vazio).
+-- Sem ícone próprio (removido do cadastro e de qualquer lugar onde era
+-- exibido). `is_protected` = 1 marca o tópico especial 'environment' (usado
 -- internamente para os cards de "Ambiente específico" — buildEnvCards em
 -- db-render-engine.js): não pode ser excluído e fica fora dos filtros de
--- Tópico (sidebar/config), só aparece no editor de comandos.
+-- Tópico (sidebar/config), só aparece no editor de comandos — é a única
+-- diferença estrutural real entre Topic e Environment.
 CREATE TABLE IF NOT EXISTS topics (
   key           TEXT PRIMARY KEY,
   label         TEXT NOT NULL,
-  section_title TEXT NOT NULL,
   color         TEXT NOT NULL DEFAULT '#8B949E',
   sort_order    INTEGER NOT NULL DEFAULT 0,
   is_protected  INTEGER NOT NULL DEFAULT 0

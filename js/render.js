@@ -137,8 +137,8 @@ async function render() {
   // dropdowns de filtro em js/state.js. Tópicos não têm mais ícone próprio
   // (removido do cadastro a pedido do usuário) — 2º arg '' em vez de tp.icon.
   const topicsSorted = (CATALOGS.topics || []).filter(tp => !tp.is_protected).slice().sort((a, b) =>
-    stripLeadingSymbols(a.section_title).localeCompare(
-      stripLeadingSymbols(b.section_title), undefined, { sensitivity: 'base' }
+    stripLeadingSymbols(a.label).localeCompare(
+      stripLeadingSymbols(b.label), undefined, { sensitivity: 'base' }
     )
   );
   // Monta as seções (Ambiente + Tópicos) para um subconjunto de `commands` —
@@ -151,7 +151,7 @@ async function render() {
     if (envCards.length) sections.push(section('🏗️', `Environment: ${envLabel(ce)}`, envCards, keyPrefix + 'environment'));
     topicsSorted.forEach(tp => {
       if (show(tp.key)) {
-        sections.push(buildTopicSection(rows, tp.key, '', tp.section_title, values, hasIPs, keyPrefix + tp.key));
+        sections.push(buildTopicSection(rows, tp.key, '', tp.label, values, hasIPs, keyPrefix + tp.key));
       }
     });
     return sections.join('');
