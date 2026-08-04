@@ -216,15 +216,17 @@
      mover o mouse da barra colapsada até o botão (que fica por cima, em
      z-index mais alto), o hover saía da sidebar um instante antes do
      clique, fechando o flyout na hora e fazendo o botão fugir do cursor.
-     Ícone de alfinete/pin (cabeça oval + agulha, estilo alfinete/thumbtack
-     clássico): preenchido e reto (.icon-collapse) = sidebar fixa, clique
-     colapsa; contorno e inclinado (.icon-expand, gira via CSS) = sidebar
+     Ícone de tachinha (cabeça cilíndrica arredondada + agulha, inclinada
+     35° — estilo "opção B" escolhido pelo usuário entre 4 alternativas
+     apresentadas, o mais parecido com o emoji 📌/tachinha de cortiça):
+     preenchida (.icon-collapse) = sidebar fixa, clique colapsa; contorno,
+     com uma leve inclinação extra via CSS (.icon-expand) = sidebar
      colapsada/solta, clique fixa de novo. Os dois ficam no mesmo botão;
      qual aparece é decidido só por CSS, a partir da classe
      'sidebar-collapsed' em .app (ver .sb-divider-toggle). -->
 <button type="button" class="sb-divider-toggle" id="sbDividerToggle" onclick="toggleShowSidebar()" title="Pin/unpin sidebar">
-  <svg class="icon-collapse" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="7.5" rx="4.3" ry="3.3" fill="currentColor" stroke="none"/><line x1="12" y1="10.6" x2="12" y2="20"/></svg>
-  <svg class="icon-expand" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="7.5" rx="4.3" ry="3.3"/><line x1="12" y1="10.6" x2="12" y2="20"/></svg>
+  <svg class="icon-collapse" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(35 12 12)"><rect x="8.2" y="3" width="7.6" height="8" rx="2.6" fill="currentColor" stroke="none"/><line x1="12" y1="11" x2="12" y2="20.5"/></g></svg>
+  <svg class="icon-expand" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(35 12 12)"><rect x="8.2" y="3" width="7.6" height="8" rx="2.6"/><line x1="12" y1="11" x2="12" y2="20.5"/></g></svg>
 </button>
 </nav>
 
