@@ -91,6 +91,13 @@
   overflow: visible;
   position: sticky; top: 48px; height: calc(100vh - 48px);
   transition: width .15s ease;
+  /* z-index explícito: sem isso, dropdowns do conteúdo principal (.dd,
+     position:relative — ex.: "Group by" na content-toolbar) podem pintar
+     por cima da sidebar (inclusive do flyout colapsado) em vez de ficarem
+     atrás dela, dependendo do motor do navegador. Garante, sem ambiguidade,
+     que a sidebar (fixa ou colapsada/flyout) sempre fique acima do
+     conteúdo principal — ver z-index: 1 em .main mais abaixo. */
+  z-index: 10;
 }
 .sidebar-inner {
   width: 100%; height: 100%; background: var(--surf);
@@ -110,15 +117,17 @@
   box-shadow: 2px 0 20px rgba(0,0,0,.32); z-index: 90;
 }
 .sb-block { padding: 6px 10px 4px; }
+/* Ícone de seção (Vendor/System/Version/Environment/Topic/Options) — sempre
+   visível ao lado do rótulo, mesmo padrão visual do ícone de estrela ao
+   lado de "Favorites" (#favNavRow) logo acima. Bloco inteiro some na barra
+   colapsada (.sb-block-filter, ver mais abaixo), então aqui só cobre o
+   estado normal/fixo. */
 .sb-head {
+  display: flex; align-items: center; gap: 6px;
   font-size: 9px; font-weight: 800; letter-spacing: 1.1px; text-transform: uppercase;
   color: var(--dim); margin-bottom: 6px; padding-left: 6px;
 }
-/* Ícone de seção (Vendor/System/Version/Environment/Topic/Options) — não é
-   mais exibido em nenhum estado: na barra colapsada o bloco inteiro
-   (.sb-block-filter) some, e na sidebar fixa/expandida só o texto
-   .sb-head-txt aparece, como sempre foi. Mantido escondido por padrão. */
-.sb-head-icon { display: none; flex-shrink: 0; color: var(--dim); }
+.sb-head-icon { display: flex; flex-shrink: 0; color: var(--dim); }
 /* Botões "Gerenciar ..." (sem ícone) — alinhados à esquerda, com o mesmo
    recuo inicial do rótulo .sb-head acima deles, em vez de centralizados.
    Seletor com duas classes: precisa vencer o padding do shorthand ".btn"
@@ -219,7 +228,11 @@
 
 
 /* ─── MAIN ─── */
-.main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; min-width: 0; }
+/* position: relative + z-index: 1 (bem abaixo do z-index: 10 da .sidebar,
+   ver acima) — garante que dropdowns internos (.dd, .cpq-panel etc., todos
+   position:relative/absolute) nunca pintem por cima da sidebar, inclusive
+   durante o flyout da barra colapsada. */
+.main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; min-width: 0; position: relative; z-index: 1; }
 
 
 /* ─── INPUTS ─── */
