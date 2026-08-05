@@ -151,7 +151,8 @@
    hover". Quando selecionado (.on), a regra mais específica abaixo assume e
    troca para a cor de destaque (--teal) normalmente. Abaixo do cabeçalho fica
    a lista de pastas do usuário (.folders-nested, recolhível via
-   .folders-toggle) e a linha "New folder" (.folders-new-row). */
+   .folders-toggle) — criar pasta nova é só pelo botão "Add" da toolbar
+   (removido o atalho "+ New folder" que existia aqui). */
 .folders-head-row {
   display: flex; align-items: center; gap: 2px;
   border-radius: 6px; background: var(--surf2); border: 1px solid transparent;
@@ -169,8 +170,7 @@
 }
 .folders-toggle:hover { background: var(--surf3); opacity: 1; }
 #foldersBlock.collapsed .folders-toggle svg { transform: rotate(-90deg); }
-#foldersBlock.collapsed .folders-nested,
-#foldersBlock.collapsed .folders-new-row { display: none; }
+#foldersBlock.collapsed .folders-nested { display: none; }
 .folders-nested {
   display: flex; flex-direction: column; gap: 1px; margin-top: 2px;
   padding-left: 6px; max-height: 220px; overflow-y: auto;
@@ -195,8 +195,6 @@
   cursor: pointer; font-size: 11px; line-height: 1;
 }
 .folder-row-btn:hover { background: var(--surf3); color: var(--text); }
-.folders-new-row { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
-.folders-new-row:hover { background: var(--surf2); color: var(--text); }
 .sb-chk {
   width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;
   border: 1.5px solid var(--bdr2); background: var(--surf2);
@@ -270,8 +268,7 @@
 .app.sidebar-collapsed .sidebar .cmd-search-wrap .cpq-panel { display: none !important; }
 /* Favoritos: só o ícone da estrela, centralizado e maior. */
 .app.sidebar-collapsed .sidebar #foldersBlock .folders-toggle,
-.app.sidebar-collapsed .sidebar #foldersBlock .folders-nested,
-.app.sidebar-collapsed .sidebar #foldersBlock .folders-new-row { display: none; }
+.app.sidebar-collapsed .sidebar #foldersBlock .folders-nested { display: none; }
 .app.sidebar-collapsed .sidebar .folders-head-main { justify-content: center; padding: 7px 4px; }
 .app.sidebar-collapsed .sidebar .folders-head-main > span { display: none; }
 .app.sidebar-collapsed .sidebar .folders-head-main svg { width: 21px; height: 21px; }

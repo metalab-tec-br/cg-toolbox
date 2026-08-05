@@ -80,7 +80,10 @@
        de pastas individuais abaixo, sem mudar a visão atual. Cada pasta
        listada (foldersDynamicList, preenchida por renderFoldersSidebarList())
        é clicável para filtrar só por ela, com botões de renomear/excluir que
-       aparecem no hover (ver .folder-row-actions em components.css). -->
+       aparecem no hover (ver .folder-row-actions em components.css). Criação
+       de pasta nova só pelo botão "Add" da toolbar (dropdown > Folder, ver
+       #addDDPanel) — removido o atalho "+ New folder" que existia aqui, a
+       pedido do usuário, para não duplicar o ponto de entrada. -->
   <div class="sb-block" id="foldersBlock">
     <div class="sb-list">
       <div class="sb-row folders-head-row" id="foldersNavRow">
@@ -93,10 +96,6 @@
         </button>
       </div>
       <div class="folders-nested" id="foldersDynamicList"></div>
-      <div class="sb-row folders-new-row" onclick="promptCreateFolder()">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-        <span>New folder</span>
-      </div>
     </div>
   </div>
 
