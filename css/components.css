@@ -523,20 +523,30 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 /* Botão "Add note" — antes era um "+" pequeno no canto do cabeçalho (pouco
    visível/óbvio, a pedido do usuário); agora é a PRIMEIRA coisa dentro do
    corpo da seção (.sec-body), numa linha própria abaixo do nome da pasta,
-   com o rótulo "Add note" visível — mesmo estilo sólido/pill do botão "Add"
-   da toolbar principal (fundo na cor de destaque, texto branco — ver
-   .ctb-cmd-btn.admin-highlight em layout.css), só que dimensionado pro
-   próprio conteúdo (sem a largura fixa de 128px daquele, que é só pra
-   alinhar com os outros botões da toolbar) e com uma margem embaixo pra
-   respirar em relação ao primeiro card/nota. Continua sempre visível (não
-   precisa entrar no modo de edição pra anotar algo). */
+   com o rótulo "Add note" visível — MESMO TAMANHO do botão "Add" da
+   toolbar principal (font-size/padding/width idênticos — ver
+   .ctb-cmd-actions .btn.ctb-cmd-btn em layout.css), não o tamanho do
+   conteúdo. `.sec-body` é flex-column (ver acima) e estica os filhos por
+   padrão (align-items: stretch) — sem `align-self: flex-start` o botão
+   ficaria com a largura inteira da seção; com ele, fica do tamanho fixo
+   certo e alinhado à esquerda. Continua sempre visível (não precisa
+   entrar no modo de edição pra anotar algo). */
 .sec-folder-add-note-btn {
+  align-self: flex-start; width: 128px; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-  margin: 0 0 8px; padding: 5px 12px; font-size: 11px;
+  margin: 0 0 4px; padding: 3px 7px; font-size: 10px; white-space: nowrap;
   background: var(--teal); border: 1px solid var(--teal); border-radius: 999px;
   color: #fff; font-weight: 700; letter-spacing: .2px; cursor: pointer;
 }
 .sec-folder-add-note-btn:hover { filter: brightness(1.08); }
+
+/* Aviso discreto quando uma pasta PRÓPRIA está vazia (0 comandos, 0 notas)
+   — antes a pasta simplesmente não aparecia em lugar nenhum até o usuário
+   adicionar algo a ela (bug reportado: "criei a pasta e ela não aparece").
+   Agora a seção sempre existe (ver buildFolderSectionFromCards), e este
+   texto substitui a lista de cards vazia por uma explicação do que fazer
+   a seguir, em vez de deixar só o botão "Add note" sozinho e sem contexto. */
+.sec-folder-empty-msg { margin: 0; padding: 4px 0 0; font-size: 12px; font-style: italic; color: var(--muted); }
 
 /* Nome da pasta editável inline no cabeçalho, dentro do modo de edição (ver
    nameHtml em buildFolderSectionFromCards, db-render-engine.js) — antes era

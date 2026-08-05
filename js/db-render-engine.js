@@ -584,7 +584,13 @@ function buildFolderItemsCards(cmdById, notesById, orderTagged, values, hasIPs, 
 // `.sec-title` só nas seções de pasta, ver `.section-folder` em
 // components.css) em vez de ficar espremido do lado do nome/contagem.
 function buildFolderSectionFromCards(cards, folderId, folderName, key, withActions, copyable, editMode) {
-  if (!cards.length) return '';
+  // Pastas do próprio usuário (withActions) SEMPRE aparecem, mesmo vazias
+  // (0 comandos e 0 notas) — antes voltavam '' e a pasta recém-criada
+  // simplesmente não aparecia em lugar nenhum até o usuário adicionar algo
+  // a ela, o que parecia um bug ("criei a pasta e ela não aparece").
+  // Pastas de OUTRO usuário (copyable, só leitura) continuam escondidas
+  // quando vazias — não haveria nada útil pra fazer com elas ali.
+  if (!cards.length && !withActions) return '';
   const nameEsc = escAttr(folderName);
   const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(folderName) : nameEsc;
 
@@ -623,8 +629,15 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
     ? `<input type="text" class="sec-folder-name-input" value="${nameEsc}" data-folder-id="${folderId}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onkeydown="_folderNameInputKeydown(event)" onblur="_folderNameInputBlur(event)">`
     : nameEsc;
   const headerHtml = `${folderIcon(true, 12)} ${nameHtml} <span class="sec-count">${cards.length}</span>${leftActions}${divider}${rightAction}`;
+  // Pasta própria recém-criada, ainda sem nenhum comando/nota — mostra um
+  // aviso discreto em vez de deixar o corpo da seção parecendo quebrado
+  // (só o botão "Add note" sozinho, sem nenhuma explicação do porquê não
+  // tem cards ali).
+  const emptyMsg = (withActions && !cards.length)
+    ? `<p class="sec-folder-empty-msg">This folder is empty — add a note or a command to it from the card's folder menu.</p>`
+    : '';
   const active = withActions && editMode;
-  const body = addNoteBtn + (active ? wrapCardsForFolderDrag(cards, folderId) : cards.join(''));
+  const body = addNoteBtn + emptyMsg + (active ? wrapCardsForFolderDrag(cards, folderId) : cards.join(''));
   return collapsibleGroup(key || `folder${folderId}`, headerHtml, body, active ? 'section-folder section-editing' : 'section-folder');
 }
 

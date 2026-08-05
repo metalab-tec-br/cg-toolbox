@@ -237,7 +237,13 @@ async function render() {
             return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}scope_${userKey}__folder${f.id}`, isOwn, !isOwn, editMode);
           }).join('');
           const cardCount = (folderSections.match(/<div class="card"/g) || []).length;
-          if (!cardCount) return '';
+          // Mesma correção do bug "pasta vazia não aparece" (buildFolderSectionFromCards):
+          // uma pasta PRÓPRIA vazia ainda tem o botão "Add note" (só pastas
+          // próprias o têm) mesmo com cardCount=0 — sem essa checagem extra,
+          // o bloco do usuário inteiro (👤 <nome>) desapareceria se a única
+          // pasta dele visível aqui estivesse vazia.
+          const hasOwnEmptyFolder = folderSections.includes('sec-folder-add-note-btn');
+          if (!cardCount && !hasOwnEmptyFolder) return '';
           return collapsibleGroup(`${cv}__${ce}__scopeuser${userKey}`, `👤 <strong>${escAttr(username)}</strong> <span class="sec-count">${cardCount}</span>`, folderSections, 'section-creator');
         }).join('');
       } else {
