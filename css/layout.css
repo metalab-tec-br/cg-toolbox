@@ -433,6 +433,11 @@
 .ctb-cmd-actions .btn.ctb-cmd-btn.admin-highlight {
   background: var(--teal); border-color: var(--teal); color: #fff;
   border-radius: 999px; font-weight: 700; letter-spacing: .2px;
+  /* -25% da largura-padrão dos 3 botões (128px -> 96px), só neste botão —
+     o seletor de 4 classes (mais específico que .ctb-cmd-actions .btn.ctb-cmd-btn,
+     3 classes, acima) vence sem afetar Import/Export, que não têm
+     .admin-highlight. */
+  width: 96px;
 }
 .ctb-cmd-actions .btn.ctb-cmd-btn.admin-highlight:hover { filter: brightness(1.08); border-color: var(--teal); }
 .ctb-cmd-actions .btn.ctb-cmd-btn.admin-highlight .dd-arrow { color: #fff; opacity: .9; }

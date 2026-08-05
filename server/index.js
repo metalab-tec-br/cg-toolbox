@@ -666,34 +666,46 @@ app.post('/api/folders', async (req, res) => {
   }
 });
 
-// Renomeia uma pasta do usuário atual. 404 tanto se o id não existir quanto
-// se existir mas for de OUTRO usuário — não vazamos a distinção, mesmo
-// tratamento dado a outros recursos privados por usuário nesta API.
+// Renomeia uma pasta. Um usuário comum só renomeia as PRÓPRIAS pastas
+// (username === currentUser); admins podem renomear a de qualquer usuário
+// (pedido do usuário: "admins continuam podendo fazer tudo" — mesma regra
+// aplicada aos comandos, ver PUT/DELETE /api/commands/:id acima). 404 tanto
+// se o id não existir quanto se existir mas for de outro usuário e quem
+// pediu não for admin — não vazamos a distinção nesse caso.
 app.put('/api/folders/:id', async (req, res) => {
   const name = String((req.body && req.body.name) || '').trim();
   try {
     if (!name) return res.status(400).json({ error: 'validation_error', message: '"name" is required' });
     const username = getCurrentUsername(req);
+    const isAdmin = (await getCurrentRole(req)) === 'admin';
     const { rows } = await pool.query(
-      'UPDATE folders SET name = $1 WHERE id = $2 AND username = $3 RETURNING id, name, sort_order',
-      [name, req.params.id, username]
+      isAdmin
+        ? 'UPDATE folders SET name = $1 WHERE id = $2 RETURNING id, name, sort_order'
+        : 'UPDATE folders SET name = $1 WHERE id = $2 AND username = $3 RETURNING id, name, sort_order',
+      isAdmin ? [name, req.params.id] : [name, req.params.id, username]
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found', message: `Folder '${req.params.id}' not found` });
     res.json(rows[0]);
   } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'conflict', message: `You already have a folder named "${name}"` });
+    if (err.code === '23505') return res.status(409).json({ error: 'conflict', message: `A folder named "${name}" already exists for that folder's owner` });
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
 
-// Apaga uma pasta do usuário atual — folder_commands é limpo sozinho via ON
-// DELETE CASCADE (ver schema.sql); os comandos em si e as OUTRAS pastas do
-// usuário não são afetados.
+// Apaga uma pasta — mesma regra do PUT acima: dono ou admin. folder_commands
+// é limpo sozinho via ON DELETE CASCADE (ver schema.sql); os comandos em si
+// e as OUTRAS pastas do dono não são afetados.
 app.delete('/api/folders/:id', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
-    const { rowCount } = await pool.query('DELETE FROM folders WHERE id = $1 AND username = $2', [req.params.id, username]);
+    const isAdmin = (await getCurrentRole(req)) === 'admin';
+    const { rowCount } = await pool.query(
+      isAdmin
+        ? 'DELETE FROM folders WHERE id = $1'
+        : 'DELETE FROM folders WHERE id = $1 AND username = $2',
+      isAdmin ? [req.params.id] : [req.params.id, username]
+    );
     if (!rowCount) return res.status(404).json({ error: 'not_found', message: `Folder '${req.params.id}' not found` });
     res.status(204).end();
   } catch (err) {
@@ -1575,13 +1587,25 @@ app.put('/api/commands/:id', async (req, res) => {
 // ════════════════════════════════════════════════
 // DELETE /api/commands/:id
 // ════════════════════════════════════════════════
-app.delete('/api/commands/:id', requireAdmin, async (req, res) => {
+app.delete('/api/commands/:id', async (req, res) => {
   const id = req.params.id;
   try {
     const found = await findCommand(id);
     if (!found) return res.status(404).json({ error: 'not_found', message: `Command '${id}' not found` });
-    // Sem restrição de dono (mesma decisão do PUT acima) — mas exige role='admin' (requireAdmin acima).
+
     const currentUser = getCurrentUsername(req);
+    // Mesma regra do PUT acima: um usuário comum só exclui o PRÓPRIO
+    // comando (created_by === currentUser, seja criado do zero ou
+    // copiado/duplicado de outro usuário — a cópia já nasce com
+    // created_by = quem copiou, ver POST /api/commands). Comandos
+    // 'System' e de outros usuários exigem admin. Admins não têm
+    // restrição (pedido do usuário: "admins continuam podendo fazer tudo").
+    if ((await getCurrentRole(req)) !== 'admin' && found.created_by !== currentUser) {
+      const message = found.created_by === 'System'
+        ? 'Only admins can delete System commands.'
+        : 'You can only delete your own commands.';
+      return res.status(403).json({ error: 'forbidden', message });
+    }
     // command_id em folder_commands tem FK ON DELETE CASCADE (ver schema.sql)
     // — apagar o comando já limpa sozinho sua presença em qualquer pasta.
     await pool.query('DELETE FROM commands WHERE id = $1', [id]);

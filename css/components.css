@@ -499,14 +499,24 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
    mais fácil de notar/acertar sendo a única ação sempre visível ali. */
 .sec-folder-edit-btn { width: 19px; height: 19px; font-size: 13px; }
 
-/* Excluir pasta: estilo "tag" vermelha (mesmo componente .tag/.t-red dos
-   badges dos comandos, ver mais abaixo) em vez de um botão-ícone discreto —
-   deixa a ação destrutiva mais chamativa/inconfundível. Só aparece dentro
-   do modo de edição (ver deleteTag em buildFolderSectionFromCards,
-   db-render-engine.js); .tag/.t-red já definem toda a aparência (cor/fundo/
-   borda/tamanho de fonte), só precisa virar clicável aqui. */
-.sec-folder-delete-tag { cursor: pointer; }
-.sec-folder-delete-tag:hover { filter: brightness(1.15); }
+/* Excluir pasta: botão dedicado (não reaproveita mais .tag/.t-red dos badges
+   de comando). A reutilização anterior causava um bug real: a regra
+   `.compact-cards .tag:not(.scope-tag) { display: none; }` (ver mais abaixo)
+   escondia esse botão sempre que a preferência "Show card details" estava
+   desligada, já que ele usava a mesma classe genérica dos badges. Agora tem
+   classe própria, do mesmo estilo/altura do botão de editar
+   (.sec-folder-edit-btn), mas com largura automática pro rótulo caber
+   dentro — pedido do usuário: "um botão pequeno com o nome dentro após o
+   botão de editar". Só aparece dentro do modo de edição (ver deleteTag em
+   buildFolderSectionFromCards, db-render-engine.js). */
+.sec-folder-delete-btn {
+  height: 19px; padding: 0 6px; margin-left: 2px; display: inline-flex; align-items: center;
+  gap: 3px; border: 1px solid var(--red); border-radius: 4px;
+  background: var(--red-bg); color: var(--red); font-size: 10px;
+  font-weight: 600; line-height: 1; white-space: nowrap; cursor: pointer;
+  flex-shrink: 0;
+}
+.sec-folder-delete-btn:hover { background: var(--red); color: #fff; }
 
 /* Divisor explícito entre os botões da esquerda (✎ Edit / ✕ Delete) e o
    botão do canto direito (⧉ Copy, só em pastas de outro usuário — "Add
@@ -532,13 +542,20 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
    certo e alinhado à esquerda. Continua sempre visível (não precisa
    entrar no modo de edição pra anotar algo). */
 .sec-folder-add-note-btn {
-  align-self: flex-start; width: 128px; flex-shrink: 0;
+  /* -25% da largura (128px -> 96px), igual ao botão "Add" da toolbar
+     (.ctb-cmd-actions .btn.ctb-cmd-btn.admin-highlight em layout.css), pra
+     manterem o mesmo tamanho entre si. */
+  align-self: flex-start; width: 96px; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
   margin: 0 0 4px; padding: 3px 7px; font-size: 10px; white-space: nowrap;
-  background: var(--teal); border: 1px solid var(--teal); border-radius: 999px;
-  color: #fff; font-weight: 700; letter-spacing: .2px; cursor: pointer;
+  /* Cor no mesmo estilo post-it das notes (pedido do usuário: "deixe a cor
+     do botão no mesmo estilo") — em vez da cor de destaque (--teal), usa a
+     faixa mais escura do post-it como fundo e o texto escuro do post-it,
+     igual ao cabeçalho de uma nota. */
+  background: var(--postit-head-bg); border: 1px solid var(--postit-border);
+  color: var(--postit-text); font-weight: 700; letter-spacing: .2px; cursor: pointer;
 }
-.sec-folder-add-note-btn:hover { filter: brightness(1.08); }
+.sec-folder-add-note-btn:hover { filter: brightness(0.97); }
 
 /* Aviso discreto quando uma pasta PRÓPRIA está vazia (0 comandos, 0 notas)
    — antes a pasta simplesmente não aparecia em lugar nenhum até o usuário
@@ -778,14 +795,39 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .note-delete-btn:hover { border-color: var(--red); color: var(--red); }
 
 /* ─── NOTES (título + descrição livre dentro de uma pasta) ─── */
+/* Aparência de post-it (pedido do usuário: "as cores no estilo postit, um
+   amarelo clarinho na descrição, e um amarelo pouquinho mais escuro no
+   título") — sobrescreve o fundo cinza padrão de .card/.card-head (ver
+   acima) só quando é uma NOTA (seletor por data-note-id, ver
+   buildNoteCardHtml em js/db-render-engine.js); cards de comando não são
+   afetados. --postit-* (theme.css) são cores fixas, iguais nos temas claro/
+   escuro, porque um post-it é reconhecido pela cor amarela em si. */
+.card[data-note-id] {
+  background: var(--postit-bg); border-color: var(--postit-border);
+}
+.card[data-note-id] .card-head {
+  background: var(--postit-head-bg); border-bottom-color: var(--postit-border);
+}
+.card[data-note-id] .card-name { color: var(--postit-text); }
 /* "Note" na frente do título — único jeito de diferenciar visualmente de um
    card de comando dentro da mesma seção de pasta (mesma aparência de
-   .card/.card-head/.card-actions, ver card() em terminal-renderer.js). */
+   .card/.card-head/.card-actions, ver card() em terminal-renderer.js). Antes
+   usava a cor de destaque (--teal); agora acompanha a paleta do post-it. */
 .note-badge {
   font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px;
-  color: var(--teal); background: var(--teal-bg); border-radius: 3px;
+  color: var(--postit-text); background: rgba(113,63,18,.14); border-radius: 3px;
   padding: 1px 5px; margin-right: 4px; vertical-align: middle;
 }
+/* Botões de ação da nota (clonar/editar/excluir) — mesmo componente
+   .edit-btn dos comandos, mas o fundo/borda neutros (var(--surf)/var(--bdr))
+   destoavam em cima do amarelo do post-it; aqui usam um tom translúcido da
+   própria cor de texto do post-it. Excluir mantém o destaque vermelho no
+   hover (ação destrutiva), só o fundo/borda de repouso mudam. */
+.card[data-note-id] .edit-btn {
+  background: rgba(113,63,18,.08); border-color: var(--postit-border); color: var(--postit-text);
+}
+.card[data-note-id] .edit-btn:hover { background: rgba(113,63,18,.18); border-color: var(--postit-text); color: var(--postit-text); }
+.card[data-note-id] .note-delete-btn:hover { background: var(--red-bg); border-color: var(--red); color: var(--red); }
 /* Corpo da nota — HTML livre (sanitizado no servidor, ver sanitizeNoteHtml
    em server/index.js), pode ter texto formatado + imagens coladas. Imagens
    sempre limitadas à largura do card (max-width:100%) mesmo que o atributo
@@ -793,9 +835,11 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    _neArmImageResize em js/folders.js) seja maior que o card — evita
    overflow horizontal em telas estreitas. */
 .note-body { padding: 10px 12px; font-size: 12px; color: var(--text); line-height: 1.5; word-wrap: break-word; }
+.card[data-note-id] .note-body { color: var(--postit-text); }
 .note-body img { max-width: 100%; height: auto; border-radius: 4px; margin: 4px 0; display: block; }
 .note-body p, .note-body div { margin: 0 0 4px; }
 .note-body:empty::before { content: '(empty note)'; color: var(--muted); font-style: italic; }
+.card[data-note-id] .note-body:empty::before { color: var(--postit-text); opacity: .65; }
 
 /* Editor de nota (#noteBodyEditor, ver openNoteEditor()/js/folders.js) — um
    <div contenteditable> em vez de <textarea> pra suportar <img> coladas

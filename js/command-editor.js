@@ -658,10 +658,13 @@ async function _cePopulateForm(id) {
 
   CMD_EDITOR_RESOLVER = row.placeholder_resolver || null;
   _ce('cmdEditorResolverWarning').classList.toggle('show', !!CMD_EDITOR_RESOLVER);
-  // Excluir comando exige role='admin' (ver requireAdmin() no DELETE
-  // /api/commands/:id em server/index.js) — window.CG_IS_ADMIN é preenchido
-  // por updateAccountUI() em js/auth.js assim que /api/me responde.
-  _ce('cmdEditorDeleteBtn').style.display = window.CG_IS_ADMIN ? '' : 'none';
+  // Excluir comando: dono (created_by === CURRENT_USER) OU admin — mesma
+  // regra do editar (ver isOwn abaixo em openCommandEditor) e do servidor
+  // (DELETE /api/commands/:id em server/index.js). Um comando 'System' ou
+  // de outro usuário nunca bate com CURRENT_USER, então continua exigindo
+  // admin automaticamente, sem precisar de um caso especial aqui.
+  const canDeleteThis = window.CG_IS_ADMIN || (typeof CURRENT_USER !== 'undefined' && CURRENT_USER === row.created_by);
+  _ce('cmdEditorDeleteBtn').style.display = canDeleteThis ? '' : 'none';
   _ce('cmdEditorDeleteBtn').dataset.name = row.name || id;
   return row;
 }

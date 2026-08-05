@@ -598,7 +598,7 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
     ? `<button type="button" class="sec-folder-btn sec-folder-edit-btn${editMode ? ' on' : ''}" onmousedown="event.preventDefault()" onclick="toggleFolderEditMode(${folderId}, event)" title="${editMode ? 'Done editing' : 'Edit folder'}">✎</button>`
     : '';
   const deleteTag = (withActions && editMode)
-    ? `<button type="button" class="tag t-red sec-folder-delete-tag" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${folderId}, '${jsEsc}', event)" title="Delete folder">✕ Delete</button>`
+    ? `<button type="button" class="sec-folder-delete-btn" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${folderId}, '${jsEsc}', event)" title="Delete folder">✕ Delete</button>`
     : '';
   const leftActions = (editBtn || deleteTag) ? `<span class="sec-folder-actions">${editBtn}${deleteTag}</span>` : '';
 
