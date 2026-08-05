@@ -596,13 +596,20 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
     : '';
   const leftActions = (editBtn || deleteTag) ? `<span class="sec-folder-actions">${editBtn}${deleteTag}</span>` : '';
 
+  // "Add note" saiu do cabeçalho (era um botão "+" pequeno no canto direito —
+  // o usuário achou pouco visível/óbvio) e virou um botão de linha inteira,
+  // logo ABAIXO do nome da pasta (primeira coisa dentro de .sec-body, antes
+  // dos cards), com o mesmo estilo sólido/pill do botão "Add" da toolbar
+  // (.ctb-cmd-btn.admin-highlight) e o texto "Add note" visível dentro —
+  // ver .sec-folder-add-note-btn em components.css.
   let rightAction = '';
-  if (withActions) {
-    rightAction = `<button type="button" class="sec-folder-add-btn" onmousedown="event.preventDefault()" onclick="openNoteEditor('create', ${folderId}, null, event)" title="Add note">+</button>`;
-  } else if (copyable) {
+  if (!withActions && copyable) {
     rightAction = `<button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="copyFolderFromUser(${folderId}, '${jsEsc}', event)" title="Copy this folder to your own Folders">⧉</button>`;
   }
   const divider = (leftActions || rightAction) ? '<span class="sec-title-divider"></span>' : '';
+  const addNoteBtn = withActions
+    ? `<button type="button" class="btn sec-folder-add-note-btn" onclick="openNoteEditor('create', ${folderId}, null, event)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>Add note</span></button>`
+    : '';
 
   // Dentro do modo de edição, o nome deixa de ser texto estático e passa a
   // ser um <input> editável direto no cabeçalho (em vez de precisar clicar
@@ -617,7 +624,7 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
     : nameEsc;
   const headerHtml = `${folderIcon(true, 12)} ${nameHtml} <span class="sec-count">${cards.length}</span>${leftActions}${divider}${rightAction}`;
   const active = withActions && editMode;
-  const body = active ? wrapCardsForFolderDrag(cards, folderId) : cards.join('');
+  const body = addNoteBtn + (active ? wrapCardsForFolderDrag(cards, folderId) : cards.join(''));
   return collapsibleGroup(key || `folder${folderId}`, headerHtml, body, active ? 'section-folder section-editing' : 'section-folder');
 }
 

@@ -509,26 +509,34 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .sec-folder-delete-tag:hover { filter: brightness(1.15); }
 
 /* Divisor explícito entre os botões da esquerda (✎ Edit / ✕ Delete) e o
-   botão do canto direito (+ Add note / ⧉ Copy) — substitui o ::after padrão
-   de .sec-title (que ficaria ENTRE eles, sem sobrar espaço pro botão do
-   canto direito ficar de fato na borda). `.section-folder` desliga esse
-   ::after padrão só nas seções de pasta (buildFolderSectionFromCards sempre
-   passa essa classe), porque elas montam o próprio divisor manualmente. */
+   botão do canto direito (⧉ Copy, só em pastas de outro usuário — "Add
+   note" saiu do cabeçalho, ver .sec-folder-add-note-btn abaixo) — substitui
+   o ::after padrão de .sec-title (que ficaria ENTRE eles, sem sobrar espaço
+   pro botão do canto direito ficar de fato na borda). `.section-folder`
+   desliga esse ::after padrão só nas seções de pasta
+   (buildFolderSectionFromCards sempre passa essa classe), porque elas
+   montam o próprio divisor manualmente — mesmo quando não há nenhum botão
+   depois dele (aí ele só ocupa o espaço restante, igual o ::after normal). */
 .section.section-folder > .sec-title::after { display: none; }
 .sec-title-divider { flex: 1; height: 1px; background: var(--bdr); }
 
-/* Botão "+ Add note", no canto direito do cabeçalho da pasta — mesmo estilo
-   sólido/pill do botão "Add" da toolbar principal (fundo na cor de
-   destaque, texto branco — ver .ctb-cmd-btn.admin-highlight em layout.css),
-   só numa versão compacta (círculo pequeno) pra caber numa linha de
-   cabeçalho de seção em vez de na toolbar. Continua sempre visível (não
+/* Botão "Add note" — antes era um "+" pequeno no canto do cabeçalho (pouco
+   visível/óbvio, a pedido do usuário); agora é a PRIMEIRA coisa dentro do
+   corpo da seção (.sec-body), numa linha própria abaixo do nome da pasta,
+   com o rótulo "Add note" visível — mesmo estilo sólido/pill do botão "Add"
+   da toolbar principal (fundo na cor de destaque, texto branco — ver
+   .ctb-cmd-btn.admin-highlight em layout.css), só que dimensionado pro
+   próprio conteúdo (sem a largura fixa de 128px daquele, que é só pra
+   alinhar com os outros botões da toolbar) e com uma margem embaixo pra
+   respirar em relação ao primeiro card/nota. Continua sempre visível (não
    precisa entrar no modo de edição pra anotar algo). */
-.sec-folder-add-btn {
-  width: 18px; height: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-  border-radius: 999px; background: var(--teal); border: 1px solid var(--teal); color: #fff;
-  font-size: 12px; font-weight: 800; line-height: 1; cursor: pointer;
+.sec-folder-add-note-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  margin: 0 0 8px; padding: 5px 12px; font-size: 11px;
+  background: var(--teal); border: 1px solid var(--teal); border-radius: 999px;
+  color: #fff; font-weight: 700; letter-spacing: .2px; cursor: pointer;
 }
-.sec-folder-add-btn:hover { filter: brightness(1.08); }
+.sec-folder-add-note-btn:hover { filter: brightness(1.08); }
 
 /* Nome da pasta editável inline no cabeçalho, dentro do modo de edição (ver
    nameHtml em buildFolderSectionFromCards, db-render-engine.js) — antes era
