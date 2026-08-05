@@ -454,3 +454,21 @@ function buildTopicSection(rows, topic, icon, title, values, hasIPs, key) {
     .filter(Boolean);
   return section(icon, title, cards, key);
 }
+
+// Uma seção de PASTA (ícone de pasta + nome + seus cards) — mesmo papel de
+// buildTopicSection acima, só que agrupando pela pasta do usuário (ver
+// js/folders.js) em vez de um Tópico do catálogo. Usada quando a visão atual
+// é Folders (VIEW_FOLDERS_HOME/VIEW_FOLDER_ID, ver render.js), para que cada
+// pasta apareça como uma seção recolhível no mesmo estilo visual dos
+// Tópicos, em vez do antigo esquema de só esconder/mostrar cards já
+// renderizados por Tópico. `folderName` é texto livre cadastrado pelo
+// usuário — passa por escAttr() antes de virar título da seção (inserido
+// como HTML cru por section()) para não permitir HTML injection via nome de
+// pasta malicioso.
+function buildFolderSection(rows, folderId, folderName, values, hasIPs, key) {
+  const cards = rows
+    .filter(r => (r.folder_ids || []).includes(folderId))
+    .map(r => buildCardHtmlForRow(r, values, hasIPs))
+    .filter(Boolean);
+  return section(folderIcon(true, 12), escAttr(folderName), cards, key);
+}

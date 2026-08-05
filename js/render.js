@@ -106,7 +106,7 @@ async function render() {
     const env = (CATALOGS.environments || []).find(x => x.key === key);
     return env ? env.label : key;
   }
-  const show = tp => VIEW_FOLDERS_HOME || VIEW_FOLDER_ID != null || topicSel.length === 0 || topicSel.includes(tp);
+  const show = tp => topicSel.length === 0 || topicSel.includes(tp);
 
   const envNotesText = {
     all: 'All (all environments): commands are generated using the <strong>Standalone</strong> default. Switch the Environment to Cluster HA / VSX / Maestro / MDS when you need the specific syntax (<code>vsenv</code>, <code>asg_cmd</code>, <code>mdsenv</code>, etc.).',
@@ -141,19 +141,42 @@ async function render() {
       stripLeadingSymbols(b.label), undefined, { sensitivity: 'base' }
     )
   );
-  // Monta as seções (Ambiente + Tópicos) para um subconjunto de `commands` —
-  // extraído para função porque o modo "Created by" repete isso uma vez por
-  // autor (ver mais abaixo), com `keyPrefix` distinto para manter o
-  // recolher/expandir de cada seção independente entre autores.
+  // Monta as seções para um subconjunto de `commands` — extraído para função
+  // porque o modo "Created by" repete isso uma vez por autor (ver mais
+  // abaixo), com `keyPrefix` distinto para manter o recolher/expandir de
+  // cada seção independente entre autores.
+  //
+  // Navegando por Folders (VIEW_FOLDERS_HOME = visão combinada, ou
+  // VIEW_FOLDER_ID = uma pasta específica clicada na sidebar — ver
+  // js/folders.js), o conteúdo é organizado por PASTA em vez de por Tópico:
+  // uma seção recolhível por pasta (mesmo estilo visual/comportamento das
+  // seções de Tópico — expande/recolhe, mostra a contagem), cada uma com
+  // todos os comandos que o usuário guardou ali dentro, sem separar por
+  // Ambiente/Tópico. Substituiu o esquema antigo de renderizar tudo
+  // normalmente por Tópico e só ESCONDER depois os cards fora da pasta
+  // (ver histórico de applyFolderFilter/applyAnyFolderFilter) — este
+  // esquema não dava a sensação de "pasta" pedida, só filtrava a mesma
+  // grade de sempre.
   function buildSections(rows, keyPrefix) {
     const sections = [];
-    const envCards = buildEnvCards(rows, ce, values);
-    if (envCards.length) sections.push(section('🏗️', `Environment: ${envLabel(ce)}`, envCards, keyPrefix + 'environment'));
-    topicsSorted.forEach(tp => {
-      if (show(tp.key)) {
-        sections.push(buildTopicSection(rows, tp.key, '', tp.label, values, hasIPs, keyPrefix + tp.key));
-      }
-    });
+    if (VIEW_FOLDERS_HOME || VIEW_FOLDER_ID != null) {
+      const folderNameById = new Map((typeof FOLDERS !== 'undefined' ? FOLDERS : []).map(f => [f.id, f.name]));
+      const scopeIds = VIEW_FOLDER_ID != null ? [VIEW_FOLDER_ID] : [...folderNameById.keys()];
+      const sortedIds = scopeIds.filter(id => folderNameById.has(id)).sort((a, b) =>
+        folderNameById.get(a).localeCompare(folderNameById.get(b), undefined, { sensitivity: 'base' })
+      );
+      sortedIds.forEach(fid => {
+        sections.push(buildFolderSection(rows, fid, folderNameById.get(fid), values, hasIPs, keyPrefix + 'folder' + fid));
+      });
+    } else {
+      const envCards = buildEnvCards(rows, ce, values);
+      if (envCards.length) sections.push(section('🏗️', `Environment: ${envLabel(ce)}`, envCards, keyPrefix + 'environment'));
+      topicsSorted.forEach(tp => {
+        if (show(tp.key)) {
+          sections.push(buildTopicSection(rows, tp.key, '', tp.label, values, hasIPs, keyPrefix + tp.key));
+        }
+      });
+    }
     return sections.join('');
   }
 
@@ -241,8 +264,17 @@ async function render() {
   }); // fim do map de combos
 
   out.innerHTML = [combosTruncatedNote, ...comboBlocks].join('');
-  if (VIEW_FOLDER_ID != null) applyFolderFilter();
-  else if (VIEW_FOLDERS_HOME) applyAnyFolderFilter();
+  // buildSections() já monta uma seção por pasta quando navegando por Folders
+  // (ver acima) — mas se nenhuma tiver comandos para os filtros atuais (ou a
+  // pasta específica clicada estiver vazia), nenhuma seção é gerada e a tela
+  // fica em branco sem esse aviso.
+  if ((VIEW_FOLDERS_HOME || VIEW_FOLDER_ID != null) && !out.querySelector('.section')) {
+    const folder = VIEW_FOLDER_ID != null && typeof FOLDERS !== 'undefined' ? FOLDERS.find(f => f.id === VIEW_FOLDER_ID) : null;
+    const msg = VIEW_FOLDER_ID != null
+      ? (folder ? `No commands in "${escAttr(folder.name)}" yet for the current filters.` : 'Folder not found.')
+      : 'No commands in any folder yet for the current filters.';
+    out.insertAdjacentHTML('beforeend', `<div class="empty"><div class="empty-ico">${folderIcon(false, 40)}</div><p>${msg}</p></div>`);
+  }
   applySearchFilter();
 }
 

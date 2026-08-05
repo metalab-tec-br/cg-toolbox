@@ -467,6 +467,28 @@
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
   width: 128px;
 }
+/* Botão "Add" em pill sólido (fundo na cor de destaque, texto/ícone brancos)
+   — pedido explicitamente pelo usuário a partir de um mockup de referência
+   (estilo comum em apps de senhas/catálogo: botão cheio + dropdown com
+   ícone e texto por item). Só este botão usa o preenchimento sólido; os
+   demais (.btn.admin-highlight usados em Configurações → Registration, por
+   exemplo) continuam no estilo "tintado" de sempre — o seletor de 3 classes
+   (.ctb-cmd-btn.admin-highlight) restringe a mudança só ao Add da toolbar. */
+.ctb-cmd-actions .btn.ctb-cmd-btn.admin-highlight {
+  background: var(--teal); border-color: var(--teal); color: #fff;
+  border-radius: 999px; font-weight: 700; letter-spacing: .2px;
+}
+.ctb-cmd-actions .btn.ctb-cmd-btn.admin-highlight:hover { filter: brightness(1.08); border-color: var(--teal); }
+.ctb-cmd-actions .btn.ctb-cmd-btn.admin-highlight .dd-arrow { color: #fff; opacity: .9; }
+/* Painel do dropdown "Add" — um pouco mais largo/espaçoso que o padrão
+   .dd-panel (ver components.css) para caber ícone + rótulo com folga, e um
+   divisor fino entre "Command" e "Folder" (dois grupos de ação distintos),
+   igual ao mockup de referência. Ícones na cor de destaque (--teal) em vez
+   do cinza neutro padrão, para dar mais peso visual a cada opção. */
+#addDDPanel { min-width: 176px; padding: 6px; }
+#addDDPanel .sb-row { padding: 8px 10px; gap: 10px; font-size: 12.5px; color: var(--text); }
+#addDDPanel .sb-row svg { color: var(--teal); flex-shrink: 0; }
+#addDDPanel .sb-row + .sb-row { border-top: 1px solid var(--bdr); margin-top: 4px; padding-top: 12px; }
 
 /* ─── CONTENT ─── */
 .content { padding: 14px; display: flex; flex-direction: column; gap: 16px; }

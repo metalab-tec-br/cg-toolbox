@@ -111,67 +111,41 @@ function goHome() {
   render();
 }
 
-// ── Filtros pós-render (mesma técnica do antigo applyFavoritesFilter): depois
-// que render() monta todas as seções normalmente, esconde os cards que não
-// batem com a pasta/visão atual e as seções que ficaram vazias. ──
-function _foldersEmptyState(message) {
-  return `<div class="empty"><div class="empty-ico">${folderIcon(false, 40)}</div><p>${message}</p></div>`;
-}
-function filterCardsByIdSet(idSet, emptyMessage) {
-  const out = document.getElementById('out');
-  const cards = out.querySelectorAll('.card[data-cmd-id]');
-  cards.forEach(c => {
-    const cid = c.dataset.cmdId;
-    c.style.display = (cid && idSet.has(cid)) ? '' : 'none';
-  });
-  out.querySelectorAll('.section').forEach(sec => {
-    const visible = [...sec.querySelectorAll('.card')].some(c => c.style.display !== 'none');
-    sec.style.display = visible ? '' : 'none';
-  });
-  out.querySelectorAll('.env-note').forEach(n => { n.style.display = 'none'; });
-  const anyVisible = [...out.querySelectorAll('.card')].some(c => c.style.display !== 'none');
-  if (!anyVisible) out.insertAdjacentHTML('beforeend', _foldersEmptyState(emptyMessage));
-}
-function applyFolderFilter() {
-  const folder = FOLDERS.find(f => f.id === VIEW_FOLDER_ID);
-  filterCardsByIdSet(folder ? folder.command_ids : new Set(), folder ? `No commands in "${folder.name}" yet for the current filters.` : 'Folder not found.');
-}
-function applyAnyFolderFilter() {
-  const anyIds = new Set();
-  FOLDERS.forEach(f => f.command_ids.forEach(id => anyIds.add(id)));
-  filterCardsByIdSet(anyIds, 'No commands in any folder yet for the current filters.');
-}
-
 // ── Membership: adicionar/remover um comando de uma pasta (chamado pelo
 // dropdown de pastas de cada card — ver folderMenuHtml()/toggleFolderMenu()
 // em js/terminal-renderer.js) ──
+//
+// Navegando por Folders (VIEW_FOLDERS_HOME/VIEW_FOLDER_ID) ou com Group By =
+// "My folders" (ver js/render.js: buildSections()), a tela é organizada em
+// seções POR PASTA — um comando marcado/desmarcado muda quais cards
+// aparecem em quais seções, o que exige reconstruir o HTML (render()
+// completo), não só trocar uma classe. Fora desses casos (navegando
+// normalmente por Tópico/Versão/Created by, com o dropdown de pastas aberto
+// no próprio card), a atualização é otimista — marca/desmarca só o item
+// clicado e o botão de pasta do card, SEM re-renderizar — para o dropdown
+// continuar aberto e permitir marcar várias pastas em sequência.
 function toggleCommandInFolder(cmdId, folderId, itemEl) {
   const folder = FOLDERS.find(f => f.id === folderId);
   if (!folder) return;
   const wasOn = folder.command_ids.has(cmdId);
   if (wasOn) folder.command_ids.delete(cmdId); else folder.command_ids.add(cmdId);
-  // Atualização otimista: marca/desmarca o item clicado no próprio dropdown
-  // e o botão de pasta do card (ligado se o comando estiver em QUALQUER
-  // pasta agora) — SEM re-renderizar a tela toda, para o dropdown continuar
-  // aberto e permitir marcar várias pastas em sequência.
-  if (itemEl) {
+
+  const folderCountEl = document.querySelector(`#foldersDynamicList .folder-row[data-folder-id="${folderId}"] .folder-row-count`);
+  if (folderCountEl) folderCountEl.textContent = folder.command_ids.size;
+
+  if (VIEW_FOLDERS_HOME || VIEW_FOLDER_ID != null || GROUP_BY === 'my-folders') {
+    render();
+  } else if (itemEl) {
     itemEl.classList.toggle('on', !wasOn);
     const chk = itemEl.querySelector('.folder-menu-chk');
     if (chk) chk.textContent = wasOn ? '' : '✓';
+    const card = document.querySelector(`.card[data-cmd-id="${CSS.escape(cmdId)}"]`);
+    if (card) {
+      const inAnyFolder = FOLDERS.some(f => f.command_ids.has(cmdId));
+      const btn = card.querySelector('.fav-wrap .fav-btn');
+      if (btn) btn.classList.toggle('on', inAnyFolder);
+    }
   }
-  const card = document.querySelector(`.card[data-cmd-id="${CSS.escape(cmdId)}"]`);
-  if (card) {
-    const inAnyFolder = FOLDERS.some(f => f.command_ids.has(cmdId));
-    const btn = card.querySelector('.fav-wrap .fav-btn');
-    if (btn) btn.classList.toggle('on', inAnyFolder);
-  }
-  const folderCountEl = document.querySelector(`#foldersDynamicList .folder-row[data-folder-id="${folderId}"] .folder-row-count`);
-  if (folderCountEl) folderCountEl.textContent = folder.command_ids.size;
-  // Se a pasta alterada é a que está sendo filtrada agora, atualiza a
-  // visibilidade do card na hora — sem isso, remover um comando da pasta
-  // aberta o deixaria visível até o próximo render() completo.
-  if (VIEW_FOLDER_ID === folderId) applyFolderFilter();
-  else if (VIEW_FOLDERS_HOME) applyAnyFolderFilter();
 
   const method = wasOn ? 'DELETE' : 'POST';
   fetch(`/api/folders/${folderId}/commands/${encodeURIComponent(cmdId)}`, { method }).catch(e => {
@@ -232,12 +206,16 @@ async function promptCreateFolder(cmdIdToAddAfter) {
       return;
     }
     const folder = await res.json();
-    FOLDERS.push({ id: folder.id, name: folder.name, sort_order: folder.sort_order, command_ids: new Set(folder.command_ids || []) });
-    renderFoldersSidebarList();
+    const commandIds = new Set(folder.command_ids || []);
     if (cmdIdToAddAfter) {
-      toggleCommandInFolder(cmdIdToAddAfter, folder.id, null);
-      render(); // reconstrói os cards para o dropdown de pastas já listar a nova
+      commandIds.add(cmdIdToAddAfter);
+      fetch(`/api/folders/${folder.id}/commands/${encodeURIComponent(cmdIdToAddAfter)}`, { method: 'POST' }).catch(e => {
+        console.warn('Falha ao adicionar o comando à nova pasta no servidor (mantido localmente)', e);
+      });
     }
+    FOLDERS.push({ id: folder.id, name: folder.name, sort_order: folder.sort_order, command_ids: commandIds });
+    renderFoldersSidebarList();
+    render(); // reconstrói os cards para o dropdown de pastas (e a seção da pasta, se estiver em Folders) já refletirem a pasta nova
   } catch (e) {
     alert('Failed to create folder. Please try again.');
   }
