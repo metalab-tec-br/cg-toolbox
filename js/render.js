@@ -236,6 +236,51 @@ async function render() {
     return comboHeader + envNote + folderGroups;
   }
 
+  // "User folders": mesma ideia de "Folders" acima, mas CROSS-USER — um
+  // bloco recolhível por usuário (mesmo padrão visual do "Created by"), com
+  // as pastas DELE aninhadas dentro (cards direto, sem sub-seção de Tópico,
+  // igual "Folders"). Só aparece no dropdown fora de Folders
+  // (VIEW_FOLDERS_HOME — ver updateGroupByOptionsForFoldersScope() em
+  // js/folders.js, que esconde essa opção enquanto o usuário está lá).
+  // Usa ALL_USERS_FOLDERS (cross-user, carregado sob demanda quando este
+  // Group by é escolhido — ver reloadAllUsersFoldersFromServer() em
+  // js/folders.js) em vez de command.folder_ids (que só reflete as pastas do
+  // usuário ATUAL — ver shapeCommand() em server/index.js). Renomear/excluir
+  // só aparece nas pastas que são do próprio usuário logado (CURRENT_USER,
+  // ver js/user-sync.js); as de outras pessoas aparecem só para consulta —
+  // o backend nem aceita a requisição de qualquer forma (ver
+  // PUT/DELETE /api/folders/:id, com WHERE username = usuário atual).
+  if (GROUP_BY === 'user-folders') {
+    const allFolders = typeof ALL_USERS_FOLDERS !== 'undefined' ? ALL_USERS_FOLDERS : [];
+    const byUser = new Map();
+    allFolders.forEach(f => {
+      if (!byUser.has(f.username)) byUser.set(f.username, []);
+      byUser.get(f.username).push(f);
+    });
+    const usernames = [...byUser.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    const userGroups = usernames.map(username => {
+      const isOwn = typeof CURRENT_USER !== 'undefined' && CURRENT_USER === username;
+      const userFolders = byUser.get(username).slice().sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      );
+      // Chave segura pro onclick="toggleSection(...)" — usernames vêm como
+      // "DOMÍNIO\usuario" (NTLM), mesmo cuidado do "Created by" acima.
+      const userKey = username.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const folderSections = userFolders.map(f => {
+        const cards = commands.filter(c => f.command_ids.has(c.id)).map(r => buildCardHtmlForRow(r, values, hasIPs)).filter(Boolean);
+        return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}${userKey}__folder${f.id}`, isOwn);
+      }).join('');
+      const cardCount = (folderSections.match(/<div class="card"/g) || []).length;
+      if (!cardCount) return '';
+      return collapsibleGroup(`${cv}__${ce}__user${userKey}`, `👤 <strong>${escAttr(username)}</strong> <span class="sec-count">${cardCount}</span>`, folderSections, 'section-creator');
+    }).join('');
+    if (!userGroups) return '';
+    const comboHeader = combos.length > 1
+      ? `<div class="combo-header">🔀 <strong>${cvLabel}</strong> / <strong>${ceLabel}</strong></div>`
+      : '';
+    return comboHeader + envNote + userGroups;
+  }
+
   const bodyHtml = envNote + buildSections(commands, kp);
 
   // "Agrupar por Versão": embrulha o bloco inteiro da combinação num agrupamento recolhível

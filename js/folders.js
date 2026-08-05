@@ -43,6 +43,47 @@ async function reloadFoldersFromServer() {
   }
 }
 
+// ALL_USERS_FOLDERS = pastas de TODOS os usuários (cross-user, ver
+// GET /api/folders/all em server/index.js) — usada só pelo Group by "User
+// folders" (valor interno 'user-folders', ver js/render.js). Diferente de
+// FOLDERS acima (privado, só as pastas do usuário atual), aqui cada item já
+// vem com `username` do dono. Carregada sob demanda (quando o usuário
+// escolhe "User folders" no dropdown, ver setGroupBy() em js/settings.js) em
+// vez de sempre no boot, já que a maioria nunca vai usar essa visão.
+let ALL_USERS_FOLDERS = [];
+async function reloadAllUsersFoldersFromServer() {
+  try {
+    const res = await fetch('/api/folders/all');
+    const data = await res.json();
+    ALL_USERS_FOLDERS = (data || []).map(f => ({ id: f.id, username: f.username, name: f.name, sort_order: f.sort_order, command_ids: new Set(f.command_ids || []) }));
+    if (typeof render === 'function' && GROUP_BY === 'user-folders') render();
+  } catch (e) {
+    console.warn('Não foi possível carregar as pastas de todos os usuários', e);
+  }
+}
+
+// "Created by" e "User folders" são visões cross-user — não fazem sentido
+// dentro de Folders (VIEW_FOLDERS_HOME), que já é o recorte privado das
+// PRÓPRIAS pastas do usuário (pedido do usuário: dentro de Folders, o Group
+// by só deve oferecer Topic/Folders/Version). Escondidos via style.display
+// direto nos botões (mesmos .seg-btn usados no dropdown da toolbar E no
+// modal de Configurações — document.querySelectorAll pega os dois de uma
+// vez). Se a opção escondida estava ativa, volta pra Topic. Chamada sempre
+// que VIEW_FOLDERS_HOME muda (viewAllFolders/goHome) e uma vez no boot,
+// logo depois de VIEW_FOLDERS_HOME ser inicializado acima.
+const GROUP_BY_HIDDEN_IN_FOLDERS = ['creator', 'user-folders'];
+function updateGroupByOptionsForFoldersScope() {
+  document.querySelectorAll('.seg-btn[data-val]').forEach(b => {
+    if (GROUP_BY_HIDDEN_IN_FOLDERS.includes(b.dataset.val)) {
+      b.style.display = VIEW_FOLDERS_HOME ? 'none' : '';
+    }
+  });
+  if (VIEW_FOLDERS_HOME && GROUP_BY_HIDDEN_IN_FOLDERS.includes(GROUP_BY) && typeof setGroupBy === 'function') {
+    setGroupBy('topic');
+  }
+}
+updateGroupByOptionsForFoldersScope();
+
 // ── Navegação: visão combinada de Folders / home ──
 // Clique no cabeçalho "Folders" da sidebar — funciona como um toggle: clicar
 // de novo enquanto já está ativo desliga a visão e volta para o menu normal
@@ -55,6 +96,7 @@ function viewAllFolders() {
   VIEW_FOLDERS_HOME = !VIEW_FOLDERS_HOME;
   const nav = document.getElementById('foldersNavRow');
   if (nav) nav.classList.toggle('on', VIEW_FOLDERS_HOME);
+  updateGroupByOptionsForFoldersScope();
   render();
 }
 // Clique no nome/logo do app: volta para a página inicial configurada
@@ -64,6 +106,7 @@ function goHome() {
   VIEW_FOLDERS_HOME = s.home === 'folders';
   const nav = document.getElementById('foldersNavRow');
   if (nav) nav.classList.toggle('on', VIEW_FOLDERS_HOME);
+  updateGroupByOptionsForFoldersScope();
   render();
 }
 
@@ -85,8 +128,16 @@ function toggleCommandInFolder(cmdId, folderId, itemEl) {
   if (!folder) return;
   const wasOn = folder.command_ids.has(cmdId);
   if (wasOn) folder.command_ids.delete(cmdId); else folder.command_ids.add(cmdId);
+  // Mantém o snapshot cross-user (ALL_USERS_FOLDERS, ver Group by "User
+  // folders") coerente com a própria pasta do usuário atual — sem isso, a
+  // seção dele em "User folders" ficaria com a contagem antiga até o
+  // próximo reload (F5 ou re-escolher o Group by).
+  const ownInAllUsers = ALL_USERS_FOLDERS.find(f => f.id === folderId);
+  if (ownInAllUsers) {
+    if (wasOn) ownInAllUsers.command_ids.delete(cmdId); else ownInAllUsers.command_ids.add(cmdId);
+  }
 
-  if (VIEW_FOLDERS_HOME || GROUP_BY === 'my-folders') {
+  if (VIEW_FOLDERS_HOME || GROUP_BY === 'my-folders' || GROUP_BY === 'user-folders') {
     render();
   } else if (itemEl) {
     itemEl.classList.toggle('on', !wasOn);

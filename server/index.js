@@ -565,6 +565,31 @@ app.get('/api/folders', async (req, res) => {
   }
 });
 
+// Lista as pastas de TODOS os usuários (cross-user) — usada só pelo Group by
+// "User folders" no front-end (ver js/folders.js/render.js), uma visão de
+// equipe para ver o que cada colega organizou, no mesmo espírito do
+// "Created by" (que já é cross-user). Diferente de GET /api/folders acima,
+// que é privado ao usuário da requisição — aqui não há filtro por username.
+// Comandos em si já são visíveis a todo mundo (ver "Created by"); o que era
+// privado era só a ORGANIZAÇÃO em pastas, e este endpoint existe
+// especificamente para abrir essa visão, a pedido do usuário.
+app.get('/api/folders/all', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT f.id, f.username, f.name, f.sort_order,
+              COALESCE(array_agg(fc.command_id) FILTER (WHERE fc.command_id IS NOT NULL), '{}') AS command_ids
+       FROM folders f
+       LEFT JOIN folder_commands fc ON fc.folder_id = f.id
+       GROUP BY f.id
+       ORDER BY f.username, f.sort_order, f.name`
+    );
+    res.json(rows.map(r => ({ id: r.id, username: r.username, name: r.name, sort_order: r.sort_order, command_ids: r.command_ids })));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
 // Cria uma pasta nova para o usuário atual. 409 se ele já tiver uma pasta com
 // esse nome (UNIQUE(username, name), ver schema.sql — err.code 23505 é o
 // código padrão do Postgres para violação de constraint única).

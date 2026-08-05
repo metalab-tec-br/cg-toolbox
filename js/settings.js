@@ -285,15 +285,21 @@ function applyCommandEditingSetting(enabled) {
   if (typeof render === 'function') render(); // reconstrói os cards para (des)aparecer o lápis de editar
 }
 
-// Agrupamento do resultado: 'topic' (uma seção recolhível por Tópico — padrão),
-// 'version' (um bloco recolhível por Versão/Ambiente, com as seções de Tópico
-// aninhadas), 'creator' (um bloco recolhível por quem cadastrou o comando —
-// created_by —, também com as mesmas seções de Tópico aninhadas dentro de
-// cada autor; ver uso em js/render.js), ou 'my-folders' (um bloco recolhível
-// por pasta do próprio usuário — ver js/folders.js — substituiu o antigo
-// 'favorites', que agrupava por quem tinha favoritado, cross-user).
+// Agrupamento do resultado: 'topic' (uma seção recolhível por Tópico —
+// padrão), 'version' (um bloco recolhível por Versão/Ambiente, com as seções
+// de Tópico aninhadas), 'creator' (um bloco recolhível por quem cadastrou o
+// comando — created_by —, também com as mesmas seções de Tópico aninhadas
+// dentro de cada autor; ver uso em js/render.js), 'my-folders' — rotulado
+// "Folders" na UI, valor interno inalterado para não migrar dados salvos —
+// (um bloco recolhível por pasta do PRÓPRIO usuário, cards direto sem
+// sub-seção de Tópico — ver js/folders.js), ou 'user-folders' — "User
+// folders": mesma ideia, mas CROSS-USER (um bloco por usuário, com as pastas
+// dele aninhadas dentro — ver ALL_USERS_FOLDERS em js/folders.js). 'creator'
+// e 'user-folders' ficam escondidos do dropdown enquanto o usuário está em
+// Folders (VIEW_FOLDERS_HOME — ver updateGroupByOptionsForFoldersScope() em
+// js/folders.js), então não precisam de tratamento especial aqui.
 function normalizeGroupBy(mode) {
-  return (mode === 'version') ? 'version' : (mode === 'creator') ? 'creator' : (mode === 'my-folders') ? 'my-folders' : 'topic';
+  return ['version', 'creator', 'my-folders', 'user-folders'].includes(mode) ? mode : 'topic';
 }
 function applyGroupBySetting(mode) {
   GROUP_BY = normalizeGroupBy(mode);
@@ -302,7 +308,8 @@ function applyGroupBySetting(mode) {
 // Texto mostrado no botão dropdown "Group by" (barra de ferramentas) —
 // mantido em sincronia com GROUP_BY sempre que ele muda.
 function groupByLabel(mode) {
-  return mode === 'version' ? 'Version' : mode === 'creator' ? 'Created by' : mode === 'my-folders' ? 'My folders' : 'Topic';
+  return mode === 'version' ? 'Version' : mode === 'creator' ? 'Created by'
+    : mode === 'my-folders' ? 'Folders' : mode === 'user-folders' ? 'User folders' : 'Topic';
 }
 function syncGroupByToggleUI(mode) {
   const wrap = document.getElementById('groupByToggle');
@@ -324,6 +331,12 @@ function setGroupBy(mode) {
   const s = loadSettings();
   s.groupBy = GROUP_BY;
   persistSettings(s);
+  // "User folders" é cross-user e carregado à parte (privacidade — ver
+  // js/folders.js) — busca (ou refresca) sob demanda só quando escolhido,
+  // em vez de manter isso sempre quente no boot pra todo mundo.
+  if (mode === 'user-folders' && typeof reloadAllUsersFoldersFromServer === 'function') {
+    reloadAllUsersFoldersFromServer();
+  }
 }
 
 // Aplica as preferências salvas ao estado vivo da ferramenta (chamado no boot)
@@ -357,6 +370,12 @@ function applyDefaultsFromSettings() {
   applyCommandEditingSetting(true);
   GROUP_BY = normalizeGroupBy(s.groupBy); // sem render() aqui — render() inicial ainda vai rodar
   syncGroupByToggleUI(GROUP_BY);
+  // Se a preferência salva de uma sessão anterior já era "User folders",
+  // busca os dados cross-user agora — fora daqui (ver setGroupBy()), essa
+  // busca só acontece quando o usuário escolhe a opção na hora.
+  if (GROUP_BY === 'user-folders' && typeof reloadAllUsersFoldersFromServer === 'function') {
+    reloadAllUsersFoldersFromServer();
+  }
 }
 applyDefaultsFromSettings();
 // Assíncrono, best-effort — não atrasa a primeira pintura da tela (mesmo
