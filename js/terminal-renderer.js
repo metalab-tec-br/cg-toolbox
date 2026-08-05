@@ -4,7 +4,12 @@
 // ════════════════════════════════════════════════
 let _uid = 0;
 
-function termRender(lines) {
+// cmdId (opcional): id do comando dono destas linhas — repassado ao botão de
+// copiar de cada linha (ver copyBtn abaixo) só para o modo de seleção
+// múltipla saber, na hora de excluir em lote, a QUAL comando cada linha
+// selecionada pertence (não existe exclusão de linha avulsa, só de comando
+// inteiro — ver DELETE /api/commands/:id em server/index.js).
+function termRender(lines, cmdId) {
   const rows = lines.map(l => {
     if (!l) return '';
     // Prefixo "[Note]#" no mesmo padrão de "[Expert@FW]#" (comando) e
@@ -59,7 +64,7 @@ function termRender(lines) {
     // markVar() em db-render-engine.js) usados só para colorir o trecho no
     // safeHL(); o botão de copiar precisa do texto limpo, sem esses
     // caracteres de controle invisíveis.
-    return `<span class="cmd-line"><span class="pr">${prompt} </span>${safeHL(l.c)}${copyBtn(stripVarMarkers(l.c))}</span>`;
+    return `<span class="cmd-line"><span class="pr">${prompt} </span>${safeHL(l.c)}${copyBtn(stripVarMarkers(l.c), cmdId)}</span>`;
   }).join('');
   return `<div class="term">${rows}</div>`;
 }
@@ -166,10 +171,16 @@ function _mcBar() {
   bar = document.createElement('div');
   bar.id = 'multiCopyBar';
   bar.className = 'multi-copy-bar';
+  // "Delete selected" só existe para admin (ver requireAdmin() no DELETE
+  // /api/commands/:id em server/index.js — a API já recusaria de qualquer
+  // forma, isto é só pra não mostrar um botão que vai falhar) — visibilidade
+  // real controlada em _mcUpdateBar() (window.CG_IS_ADMIN só fica disponível
+  // depois que /api/me responde, ver updateAccountUI em js/auth.js).
   bar.innerHTML = `
     <span class="multi-copy-count" id="multiCopyCount">0 selected</span>
+    <button type="button" class="btn btn-danger btn-sm" id="multiCopyDeleteBtn" onclick="_mcDeleteSelected()" style="display:none;">Delete</button>
     <button type="button" class="btn btn-ghost btn-sm" onclick="_mcCancel()">Cancel</button>
-    <button type="button" class="btn btn-primary btn-sm" onclick="_mcFinish()">Copy</button>
+    <button type="button" class="btn btn-primary btn-sm" id="multiCopyCopyBtn" onclick="_mcFinish()">Copy</button>
   `;
   document.body.appendChild(bar);
   return bar;
@@ -177,11 +188,25 @@ function _mcBar() {
 function _mcSelectedButtons() {
   return Array.from(document.querySelectorAll('.copy-btn.multi-on')); // ordem do DOM = ordem na página
 }
+// IDs de comando únicos entre as linhas selecionadas — várias linhas
+// selecionadas do MESMO comando (ex.: duas linhas de um comando multi-linha)
+// contam como um só para fins de exclusão, já que só existe DELETE por
+// comando inteiro (server/index.js não tem exclusão de linha avulsa).
+function _mcSelectedCommandIds() {
+  return [...new Set(_mcSelectedButtons().map(b => b._cmdId).filter(Boolean))];
+}
 function _mcUpdateBar() {
   const bar = _mcBar();
   const n = _mcSelectedButtons().length;
   const countEl = document.getElementById('multiCopyCount');
   if (countEl) countEl.textContent = n === 1 ? '1 selected' : `${n} selected`;
+  const copyBtnEl = document.getElementById('multiCopyCopyBtn');
+  if (copyBtnEl) copyBtnEl.disabled = n === 0;
+  const delBtnEl = document.getElementById('multiCopyDeleteBtn');
+  if (delBtnEl) {
+    delBtnEl.style.display = (typeof window !== 'undefined' && window.CG_IS_ADMIN) ? '' : 'none';
+    delBtnEl.disabled = _mcSelectedCommandIds().length === 0;
+  }
   bar.classList.toggle('show', MULTI_COPY_MODE);
 }
 function _mcToggle(el) {
@@ -212,6 +237,29 @@ function _mcFinish() {
     alert('Failed to copy — please try again.');
   });
 }
+// Exclui de uma vez todos os comandos representados pelas linhas
+// selecionadas (um comando pode ter mais de uma linha marcada, mas só conta
+// uma vez — ver _mcSelectedCommandIds). Reaproveita deleteCommand()
+// (js/api-client.js) e render() (js/render.js), o mesmo par usado pela
+// exclusão individual no editor de comandos (ver cmdEditorDelete em
+// js/command-editor.js).
+function _mcDeleteSelected() {
+  const ids = _mcSelectedCommandIds();
+  if (!ids.length) return;
+  const label = ids.length === 1 ? '1 selected command' : `${ids.length} selected commands`;
+  if (typeof openConfirmModal !== 'function') return;
+  openConfirmModal(`Delete ${label}? This action cannot be undone.`, { danger: true }).then(async ok => {
+    if (!ok) return;
+    try {
+      await Promise.all(ids.map(id => deleteCommand(id)));
+    } catch (err) {
+      console.error('Bulk delete failed', err);
+      alert('Failed to delete one or more of the selected commands. Please try again.');
+    }
+    _mcCancel();
+    if (typeof render === 'function') render();
+  });
+}
 document.addEventListener('keydown', ev => {
   if (ev.key === 'Escape' && MULTI_COPY_MODE) _mcCancel();
 });
@@ -225,7 +273,7 @@ document.addEventListener('click', ev => {
   _mcCancel();
 });
 
-function copyBtn(text) {
+function copyBtn(text, cmdId) {
   const id = 'c' + (++_uid);
   const btn = `<button class="copy-btn copy-btn-inline" id="${id}" title="Copy (double-click to select multiple commands)">${COPY_BTN_ICON}</button>`;
   // store text via JS after insert
@@ -233,6 +281,7 @@ function copyBtn(text) {
     const el = document.getElementById(id);
     if (!el) return;
     el._copyText = text;
+    el._cmdId = cmdId; // ver _mcSelectedCommandIds() / _mcDeleteSelected() acima
     let clickTimer = null;
     el.addEventListener('click', () => {
       if (MULTI_COPY_MODE) { _mcToggle(el); return; }
@@ -391,7 +440,7 @@ function card({ id, name, desc, about, tags = [], lines, diffs, favoriteCount = 
         ${diffs.map(d => `
           <div class="diff-ver">
             <div class="diff-ver-hd"><span class="diff-ver-tag">${d.v}</span>${d.n || ''}</div>
-            ${termRender(d.l)}
+            ${termRender(d.l, id)}
           </div>`).join('')}
       </div>
     </div>` : '';
@@ -405,7 +454,7 @@ function card({ id, name, desc, about, tags = [], lines, diffs, favoriteCount = 
       <span class="card-actions">${favHtml}${duplicateHtml}${editHtml}</span>
     </div>
     ${aboutHtml}
-    ${termRender(lines)}
+    ${termRender(lines, id)}
     ${diffHtml}
   </div>`;
 }
