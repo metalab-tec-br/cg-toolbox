@@ -559,11 +559,11 @@
         <div class="set-group">
           <span class="set-label">Commands</span>
           <div class="settings-action-row">
-            <button type="button" class="btn btn-ghost admin-highlight" id="exportCsvBtn" onclick="openExportColumnsModal()" title="Exports the command catalog as a .csv file — you choose the columns">
+            <button type="button" class="btn btn-ghost" id="exportCsvBtn" onclick="openExportColumnsModal()" title="Exports the command catalog as a .csv file — you choose the columns">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 2v7.5M4.5 6.5L8 10l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
               <span>Export commands</span>
             </button>
-            <button type="button" class="btn btn-ghost admin-highlight" onclick="openImportCommandsModal(event)" title="Bulk-create commands from a .csv file.">
+            <button type="button" class="btn btn-ghost" onclick="openImportCommandsModal(event)" title="Bulk-create commands from a .csv file.">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 10.5V3M4.5 6.5L8 3l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
               <span>Import commands</span>
             </button>
@@ -1135,6 +1135,51 @@
     <div class="modal-foot" style="justify-content:flex-end;">
       <button class="btn" onclick="closeConfirmModal(false)">Cancel</button>
       <button class="btn btn-danger" id="confirmOkBtn" onclick="closeConfirmModal(true)">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ NEW API KEY — name prompt (replaces native prompt(), same pattern as
+     confirmOverlay above) ══ -->
+<div class="modal-overlay" id="apiKeyNameOverlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title">New API key</span>
+      <button class="modal-close" onclick="closeApiKeyNamePrompt()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="set-group">
+        <span class="set-label">Name</span>
+        <input class="set-input" type="text" id="apiKeyNameInput" placeholder='e.g. &quot;Integration X&quot; or the team/system that will use it' maxlength="120">
+      </div>
+    </div>
+    <div class="modal-foot" style="justify-content:flex-end;">
+      <button class="btn" onclick="closeApiKeyNamePrompt()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitApiKeyNamePrompt()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ API KEY CREATED — the key in plain text only ever appears here, once
+     (ver js/api-keys.js: createApiKey) ══ -->
+<div class="modal-overlay" id="apiKeyRevealOverlay">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <span class="modal-title">API key created</span>
+      <button class="modal-close" onclick="closeApiKeyRevealModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <span class="set-hint">Copy this key now — it will not be shown again (only the prefix is kept afterwards, for identification). Send it in the <code>X-API-Key</code> header of external requests.</span>
+      <div class="set-group" style="margin-top:10px;">
+        <span class="set-label">Key</span>
+        <div style="display:flex;gap:8px;">
+          <input class="set-input" type="text" id="apiKeyRevealInput" readonly style="flex:1;">
+          <button type="button" class="btn btn-sm" id="apiKeyRevealCopyBtn" onclick="copyApiKeyReveal()">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot" style="justify-content:flex-end;">
+      <button class="btn btn-primary" onclick="closeApiKeyRevealModal()">Done</button>
     </div>
   </div>
 </div>

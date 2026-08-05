@@ -60,10 +60,77 @@ async function renderApiKeyList() {
   `).join('');
 }
 
+// ── "New API key" (nome) — modal próprio no lugar do prompt() nativo do
+// navegador, mesmo padrão visual/classes de confirmOverlay (ver
+// js/confirm-modal.js e #apiKeyNameOverlay em index.html). ──
 function openNewApiKeyPrompt() {
-  const name = prompt('Name for this API key (e.g. "Integration X" or the team/system that will use it):');
-  if (!name || !name.trim()) return;
-  createApiKey(name.trim());
+  const input = document.getElementById('apiKeyNameInput');
+  if (input) input.value = '';
+  const overlay = document.getElementById('apiKeyNameOverlay');
+  if (overlay) overlay.classList.add('show');
+  if (input) setTimeout(() => input.focus(), 0);
+}
+
+function closeApiKeyNamePrompt() {
+  const overlay = document.getElementById('apiKeyNameOverlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
+function submitApiKeyNamePrompt() {
+  const input = document.getElementById('apiKeyNameInput');
+  const name = input ? input.value.trim() : '';
+  if (!name) { if (input) input.focus(); return; }
+  closeApiKeyNamePrompt();
+  createApiKey(name);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const nameOverlay = document.getElementById('apiKeyNameOverlay');
+  if (nameOverlay) nameOverlay.addEventListener('click', ev => { if (ev.target.id === 'apiKeyNameOverlay') closeApiKeyNamePrompt(); });
+  const nameInput = document.getElementById('apiKeyNameInput');
+  if (nameInput) nameInput.addEventListener('keydown', ev => { if (ev.key === 'Enter') submitApiKeyNamePrompt(); });
+  const revealOverlay = document.getElementById('apiKeyRevealOverlay');
+  if (revealOverlay) revealOverlay.addEventListener('click', ev => { if (ev.target.id === 'apiKeyRevealOverlay') closeApiKeyRevealModal(); });
+});
+document.addEventListener('keydown', ev => {
+  if (ev.key !== 'Escape') return;
+  const nameOverlay = document.getElementById('apiKeyNameOverlay');
+  if (nameOverlay && nameOverlay.classList.contains('show')) closeApiKeyNamePrompt();
+  const revealOverlay = document.getElementById('apiKeyRevealOverlay');
+  if (revealOverlay && revealOverlay.classList.contains('show')) closeApiKeyRevealModal();
+});
+
+// ── "API key created" (reveal, uma única vez) — mesmo padrão. ──
+function openApiKeyRevealModal(keyValue) {
+  const input = document.getElementById('apiKeyRevealInput');
+  if (input) input.value = keyValue;
+  const copyBtn = document.getElementById('apiKeyRevealCopyBtn');
+  if (copyBtn) copyBtn.textContent = 'Copy';
+  const overlay = document.getElementById('apiKeyRevealOverlay');
+  if (overlay) overlay.classList.add('show');
+}
+
+function closeApiKeyRevealModal() {
+  const overlay = document.getElementById('apiKeyRevealOverlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
+// Reaproveita o helper de cópia já usado nos botões "Copy" das linhas de
+// comando (ver js/terminal-renderer.js: _copyToClipboard) — funciona tanto
+// via Clipboard API (HTTPS/localhost) quanto via execCommand (HTTP puro).
+function copyApiKeyReveal() {
+  const input = document.getElementById('apiKeyRevealInput');
+  const btn = document.getElementById('apiKeyRevealCopyBtn');
+  if (!input) return;
+  const copy = (typeof _copyToClipboard === 'function') ? _copyToClipboard(input.value) : Promise.reject(new Error('no clipboard helper'));
+  copy.then(() => {
+    if (!btn) return;
+    btn.textContent = 'Copied';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+  }).catch(() => {
+    input.focus();
+    input.select();
+  });
 }
 
 async function createApiKey(name) {
@@ -78,12 +145,9 @@ async function createApiKey(name) {
       throw new Error(data.message || `HTTP ${res.status}`);
     }
     const data = await res.json();
-    // A key completa só existe AQUI — nunca mais é recuperável depois disso.
-    window.prompt(
-      `API key created. Copy it now — it will not be shown again (only the prefix "${data.key_prefix}…" is kept, for identification).\n\nSend this value in the "X-API-Key" header of external requests:`,
-      data.key
-    );
     renderApiKeyList();
+    // A key completa só existe AQUI — nunca mais é recuperável depois disso.
+    openApiKeyRevealModal(data.key);
   } catch (err) {
     alert('Failed to create API key. Please try again.');
     console.error('Create API key failed', err);
