@@ -146,23 +146,23 @@ async function render() {
   // abaixo), com `keyPrefix` distinto para manter o recolher/expandir de
   // cada seção independente entre autores.
   //
-  // Navegando por Folders (VIEW_FOLDERS_HOME = visão combinada, ou
-  // VIEW_FOLDER_ID = uma pasta específica clicada na sidebar — ver
-  // js/folders.js), o conteúdo é organizado por PASTA em vez de por Tópico:
-  // uma seção recolhível por pasta (mesmo estilo visual/comportamento das
-  // seções de Tópico — expande/recolhe, mostra a contagem), cada uma com
-  // todos os comandos que o usuário guardou ali dentro, sem separar por
-  // Ambiente/Tópico. Substituiu o esquema antigo de renderizar tudo
-  // normalmente por Tópico e só ESCONDER depois os cards fora da pasta
-  // (ver histórico de applyFolderFilter/applyAnyFolderFilter) — este
-  // esquema não dava a sensação de "pasta" pedida, só filtrava a mesma
-  // grade de sempre.
+  // Navegando por Folders (VIEW_FOLDERS_HOME — clique em "Folders" na
+  // sidebar, ver js/folders.js), o conteúdo é organizado por PASTA em vez de
+  // por Tópico: uma seção recolhível por pasta (mesmo estilo visual/
+  // comportamento das seções de Tópico — expande/recolhe, mostra a
+  // contagem), cada uma com todos os comandos que o usuário guardou ali
+  // dentro, sem separar por Ambiente/Tópico. Substituiu o esquema antigo de
+  // renderizar tudo normalmente por Tópico e só ESCONDER depois os cards
+  // fora da pasta (ver histórico de applyFolderFilter/applyAnyFolderFilter)
+  // — este esquema não dava a sensação de "pasta" pedida, só filtrava a
+  // mesma grade de sempre. A sidebar não navega mais por pasta individual
+  // (removido o VIEW_FOLDER_ID/lista de pastas a pedido do usuário) — aqui
+  // sempre aparecem TODAS as pastas do usuário, uma seção cada.
   function buildSections(rows, keyPrefix) {
     const sections = [];
-    if (VIEW_FOLDERS_HOME || VIEW_FOLDER_ID != null) {
+    if (VIEW_FOLDERS_HOME) {
       const folderNameById = new Map((typeof FOLDERS !== 'undefined' ? FOLDERS : []).map(f => [f.id, f.name]));
-      const scopeIds = VIEW_FOLDER_ID != null ? [VIEW_FOLDER_ID] : [...folderNameById.keys()];
-      const sortedIds = scopeIds.filter(id => folderNameById.has(id)).sort((a, b) =>
+      const sortedIds = [...folderNameById.keys()].sort((a, b) =>
         folderNameById.get(a).localeCompare(folderNameById.get(b), undefined, { sensitivity: 'base' })
       );
       sortedIds.forEach(fid => {
@@ -235,7 +235,13 @@ async function render() {
       const cardCount = (body.match(/<div class="card"/g) || []).length;
       if (!cardCount) return '';
       const folderName = folderNameById.get(folderId);
-      return collapsibleGroup(`${cv}__${ce}__folder${folderId}`, `${folderIcon(true, 13)} <strong>${escAttr(folderName)}</strong> <span class="sec-count">${cardCount}</span>`, body, 'section-creator');
+      const nameEsc = escAttr(folderName);
+      const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(folderName) : nameEsc;
+      const actions = `<span class="sec-folder-actions">
+        <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="promptRenameFolder(${folderId}, '${jsEsc}', event)" title="Rename folder">✎</button>
+        <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${folderId}, '${jsEsc}', event)" title="Delete folder">✕</button>
+      </span>`;
+      return collapsibleGroup(`${cv}__${ce}__folder${folderId}`, `${folderIcon(true, 13)} <strong>${nameEsc}</strong> <span class="sec-count">${cardCount}</span>${actions}`, body, 'section-creator');
     }).join('');
     if (!folderGroups) return '';
     const comboHeader = combos.length > 1
@@ -265,15 +271,11 @@ async function render() {
 
   out.innerHTML = [combosTruncatedNote, ...comboBlocks].join('');
   // buildSections() já monta uma seção por pasta quando navegando por Folders
-  // (ver acima) — mas se nenhuma tiver comandos para os filtros atuais (ou a
-  // pasta específica clicada estiver vazia), nenhuma seção é gerada e a tela
-  // fica em branco sem esse aviso.
-  if ((VIEW_FOLDERS_HOME || VIEW_FOLDER_ID != null) && !out.querySelector('.section')) {
-    const folder = VIEW_FOLDER_ID != null && typeof FOLDERS !== 'undefined' ? FOLDERS.find(f => f.id === VIEW_FOLDER_ID) : null;
-    const msg = VIEW_FOLDER_ID != null
-      ? (folder ? `No commands in "${escAttr(folder.name)}" yet for the current filters.` : 'Folder not found.')
-      : 'No commands in any folder yet for the current filters.';
-    out.insertAdjacentHTML('beforeend', `<div class="empty"><div class="empty-ico">${folderIcon(false, 40)}</div><p>${msg}</p></div>`);
+  // (ver acima) — mas se nenhuma pasta tiver comandos para os filtros atuais
+  // (ou o usuário ainda não tiver nenhuma pasta), nenhuma seção é gerada e a
+  // tela fica em branco sem esse aviso.
+  if (VIEW_FOLDERS_HOME && !out.querySelector('.section')) {
+    out.insertAdjacentHTML('beforeend', `<div class="empty"><div class="empty-ico">${folderIcon(false, 40)}</div><p>No commands in any folder yet for the current filters.</p></div>`);
   }
   applySearchFilter();
 }

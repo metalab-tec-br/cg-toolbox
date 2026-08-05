@@ -458,17 +458,33 @@ function buildTopicSection(rows, topic, icon, title, values, hasIPs, key) {
 // Uma seção de PASTA (ícone de pasta + nome + seus cards) — mesmo papel de
 // buildTopicSection acima, só que agrupando pela pasta do usuário (ver
 // js/folders.js) em vez de um Tópico do catálogo. Usada quando a visão atual
-// é Folders (VIEW_FOLDERS_HOME/VIEW_FOLDER_ID, ver render.js), para que cada
-// pasta apareça como uma seção recolhível no mesmo estilo visual dos
-// Tópicos, em vez do antigo esquema de só esconder/mostrar cards já
-// renderizados por Tópico. `folderName` é texto livre cadastrado pelo
-// usuário — passa por escAttr() antes de virar título da seção (inserido
-// como HTML cru por section()) para não permitir HTML injection via nome de
-// pasta malicioso.
+// é Folders (VIEW_FOLDERS_HOME, ver render.js), para que cada pasta apareça
+// como uma seção recolhível no mesmo estilo visual dos Tópicos, em vez do
+// antigo esquema de só esconder/mostrar cards já renderizados por Tópico.
+// `folderName` é texto livre cadastrado pelo usuário — passa por escAttr()
+// antes de virar título da seção (inserido como HTML cru) para não permitir
+// HTML injection via nome de pasta malicioso.
+//
+// A sidebar não lista mais as pastas individualmente (só o item combinado
+// "Folders" — a pedido do usuário), então renomear/excluir uma pasta só é
+// possível aqui: dois botões (✎/✕) embutidos no próprio cabeçalho da seção,
+// visíveis só no hover (.sec-folder-actions, ver components.css), mesma UX
+// que existia nas linhas da sidebar antes de serem removidas. Não usa o
+// helper genérico section() porque ele não permite inserir esses botões
+// entre o nome e a contagem — chama collapsibleGroup() diretamente, igual ao
+// bloco GROUP_BY==='my-folders' em render.js.
 function buildFolderSection(rows, folderId, folderName, values, hasIPs, key) {
   const cards = rows
     .filter(r => (r.folder_ids || []).includes(folderId))
     .map(r => buildCardHtmlForRow(r, values, hasIPs))
     .filter(Boolean);
-  return section(folderIcon(true, 12), escAttr(folderName), cards, key);
+  if (!cards.length) return '';
+  const nameEsc = escAttr(folderName);
+  const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(folderName) : nameEsc;
+  const actions = `<span class="sec-folder-actions">
+    <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="promptRenameFolder(${folderId}, '${jsEsc}', event)" title="Rename folder">✎</button>
+    <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${folderId}, '${jsEsc}', event)" title="Delete folder">✕</button>
+  </span>`;
+  const headerHtml = `${folderIcon(true, 12)} ${nameEsc} <span class="sec-count">${cards.length}</span>${actions}`;
+  return collapsibleGroup(key || `folder${folderId}`, headerHtml, cards.join(''));
 }

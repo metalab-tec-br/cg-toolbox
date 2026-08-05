@@ -472,6 +472,19 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 }
 .sec-body { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .section.collapsed .sec-body { display: none; }
+/* Renomear/excluir uma pasta (buildFolderSection em db-render-engine.js, e o
+   agrupamento GROUP_BY==='my-folders' em render.js) — como a sidebar não
+   lista mais as pastas individualmente, esses botões (✎/✕) no cabeçalho da
+   própria seção são o único jeito de gerenciar a pasta. Só aparecem no hover
+   do cabeçalho, mesmo padrão do antigo .folder-row-actions da sidebar. */
+.sec-folder-actions { display: none; align-items: center; gap: 2px; flex-shrink: 0; text-transform: none; }
+.sec-title:hover .sec-folder-actions { display: flex; }
+.sec-folder-btn {
+  width: 16px; height: 16px; display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; color: var(--muted); border-radius: 4px;
+  cursor: pointer; font-size: 10px; line-height: 1;
+}
+.sec-folder-btn:hover { background: var(--surf3); color: var(--text); }
 
 /* Bloco recolhível por Versão/Ambiente (modo "Agrupar por Versão") — mesma mecânica de
    .section, com um destaque visual próprio (borda + fundo) para se diferenciar das
@@ -498,14 +511,21 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 
 
 /* ─── CARD ─── */
+/* Sem overflow:hidden aqui (tinha antes, só para cortar os cantos quadrados
+   do .card-head no lugar dos cantos arredondados do card) — isso cortava
+   junto o dropdown de pastas (.folder-menu-pop, position:absolute dentro de
+   .fav-wrap) sempre que a lista de pastas do usuário era grande o bastante
+   para ultrapassar a borda inferior do card. .card-head agora arredonda os
+   próprios cantos superiores para não precisar do overflow:hidden do pai. */
 .card {
-  background: var(--surf); border: 1px solid var(--bdr); border-radius: 8px; overflow: hidden;
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: 8px;
   transition: border-color .12s;
 }
 .card:hover { border-color: var(--bdr2); }
 .card-head {
   display: flex; align-items: center; gap: 6px; padding: 8px 12px;
   background: var(--surf2); border-bottom: 1px solid var(--bdr); flex-wrap: wrap;
+  border-radius: 8px 8px 0 0;
 }
 .card-name { font-size: 12px; font-weight: 700; color: var(--text); flex: 1; min-width: 100px; }
 .card-desc { font-size: 10.5px; color: var(--muted); }
@@ -619,6 +639,7 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .folder-menu-pop {
   display: none; position: absolute; top: 100%; left: 0; margin-top: 6px;
   z-index: 31; width: max-content; min-width: 160px; max-width: 260px;
+  max-height: 240px; overflow-y: auto;
   background: var(--surf); border: 1px solid var(--bdr); border-radius: 7px;
   box-shadow: 0 6px 18px rgba(0,0,0,.22); padding: 4px;
   font-size: 12px; color: var(--text); text-align: left; cursor: default;

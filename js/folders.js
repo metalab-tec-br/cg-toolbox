@@ -18,24 +18,15 @@
 // ════════════════════════════════════════════════
 let FOLDERS = [];
 
-// VIEW_FOLDERS_HOME = visão combinada (home page "Folders" — mostra todo
-// comando que esteja em QUALQUER pasta do usuário, sem seções por pasta).
-// VIEW_FOLDER_ID = pasta específica sendo visualizada (clicada na sidebar) —
-// os dois são mutuamente exclusivos; nenhum dos dois ativo = menu normal.
+// VIEW_FOLDERS_HOME = visão "Folders" ativa (home page ou clique em
+// #foldersNavRow) — mostra todo comando que esteja em QUALQUER pasta do
+// usuário, uma seção recolhível por pasta (ver buildFolderSection em
+// db-render-engine.js), mesmo estilo visual dos Tópicos. Não existe mais
+// navegação por pasta individual pela sidebar (ela não lista mais as pastas
+// — a pedido do usuário; renomear/excluir uma pasta agora é feito no
+// cabeçalho da própria seção, ver .sec-folder-actions em components.css).
 let VIEW_FOLDERS_HOME = loadSettings().home === 'folders';
-let VIEW_FOLDER_ID = null;
 (() => { const row = document.getElementById('foldersNavRow'); if (row) row.classList.toggle('on', VIEW_FOLDERS_HOME); })();
-// Estado de expandido/recolhido da lista de pastas na sidebar — só estético,
-// puramente local (não sincronizado entre máquinas, ao contrário das pastas
-// em si), por isso persistido direto no localStorage sem passar pelo
-// mecanismo de sync de user-data (ver js/user-sync.js: USER_SYNCED_KEYS).
-(() => {
-  const block = document.getElementById('foldersBlock');
-  if (!block) return;
-  let expanded = true;
-  try { expanded = localStorage.getItem('cpa-folders-expanded') !== '0'; } catch (e) {}
-  block.classList.toggle('collapsed', !expanded);
-})();
 
 // Busca as pastas reais do usuário atual no servidor e substitui FOLDERS —
 // chamado uma vez no boot (via user-sync.js) depois que o usuário é
@@ -46,59 +37,21 @@ async function reloadFoldersFromServer() {
     const res = await fetch('/api/folders');
     const data = await res.json();
     FOLDERS = (data || []).map(f => ({ id: f.id, name: f.name, sort_order: f.sort_order, command_ids: new Set(f.command_ids || []) }));
-    renderFoldersSidebarList();
     if (typeof render === 'function') render();
   } catch (e) {
     console.warn('Não foi possível carregar as pastas do servidor', e);
   }
 }
 
-// ── Sidebar: lista de pastas (nested list sob o cabeçalho "Folders") ──
-function renderFoldersSidebarList() {
-  const list = document.getElementById('foldersDynamicList');
-  if (!list) return;
-  const sorted = FOLDERS.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-  list.innerHTML = sorted.map(f => `
-    <div class="sb-row folder-row${VIEW_FOLDER_ID === f.id ? ' on' : ''}" data-folder-id="${f.id}" onclick="selectFolder(${f.id})">
-      ${folderIcon(false, 12)}
-      <span class="folder-row-name">${escapeCmdSearchHistoryHtml(f.name)}</span>
-      <span class="folder-row-count">${f.command_ids.size}</span>
-      <span class="folder-row-actions">
-        <button type="button" class="folder-row-btn" onmousedown="event.preventDefault()" onclick="promptRenameFolder(${f.id}, '${jsAttrEscapeCmdSearch(f.name)}', event)" title="Rename folder">✎</button>
-        <button type="button" class="folder-row-btn" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${f.id}, '${jsAttrEscapeCmdSearch(f.name)}', event)" title="Delete folder">✕</button>
-      </span>
-    </div>`).join('');
-}
-
-// ── Navegação: visão combinada / pasta específica / home ──
-function toggleFoldersExpanded() {
-  const block = document.getElementById('foldersBlock');
-  if (!block) return;
-  const willCollapse = !block.classList.contains('collapsed');
-  block.classList.toggle('collapsed', willCollapse);
-  try { localStorage.setItem('cpa-folders-expanded', willCollapse ? '0' : '1'); } catch (e) {}
-}
-function updateFoldersNavHighlight() {
-  const nav = document.getElementById('foldersNavRow');
-  if (nav) nav.classList.toggle('on', VIEW_FOLDERS_HOME);
-  document.querySelectorAll('#foldersDynamicList .folder-row').forEach(r => {
-    r.classList.toggle('on', VIEW_FOLDER_ID !== null && String(VIEW_FOLDER_ID) === r.dataset.folderId);
-  });
-}
+// ── Navegação: visão combinada de Folders / home ──
 // Clique no cabeçalho "Folders" da sidebar — mesmo easter egg de sempre
 // (Ctrl+Alt+clique, ver _q7 em js/state.js) preservado aqui no lugar de
 // toggleFavoritesView(), que cumpria o mesmo papel antes.
 function viewAllFolders() {
   if (_q7 === 3) return _rvl9();
   VIEW_FOLDERS_HOME = true;
-  VIEW_FOLDER_ID = null;
-  updateFoldersNavHighlight();
-  render();
-}
-function selectFolder(id) {
-  VIEW_FOLDERS_HOME = false;
-  VIEW_FOLDER_ID = id;
-  updateFoldersNavHighlight();
+  const nav = document.getElementById('foldersNavRow');
+  if (nav) nav.classList.toggle('on', true);
   render();
 }
 // Clique no nome/logo do app: volta para a página inicial configurada
@@ -106,8 +59,8 @@ function selectFolder(id) {
 function goHome() {
   const s = loadSettings();
   VIEW_FOLDERS_HOME = s.home === 'folders';
-  VIEW_FOLDER_ID = null;
-  updateFoldersNavHighlight();
+  const nav = document.getElementById('foldersNavRow');
+  if (nav) nav.classList.toggle('on', VIEW_FOLDERS_HOME);
   render();
 }
 
@@ -115,25 +68,22 @@ function goHome() {
 // dropdown de pastas de cada card — ver folderMenuHtml()/toggleFolderMenu()
 // em js/terminal-renderer.js) ──
 //
-// Navegando por Folders (VIEW_FOLDERS_HOME/VIEW_FOLDER_ID) ou com Group By =
-// "My folders" (ver js/render.js: buildSections()), a tela é organizada em
-// seções POR PASTA — um comando marcado/desmarcado muda quais cards
-// aparecem em quais seções, o que exige reconstruir o HTML (render()
-// completo), não só trocar uma classe. Fora desses casos (navegando
-// normalmente por Tópico/Versão/Created by, com o dropdown de pastas aberto
-// no próprio card), a atualização é otimista — marca/desmarca só o item
-// clicado e o botão de pasta do card, SEM re-renderizar — para o dropdown
-// continuar aberto e permitir marcar várias pastas em sequência.
+// Navegando por Folders (VIEW_FOLDERS_HOME) ou com Group By = "My folders"
+// (ver js/render.js: buildSections()), a tela é organizada em seções POR
+// PASTA — um comando marcado/desmarcado muda quais cards aparecem em quais
+// seções, o que exige reconstruir o HTML (render() completo), não só trocar
+// uma classe. Fora desses casos (navegando normalmente por Tópico/Versão/
+// Created by, com o dropdown de pastas aberto no próprio card), a
+// atualização é otimista — marca/desmarca só o item clicado e o botão de
+// pasta do card, SEM re-renderizar — para o dropdown continuar aberto e
+// permitir marcar várias pastas em sequência.
 function toggleCommandInFolder(cmdId, folderId, itemEl) {
   const folder = FOLDERS.find(f => f.id === folderId);
   if (!folder) return;
   const wasOn = folder.command_ids.has(cmdId);
   if (wasOn) folder.command_ids.delete(cmdId); else folder.command_ids.add(cmdId);
 
-  const folderCountEl = document.querySelector(`#foldersDynamicList .folder-row[data-folder-id="${folderId}"] .folder-row-count`);
-  if (folderCountEl) folderCountEl.textContent = folder.command_ids.size;
-
-  if (VIEW_FOLDERS_HOME || VIEW_FOLDER_ID != null || GROUP_BY === 'my-folders') {
+  if (VIEW_FOLDERS_HOME || GROUP_BY === 'my-folders') {
     render();
   } else if (itemEl) {
     itemEl.classList.toggle('on', !wasOn);
@@ -214,14 +164,17 @@ async function promptCreateFolder(cmdIdToAddAfter) {
       });
     }
     FOLDERS.push({ id: folder.id, name: folder.name, sort_order: folder.sort_order, command_ids: commandIds });
-    renderFoldersSidebarList();
     render(); // reconstrói os cards para o dropdown de pastas (e a seção da pasta, se estiver em Folders) já refletirem a pasta nova
   } catch (e) {
     alert('Failed to create folder. Please try again.');
   }
 }
+// `ev` (opcional): quando chamado a partir do cabeçalho de uma seção de
+// pasta (.sec-folder-actions, ver buildFolderSection em
+// db-render-engine.js), stopPropagation() evita que o clique também
+// recolha/expanda a seção (o cabeçalho inteiro tem onclick="toggleSection(...)")
 async function promptRenameFolder(id, currentName, ev) {
-  if (ev) ev.stopPropagation(); // não deixa o clique também selecionar a pasta (ver selectFolder no row pai)
+  if (ev) ev.stopPropagation();
   const name = await openFolderPromptModal('rename', currentName);
   if (!name || name === currentName) return;
   try {
@@ -235,7 +188,7 @@ async function promptRenameFolder(id, currentName, ev) {
     }
     const folder = FOLDERS.find(f => f.id === id);
     if (folder) folder.name = name;
-    renderFoldersSidebarList();
+    render(); // o nome da pasta aparece no título da sua seção — precisa reconstruir
   } catch (e) {
     alert('Failed to rename folder. Please try again.');
   }
@@ -248,8 +201,7 @@ function deleteFolderConfirm(id, name, ev) {
     fetch(`/api/folders/${id}`, { method: 'DELETE' }).catch(e => {
       console.warn('Falha ao excluir pasta no servidor (mantida localmente)', e);
     });
-    if (VIEW_FOLDER_ID === id) { VIEW_FOLDER_ID = null; goHome(); }
-    else { renderFoldersSidebarList(); render(); }
+    render();
   });
 }
 

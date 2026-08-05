@@ -146,8 +146,8 @@ function saveSettingsModal() {
   if (typeof ccRefreshCascade === 'function') ccRefreshCascade();
   gvSet('f-log', s.logFile);
   VIEW_FOLDERS_HOME = s.home === 'folders';
-  VIEW_FOLDER_ID = null;
-  if (typeof updateFoldersNavHighlight === 'function') updateFoldersNavHighlight();
+  const foldersNav = document.getElementById('foldersNavRow');
+  if (foldersNav) foldersNav.classList.toggle('on', VIEW_FOLDERS_HOME);
   closeSettingsModal();
   render();
 }

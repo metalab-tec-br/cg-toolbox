@@ -74,28 +74,21 @@
     </div>
   </div>
 
-  <!-- Folders — substitui Favorites (ver js/folders.js). #foldersNavRow clicado
-       seleciona a visão combinada (todos os comandos que estão em QUALQUER
-       pasta do usuário); a setinha (foldersToggle) só expande/recolhe a lista
-       de pastas individuais abaixo, sem mudar a visão atual. Cada pasta
-       listada (foldersDynamicList, preenchida por renderFoldersSidebarList())
-       é clicável para filtrar só por ela, com botões de renomear/excluir que
-       aparecem no hover (ver .folder-row-actions em components.css). Criação
-       de pasta nova só pelo botão "Add" da toolbar (dropdown > Folder, ver
-       #addDDPanel) — removido o atalho "+ New folder" que existia aqui, a
-       pedido do usuário, para não duplicar o ponto de entrada. -->
+  <!-- Folders — substitui Favorites (ver js/folders.js). Uma única linha
+       clicável (#foldersNavRow) que leva à visão combinada (todos os
+       comandos que estão em QUALQUER pasta do usuário, cada pasta como uma
+       seção recolhível — ver buildFolderSection em db-render-engine.js).
+       Não lista mais as pastas individuais aqui na sidebar (removido a
+       pedido do usuário) — renomear/excluir uma pasta agora é feito
+       diretamente no cabeçalho da sua seção, dentro do conteúdo (ver
+       .sec-folder-actions em components.css). Criação de pasta nova
+       continua só pelo botão "Add" da toolbar (dropdown > Folder). -->
   <div class="sb-block" id="foldersBlock">
     <div class="sb-list">
-      <div class="sb-row folders-head-row" id="foldersNavRow">
-        <span class="folders-head-main" onclick="viewAllFolders()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" style="flex-shrink:0;"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.2h8.5A1.5 1.5 0 0 1 21 8.7v9.8A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5v-12z"/></svg>
-          <span>Folders</span>
-        </span>
-        <button type="button" class="folders-toggle" onclick="toggleFoldersExpanded()" title="Expand/collapse folders">
-          <svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M1 2l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
+      <div class="sb-row folders-head-row" id="foldersNavRow" onclick="viewAllFolders()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" style="flex-shrink:0;"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.2h8.5A1.5 1.5 0 0 1 21 8.7v9.8A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5v-12z"/></svg>
+        <span>Folders</span>
       </div>
-      <div class="folders-nested" id="foldersDynamicList"></div>
     </div>
   </div>
 

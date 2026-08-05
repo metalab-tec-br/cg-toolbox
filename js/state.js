@@ -174,10 +174,10 @@ function readMultiSelectValue(containerId, itemSelector, keyAttr, specificKeys) 
 }
 
 function onSidebarFilterChange() {
-  if (VIEW_FOLDERS_HOME || VIEW_FOLDER_ID != null) {
+  if (VIEW_FOLDERS_HOME) {
     VIEW_FOLDERS_HOME = false;
-    VIEW_FOLDER_ID = null;
-    if (typeof updateFoldersNavHighlight === 'function') updateFoldersNavHighlight();
+    const nav = document.getElementById('foldersNavRow');
+    if (nav) nav.classList.remove('on');
   }
   render();
 }
@@ -249,8 +249,8 @@ function resetSidebarFilterToAny(containerId) {
 // "Clear filters" reseta Vendor/System/Versão/Ambiente/Tópico de uma vez só (um único
 // render no final) — diferente das mudanças individuais de filtro
 // (onSidebarFilterChange), ele NÃO tira o usuário da visão de Folders
-// (VIEW_FOLDERS_HOME/VIEW_FOLDER_ID), por isso chama render() diretamente em
-// vez de passar por onSidebarFilterChange().
+// (VIEW_FOLDERS_HOME), por isso chama render() diretamente em vez de passar
+// por onSidebarFilterChange().
 function clearAllSidebarFilters() {
   Object.keys(SB_FILTER_CFG).forEach(resetSidebarFilterToAny);
   if (typeof ccRefreshCascade === 'function') ccRefreshCascade();
