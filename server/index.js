@@ -543,8 +543,52 @@ app.get('/api/me', async (req, res) => {
 // usuário que está fazendo a requisição.
 // ════════════════════════════════════════════════
 
+// Junta folder_commands + notes de um conjunto de pastas num único array
+// `order` por pasta — {type:'command'|'note', id} na sequência de
+// sort_order (a MESMA escala numérica pras duas tabelas dentro de uma
+// pasta, ver comentário em schema.sql) — é assim que o front-end sabe
+// intercalar comandos e notas na ordem que o usuário definiu, em vez de
+// sempre mostrar os comandos primeiro. `notesById` sai já pronto pra virar
+// o campo `notes` de cada pasta na resposta.
+async function loadFolderOrderAndNotes(folderIds) {
+  if (!folderIds.length) return { orderByFolder: new Map(), notesByFolder: new Map() };
+  const [itemsQ, notesQ] = await Promise.all([
+    pool.query(
+      `SELECT folder_id, command_id::text AS item_id, sort_order, 'command' AS item_type FROM folder_commands WHERE folder_id = ANY($1)
+       UNION ALL
+       SELECT folder_id, id::text AS item_id, sort_order, 'note' AS item_type FROM notes WHERE folder_id = ANY($1)
+       ORDER BY folder_id, sort_order, item_type`,
+      [folderIds]
+    ),
+    pool.query(
+      `SELECT id, folder_id, username, title, description, sort_order, created_at, updated_at
+       FROM notes WHERE folder_id = ANY($1) ORDER BY folder_id, sort_order, id`,
+      [folderIds]
+    ),
+  ]);
+  const orderByFolder = new Map();
+  itemsQ.rows.forEach(r => {
+    if (!orderByFolder.has(r.folder_id)) orderByFolder.set(r.folder_id, []);
+    orderByFolder.get(r.folder_id).push({
+      type: r.item_type,
+      id: r.item_type === 'note' ? Number(r.item_id) : r.item_id,
+    });
+  });
+  const notesByFolder = new Map();
+  notesQ.rows.forEach(r => {
+    if (!notesByFolder.has(r.folder_id)) notesByFolder.set(r.folder_id, []);
+    notesByFolder.get(r.folder_id).push({
+      id: r.id, folder_id: r.folder_id, title: r.title, description: r.description, sort_order: r.sort_order,
+      created_at: r.created_at, updated_at: r.updated_at,
+    });
+  });
+  return { orderByFolder, notesByFolder };
+}
+
 // Lista as pastas do usuário atual, cada uma já com a lista de command_ids
-// que contém — evita 1 request por pasta no front-end.
+// que contém, as próprias notas (task Notes) e o array `order` combinado
+// (comandos + notas intercalados, ver loadFolderOrderAndNotes acima) — evita
+// 1 request por pasta no front-end.
 app.get('/api/folders', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
@@ -558,21 +602,28 @@ app.get('/api/folders', async (req, res) => {
        ORDER BY f.sort_order, f.name`,
       [username]
     );
-    res.json(rows.map(r => ({ id: r.id, name: r.name, sort_order: r.sort_order, command_ids: r.command_ids })));
+    const { orderByFolder, notesByFolder } = await loadFolderOrderAndNotes(rows.map(r => r.id));
+    res.json(rows.map(r => ({
+      id: r.id, name: r.name, sort_order: r.sort_order, command_ids: r.command_ids,
+      notes: notesByFolder.get(r.id) || [],
+      order: orderByFolder.get(r.id) || [],
+    })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
 
-// Lista as pastas de TODOS os usuários (cross-user) — usada só pelo Group by
-// "User folders" no front-end (ver js/folders.js/render.js), uma visão de
-// equipe para ver o que cada colega organizou, no mesmo espírito do
-// "Created by" (que já é cross-user). Diferente de GET /api/folders acima,
-// que é privado ao usuário da requisição — aqui não há filtro por username.
-// Comandos em si já são visíveis a todo mundo (ver "Created by"); o que era
-// privado era só a ORGANIZAÇÃO em pastas, e este endpoint existe
-// especificamente para abrir essa visão, a pedido do usuário.
+// Lista as pastas de TODOS os usuários (cross-user) — usada pelo Group by
+// "User folders" (fora de Folders) E pelo novo seletor de escopo de pastas
+// dentro de Folders ("My folders" / escolher um usuário / "All" — ver
+// js/folders.js), uma visão de equipe para ver o que cada colega organizou,
+// no mesmo espírito do "Created by" (que já é cross-user). Diferente de GET
+// /api/folders acima, que é privado ao usuário da requisição — aqui não há
+// filtro por username. Comandos em si já são visíveis a todo mundo (ver
+// "Created by"); o que era privado era só a ORGANIZAÇÃO em pastas. Notas de
+// outro usuário aparecem aqui também, só que sem nenhuma ação disponível no
+// front-end (edição/clone/exclusão exige username === CURRENT_USER).
 app.get('/api/folders/all', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -583,7 +634,12 @@ app.get('/api/folders/all', async (req, res) => {
        GROUP BY f.id
        ORDER BY f.username, f.sort_order, f.name`
     );
-    res.json(rows.map(r => ({ id: r.id, username: r.username, name: r.name, sort_order: r.sort_order, command_ids: r.command_ids })));
+    const { orderByFolder, notesByFolder } = await loadFolderOrderAndNotes(rows.map(r => r.id));
+    res.json(rows.map(r => ({
+      id: r.id, username: r.username, name: r.name, sort_order: r.sort_order, command_ids: r.command_ids,
+      notes: notesByFolder.get(r.id) || [],
+      order: orderByFolder.get(r.id) || [],
+    })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
@@ -658,10 +714,19 @@ app.post('/api/folders/:id/commands/:commandId', async (req, res) => {
     if (!(await getCommandRow(commandId))) return res.status(404).json({ error: 'not_found', message: `Command '${commandId}' not found` });
     // Comando novo entra no FIM da ordem da pasta (task #458) — MAX(sort_order)+1
     // em vez de 0 fixo, senão toda inclusão nova empataria na primeira posição.
-    // COALESCE cobre a pasta ainda vazia (MAX de zero linhas é NULL).
+    // GREATEST entre folder_commands E notes (task Notes) — as duas tabelas
+    // compartilham a MESMA escala de sort_order dentro da pasta (ver
+    // comentário em schema.sql), então o "fim" de verdade pode estar
+    // marcado numa nota, não só num comando. COALESCE(...,-1)+1 cobre a
+    // pasta ainda totalmente vazia (MAX de zero linhas nas duas é NULL).
     await pool.query(
       `INSERT INTO folder_commands (folder_id, command_id, sort_order)
-       VALUES ($1, $2, (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM folder_commands WHERE folder_id = $1))
+       VALUES ($1, $2, (
+         SELECT COALESCE(GREATEST(
+           (SELECT MAX(sort_order) FROM folder_commands WHERE folder_id = $1),
+           (SELECT MAX(sort_order) FROM notes WHERE folder_id = $1)
+         ), -1) + 1
+       ))
        ON CONFLICT DO NOTHING`,
       [id, commandId]
     );
@@ -688,32 +753,47 @@ app.delete('/api/folders/:id/commands/:commandId', async (req, res) => {
   }
 });
 
-// Reordena os comandos DENTRO de uma pasta do usuário atual (task #458) —
-// body { command_ids: [...] } é a lista COMPLETA na nova ordem desejada;
-// sort_order de cada linha é reescrito para a posição correspondente no
-// array. 404 se a pasta não existir/não for do usuário (mesmo tratamento
-// das outras rotas de folder). IDs que não pertencerem de fato à pasta são
-// ignorados silenciosamente (rowCount da query composta simplesmente não
-// bate com nada para eles) — o front-end sempre manda a lista completa e
-// correta (deriva da ordem atual do DOM), então isso só protege contra uma
-// chamada manual malformada.
+// Reordena os itens (comandos E notas, task Notes) DENTRO de uma pasta do
+// usuário atual (task #458, estendido) — body { order: [{type, id}, ...] }
+// é a lista COMPLETA na nova ordem desejada (type: 'command'|'note'); o
+// índice de cada item no array vira o novo sort_order — a MESMA escala
+// compartilhada entre folder_commands e notes (ver schema.sql), o que é
+// justamente o que permite intercalar as duas. 404 se a pasta não existir/
+// não for do usuário (mesmo tratamento das outras rotas de folder). Mantém
+// compatibilidade com o formato antigo { command_ids: [...] } (só comandos)
+// — front-ends antigos ou chamadas externas via API key continuam
+// funcionando. IDs que não pertencerem de fato à pasta são ignorados
+// silenciosamente (a query composta simplesmente não bate com nada para
+// eles) — o front-end sempre manda a lista completa e correta (deriva da
+// ordem atual do DOM), então isso só protege contra uma chamada manual malformada.
 app.put('/api/folders/:id/reorder', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
     const { id } = req.params;
-    const commandIds = Array.isArray(req.body && req.body.command_ids) ? req.body.command_ids : null;
-    if (!commandIds || !commandIds.length) {
-      return res.status(400).json({ error: 'validation_error', message: '"command_ids" must be a non-empty array' });
+    let order = Array.isArray(req.body && req.body.order) ? req.body.order : null;
+    if (!order && Array.isArray(req.body && req.body.command_ids)) {
+      order = req.body.command_ids.map(cid => ({ type: 'command', id: cid }));
+    }
+    if (!order || !order.length) {
+      return res.status(400).json({ error: 'validation_error', message: '"order" must be a non-empty array of {type, id}' });
     }
     const folder = await pool.query('SELECT id FROM folders WHERE id = $1 AND username = $2', [id, username]);
     if (!folder.rows.length) return res.status(404).json({ error: 'not_found', message: `Folder '${id}' not found` });
 
     await withTransaction(async client => {
-      for (let i = 0; i < commandIds.length; i++) {
-        await client.query(
-          'UPDATE folder_commands SET sort_order = $1 WHERE folder_id = $2 AND command_id = $3',
-          [i, id, commandIds[i]]
-        );
+      for (let i = 0; i < order.length; i++) {
+        const item = order[i];
+        if (item && item.type === 'note') {
+          await client.query(
+            'UPDATE notes SET sort_order = $1 WHERE folder_id = $2 AND id = $3 AND username = $4',
+            [i, id, item.id, username]
+          );
+        } else if (item) {
+          await client.query(
+            'UPDATE folder_commands SET sort_order = $1 WHERE folder_id = $2 AND command_id = $3',
+            [i, id, item.id]
+          );
+        }
       }
     });
     res.status(204).end();
@@ -765,6 +845,157 @@ app.post('/api/folders/:id/copy', async (req, res) => {
       return { id: newFolder.id, name: newFolder.name, sort_order: newFolder.sort_order, command_ids: cmdRows.map(r => r.command_id) };
     });
     res.status(201).json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+// Nota: /copy acima NÃO leva as notas da pasta original — só os comandos
+// (folder_commands). Notas são anotações pessoais de quem as escreveu (só o
+// autor pode editar/clonar/excluir, ver seção Notes abaixo); "importar" a
+// curadoria de outra pessoa não deveria de repente marcar você como autor
+// de notas que não escreveu. Quem copiar a pasta pode escrever as próprias.
+
+// ════════════════════════════════════════════════
+// Notes — anotações livres (título + descrição em HTML) que só existem
+// DENTRO de uma pasta (ver notes em schema.sql). Mesma filosofia de
+// permissão do resto de "Folders": só o dono da pasta (username ===
+// usuário atual) pode criar/editar/clonar/excluir; qualquer outro usuário
+// só VÊ a nota (GET /api/folders/all, Group by "User folders", ou o
+// seletor de escopo de pastas dentro de Folders) — sem nenhuma ação
+// disponível no front-end nem aceita pelo backend (todas as rotas abaixo
+// filtram por WHERE ... AND (via folder) username = usuário atual).
+// ════════════════════════════════════════════════
+
+// Allow-list de tags para o corpo da nota (contenteditable no front-end,
+// ver js/folders.js: openNoteEditor()) — sanitização própria por regex (sem
+// dependência de HTML parser/DOMPurify) porque o conteúdo é sempre gerado
+// pelo NOSSO editor (colar imagem -> <img>, texto -> <b>/<i>/<br>/<div>/etc.),
+// nunca HTML arbitrário de fora; ainda assim nunca confiamos no que o
+// cliente manda — <script>/<style> são removidos por inteiro (tag +
+// conteúdo), qualquer tag fora da allow-list é removida (mantendo o texto
+// de dentro), atributos on*="..." nunca sobrevivem (só um conjunto fixo de
+// atributos é reconstruído por tag, o resto do atributo original é
+// descartado), e <img>/<a> só aceitam src/href com esquema seguro
+// (data:image/ ou http(s):// — nunca javascript:).
+const NOTE_ALLOWED_TAGS = new Set(['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'div', 'span', 'ul', 'ol', 'li', 'a', 'img']);
+function sanitizeNoteHtml(html) {
+  if (!html) return '';
+  let s = String(html);
+  s = s.replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '');
+  s = s.replace(/<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:\s+[^<>]*)?)\s*\/?>/g, (m, closing, tag, attrs) => {
+    const lower = tag.toLowerCase();
+    if (!NOTE_ALLOWED_TAGS.has(lower)) return '';
+    if (closing) return `</${lower}>`;
+    if (lower === 'img') {
+      const srcM = /\bsrc\s*=\s*"([^"]*)"/i.exec(attrs) || /\bsrc\s*=\s*'([^']*)'/i.exec(attrs);
+      const widthM = /\bwidth\s*=\s*"?(\d+)/i.exec(attrs);
+      const heightM = /\bheight\s*=\s*"?(\d+)/i.exec(attrs);
+      let src = srcM ? srcM[1] : '';
+      if (!/^data:image\//i.test(src) && !/^https?:\/\//i.test(src)) return '';
+      let out = `<img src="${src.replace(/"/g, '&quot;')}"`;
+      if (widthM) out += ` width="${parseInt(widthM[1], 10)}"`;
+      if (heightM) out += ` height="${parseInt(heightM[1], 10)}"`;
+      return out + '>';
+    }
+    if (lower === 'a') {
+      const hrefM = /\bhref\s*=\s*"([^"]*)"/i.exec(attrs) || /\bhref\s*=\s*'([^']*)'/i.exec(attrs);
+      let href = hrefM ? hrefM[1] : '';
+      if (!/^https?:\/\//i.test(href)) href = '#';
+      return `<a href="${href.replace(/"/g, '&quot;')}" target="_blank" rel="noopener noreferrer">`;
+    }
+    return `<${lower}>`;
+  });
+  return s;
+}
+
+// Cria uma nota nova DENTRO de uma pasta do usuário atual — 404 se a pasta
+// não existir/não for do usuário (mesma checagem de POST .../commands/:id).
+// sort_order = fim da pasta na escala COMPARTILHADA com folder_commands
+// (ver comentário em GREATEST acima, mesma fórmula).
+app.post('/api/folders/:id/notes', async (req, res) => {
+  try {
+    const username = getCurrentUsername(req);
+    const { id } = req.params;
+    const title = String((req.body && req.body.title) || '').trim();
+    const description = sanitizeNoteHtml((req.body && req.body.description) || '');
+    const folder = await pool.query('SELECT id FROM folders WHERE id = $1 AND username = $2', [id, username]);
+    if (!folder.rows.length) return res.status(404).json({ error: 'not_found', message: `Folder '${id}' not found` });
+    const { rows } = await pool.query(
+      `INSERT INTO notes (folder_id, username, title, description, sort_order)
+       VALUES ($1, $2, $3, $4, (
+         SELECT COALESCE(GREATEST(
+           (SELECT MAX(sort_order) FROM folder_commands WHERE folder_id = $1),
+           (SELECT MAX(sort_order) FROM notes WHERE folder_id = $1)
+         ), -1) + 1
+       ))
+       RETURNING id, folder_id, title, description, sort_order, created_at, updated_at`,
+      [id, username, title, description]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// Edita título/descrição de uma nota — só o autor (username = usuário
+// atual). 404 tanto se não existir quanto se for de outro usuário (mesmo
+// não-vazamento de distinção usado em folders/commands).
+app.put('/api/notes/:id', async (req, res) => {
+  try {
+    const username = getCurrentUsername(req);
+    const title = String((req.body && req.body.title) || '').trim();
+    const description = sanitizeNoteHtml((req.body && req.body.description) || '');
+    const { rows } = await pool.query(
+      `UPDATE notes SET title = $1, description = $2, updated_at = NOW()
+       WHERE id = $3 AND username = $4
+       RETURNING id, folder_id, title, description, sort_order, created_at, updated_at`,
+      [title, description, req.params.id, username]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not_found', message: `Note '${req.params.id}' not found` });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// Exclui uma nota — só o autor.
+app.delete('/api/notes/:id', async (req, res) => {
+  try {
+    const username = getCurrentUsername(req);
+    const { rowCount } = await pool.query('DELETE FROM notes WHERE id = $1 AND username = $2', [req.params.id, username]);
+    if (!rowCount) return res.status(404).json({ error: 'not_found', message: `Note '${req.params.id}' not found` });
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// Clona uma nota PRÓPRIA — cria uma cópia nova na MESMA pasta, título com
+// sufixo " (copy)", no fim da ordem da pasta. Só o autor (a nota de outro
+// usuário nem aparece com esse botão no front-end — ver buildNoteCardHtml
+// em js/db-render-engine.js — e o backend recusaria de qualquer forma).
+app.post('/api/notes/:id/clone', async (req, res) => {
+  try {
+    const username = getCurrentUsername(req);
+    const src = await pool.query('SELECT folder_id, title, description FROM notes WHERE id = $1 AND username = $2', [req.params.id, username]);
+    if (!src.rows.length) return res.status(404).json({ error: 'not_found', message: `Note '${req.params.id}' not found` });
+    const { folder_id: folderId, title, description } = src.rows[0];
+    const { rows } = await pool.query(
+      `INSERT INTO notes (folder_id, username, title, description, sort_order)
+       VALUES ($1, $2, $3, $4, (
+         SELECT COALESCE(GREATEST(
+           (SELECT MAX(sort_order) FROM folder_commands WHERE folder_id = $1),
+           (SELECT MAX(sort_order) FROM notes WHERE folder_id = $1)
+         ), -1) + 1
+       ))
+       RETURNING id, folder_id, title, description, sort_order, created_at, updated_at`,
+      [folderId, username, `${title} (copy)`, description]
+    );
+    res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });

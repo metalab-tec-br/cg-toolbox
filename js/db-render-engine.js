@@ -462,7 +462,10 @@ function buildTopicSection(rows, topic, icon, title, values, hasIPs, key) {
 // na própria row (em vez de num wrapper comum) é o que o handler de
 // dragend usa pra saber pra qual pasta mandar a nova ordem — mais simples
 // que subir até o pai, e funciona igual estejamos numa única seção
-// "Folders" ou numa sub-seção de "User folders".
+// "Folders" ou numa sub-seção de "User folders". Funciona tanto para cards
+// de comando (data-cmd-id) quanto de nota (data-note-id, ver
+// buildNoteCardHtml abaixo) — o handler de dragend em js/folders.js lê
+// qualquer um dos dois pra saber o tipo do item arrastado.
 function wrapCardsForFolderDrag(cards, folderId) {
   return cards.map(html => `<div class="folder-card-row" data-folder-id="${folderId}">
     <span class="folder-drag-handle" onmousedown="_fcArmDrag(this)" title="Drag to reorder">⠿</span>
@@ -470,85 +473,150 @@ function wrapCardsForFolderDrag(cards, folderId) {
   </div>`).join('');
 }
 
+// Card de uma NOTE (título + descrição livre, task Notes) — mesma aparência
+// visual do .card de comando (mesmo container/cabeçalho/ações, ver card() em
+// terminal-renderer.js), só que sem corpo de terminal: a "descrição" É o
+// próprio conteúdo (HTML já sanitizado no servidor — ver sanitizeNoteHtml
+// em server/index.js — então pode ser inserido cru aqui, inclusive
+// <img> coladas/redimensionadas no editor). "Note" na frente do título
+// (badge) é o único jeito de diferenciar visualmente de um card de comando
+// dentro da mesma seção de pasta.
+// `ownFolder` (= withActions da seção que contém a nota, sempre verdadeiro
+// quando é uma pasta do usuário atual e falso quando é de outro usuário)
+// decide se aparecem os botões de clonar/editar/excluir — uma nota só pode
+// ser alterada por quem a escreveu, e como uma nota só existe dentro de uma
+// pasta que já é sua (não há como criar nota na pasta de outra pessoa), a
+// posse da PASTA já equivale à posse da nota — não precisa comparar
+// note.username com CURRENT_USER separadamente.
+function buildNoteCardHtml(note, ownFolder) {
+  if (!note) return '';
+  const titleEsc = escAttr(note.title || 'Untitled note');
+  const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(note.title || '') : titleEsc;
+  const actions = ownFolder ? `<span class="card-actions">
+    <button type="button" class="edit-btn" onclick="cloneNote(${note.id}, event)" title="Clone note">
+      <svg width="11" height="11" fill="none" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="9" height="9" rx="1.3" stroke="currentColor" stroke-width="1.4"/><path d="M3.2 10.5H2.3a.8.8 0 01-.8-.8v-7A.8.8 0 012.3 2h7a.8.8 0 01.8.8v.9" stroke="currentColor" stroke-width="1.4"/></svg>
+    </button>
+    <button type="button" class="edit-btn" onclick="openNoteEditor('edit', ${note.folder_id}, ${note.id}, event)" title="Edit note">
+      <svg width="11" height="11" fill="none" viewBox="0 0 16 16"><path d="M11.3 1.7l3 3L5 14H2v-3l9.3-9.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+    </button>
+    <button type="button" class="edit-btn note-delete-btn" onclick="deleteNoteConfirm(${note.id}, '${jsEsc}', event)" title="Delete note">✕</button>
+  </span>` : '';
+  // `class="card"` sem sufixo próprio de propósito — várias contagens de
+  // cards pela tela inteira (ver render.js: cardCount) casam com o texto
+  // exato `class="card"` via regex; um classname extra aqui (ex.: "card
+  // note-card") faria essas contagens ficarem pra baixo do total real.
+  // `data-note-id` (em vez de data-cmd-id) já é suficiente pra distinguir
+  // nota de comando em qualquer seletor/handler que precise (ver
+  // wrapCardsForFolderDrag/_fcArmDrag em js/folders.js), e o CSS estiliza
+  // via `.note-body`/`.note-badge`, que só existem no card de nota.
+  return `<div class="card" data-note-id="${note.id}">
+    <div class="card-head">
+      <span class="card-name"><span class="note-badge">Note</span> ${titleEsc}</span>
+      ${actions}
+    </div>
+    <div class="note-body">${note.description || ''}</div>
+  </div>`;
+}
+
+// Intercala comandos e notes de UMA pasta na ordem combinada que o usuário
+// definiu (task Notes) — `orderTagged` é o array {type:'command'|'note', id}
+// que o servidor já devolve pronto (ver GET /api/folders[/all] em
+// server/index.js, e folder.order em js/folders.js). Itens sem posição
+// salva (comando/nota nova, ou pasta antiga de antes desta feature) vão pro
+// FIM, comandos antes de notes, nunca desaparecem — mesmo critério que
+// buildFolderSection já usava só para comandos antes desta mudança.
+// `cmdById`/`notesById` são Maps já filtrados para o conteúdo desta pasta
+// especificamente (quem chama decide o que entra).
+function buildFolderItemsCards(cmdById, notesById, orderTagged, values, hasIPs, ownFolder) {
+  const seenCmd = new Set(), seenNote = new Set();
+  (orderTagged || []).forEach(o => { if (o && o.type === 'note') seenNote.add(o.id); else if (o) seenCmd.add(o.id); });
+  const extra = [
+    ...[...cmdById.keys()].filter(id => !seenCmd.has(id)).map(id => ({ type: 'command', id })),
+    ...[...notesById.keys()].filter(id => !seenNote.has(id)).map(id => ({ type: 'note', id })),
+  ];
+  const finalOrder = (orderTagged || [])
+    .filter(o => o && (o.type === 'note' ? notesById.has(o.id) : cmdById.has(o.id)))
+    .concat(extra);
+  return finalOrder.map(o => o.type === 'note'
+    ? buildNoteCardHtml(notesById.get(o.id), ownFolder)
+    : buildCardHtmlForRow(cmdById.get(o.id), values, hasIPs)
+  ).filter(Boolean);
+}
+
 // Cabeçalho + corpo de uma seção de PASTA a partir de uma lista de CARDS já
-// prontos (não filtra por folder_ids — quem chama já decidiu quais cards
-// entram, e em que ORDEM). Extraído de buildFolderSection() para ser
-// reaproveitado também pelo Group by "User folders" (cross-user, ver
-// render.js), que monta os cards de uma pasta de OUTRO usuário a partir de
+// prontos (comando OU nota — não filtra por folder_ids, quem chama já
+// decidiu quais cards entram, e em que ORDEM). Extraído de
+// buildFolderSection() para ser reaproveitado também pelo Group by "User
+// folders" (cross-user, ver render.js) e pelo novo seletor de escopo de
+// pastas dentro de Folders ("My folders" / escolher usuário / "All"), que
+// montam os cards de uma pasta de OUTRO usuário a partir de
 // ALL_USERS_FOLDERS em vez de folder_ids (que só reflete as pastas do
 // usuário atual — ver server/index.js: shapeCommand()). `folderName` é
 // texto livre cadastrado pelo usuário — passa por escAttr() antes de virar
 // título (inserido como HTML cru) para não permitir HTML injection via nome
 // de pasta malicioso.
-// `withActions` controla se aparecem os botões de renomear/excluir/
-// reordenar (.sec-folder-actions, hover-only, ver components.css) — só
-// fazem sentido numa pasta que pertence ao usuário atual (o backend recusa
-// as três operações numa pasta de outra pessoa). `copyable` (task #459)
-// mostra em vez disso um único botão de copiar a pasta — usado quando é a
-// pasta de OUTRO usuário (Group by "User folders"); nunca junto com
-// withActions.
-// `reorderMode` (task #461) — os cards só ficam arrastáveis (envolvidos em
-// .folder-card-row, ver wrapCardsForFolderDrag) enquanto o usuário está
-// EDITANDO a ordem da pasta (toggle "⇕" no cabeçalho, ver
-// toggleFolderReorderMode em js/folders.js). Fora desse modo, mesmo numa
-// pasta própria, os cards são renderizados normais — arrastar/soltar
-// acidentalmente ao rolar a tela ou clicar num card não deveria reordenar
-// nada sem o usuário ter entrado deliberadamente no modo de edição.
-function buildFolderSectionFromCards(cards, folderId, folderName, key, withActions, copyable, reorderMode) {
+// `withActions` controla se aparece o botão único "Edit folder" (task
+// #463 — consolida o antigo trio ⇕/✎/✕ num só) e o botão "+ Add note" —
+// só fazem sentido numa pasta que pertence ao usuário atual (o backend
+// recusa as operações numa pasta de outra pessoa, e nem deixa criar nota
+// fora da própria pasta). `copyable` (task #459) mostra em vez disso um
+// único botão de copiar a pasta — usado quando é a pasta de OUTRO usuário;
+// nunca junto com withActions. Notas de outro usuário aparecem no corpo
+// (buildFolderItemsCards já foi chamado com ownFolder=false por quem monta
+// `cards`), só que sem NENHUM botão de ação — ver buildNoteCardHtml.
+// `editMode` (task #461/#463) — só dentro desse modo (toggle "✎ Edit
+// folder" no cabeçalho) é que: (a) os cards ficam arrastáveis (embrulhados
+// em .folder-card-row, ver wrapCardsForFolderDrag), e (b) aparecem
+// Renomear/Excluir. Fora desse modo, mesmo numa pasta própria, a seção
+// mostra só os cards + os dois botões sempre visíveis (+ Note / ✎ Edit) —
+// arrastar/renomear/excluir por acidente não deveria ser possível sem o
+// usuário ter entrado deliberadamente no modo de edição.
+function buildFolderSectionFromCards(cards, folderId, folderName, key, withActions, copyable, editMode) {
   if (!cards.length) return '';
   const nameEsc = escAttr(folderName);
   const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(folderName) : nameEsc;
   let actions = '';
   if (withActions) {
-    const reorderBtn = `<button type="button" class="sec-folder-btn${reorderMode ? ' on' : ''}" onmousedown="event.preventDefault()" onclick="toggleFolderReorderMode(${folderId}, event)" title="${reorderMode ? 'Done reordering' : 'Reorder commands'}">⇕</button>`;
-    actions = `<span class="sec-folder-actions">
-    ${reorderBtn}
+    const addNoteBtn = `<button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="openNoteEditor('create', ${folderId}, null, event)" title="Add note">+</button>`;
+    const editBtn = `<button type="button" class="sec-folder-btn${editMode ? ' on' : ''}" onmousedown="event.preventDefault()" onclick="toggleFolderEditMode(${folderId}, event)" title="${editMode ? 'Done editing' : 'Edit folder'}">⚙</button>`;
+    const editOnlyBtns = editMode ? `
     <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="promptRenameFolder(${folderId}, '${jsEsc}', event)" title="Rename folder">✎</button>
-    <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${folderId}, '${jsEsc}', event)" title="Delete folder">✕</button>
-  </span>`;
+    <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${folderId}, '${jsEsc}', event)" title="Delete folder">✕</button>` : '';
+    actions = `<span class="sec-folder-actions">${addNoteBtn}${editBtn}${editOnlyBtns}</span>`;
   } else if (copyable) {
     actions = `<span class="sec-folder-actions">
     <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="copyFolderFromUser(${folderId}, '${jsEsc}', event)" title="Copy this folder to your own Folders">⧉</button>
   </span>`;
   }
   const headerHtml = `${folderIcon(true, 12)} ${nameEsc} <span class="sec-count">${cards.length}</span>${actions}`;
-  const active = withActions && reorderMode;
+  const active = withActions && editMode;
   const body = active ? wrapCardsForFolderDrag(cards, folderId) : cards.join('');
-  return collapsibleGroup(key || `folder${folderId}`, headerHtml, body, active ? 'section-reordering' : undefined);
+  return collapsibleGroup(key || `folder${folderId}`, headerHtml, body, active ? 'section-editing' : undefined);
 }
 
-// Uma seção de PASTA do usuário ATUAL (ícone de pasta + nome + seus cards) —
-// mesmo papel de buildTopicSection acima, só que agrupando pela pasta do
-// usuário (ver js/folders.js) em vez de um Tópico do catálogo. Usada quando
-// a visão atual é Folders (VIEW_FOLDERS_HOME, ver render.js), para que cada
-// pasta apareça como uma seção recolhível no mesmo estilo visual dos
-// Tópicos, em vez do antigo esquema de só esconder/mostrar cards já
-// renderizados por Tópico.
+// Uma seção de PASTA do usuário ATUAL (ícone de pasta + nome + seus
+// comandos/notas) — mesmo papel de buildTopicSection acima, só que
+// agrupando pela pasta do usuário (ver js/folders.js) em vez de um Tópico
+// do catálogo. Usada quando a visão atual é Folders (VIEW_FOLDERS_HOME, ver
+// render.js) com o escopo "My folders", para que cada pasta apareça como
+// uma seção recolhível no mesmo estilo visual dos Tópicos.
 //
-// `order` (opcional, task #458): lista de command_ids na ordem própria da
-// pasta (folder.order, ver js/folders.js) — os cards saem nessa ordem, não
-// na ordem curatorial global de `rows`. Sem `order` (ou pastas antigas que
-// por algum motivo não a tenham), cai de volta na ordem de `rows`, igual ao
-// comportamento anterior a esta feature.
+// `notes` (task Notes, opcional): array de notas da pasta (folder.notes, ver
+// js/folders.js). `order` (opcional, task #458, estendido pela task Notes):
+// array combinado {type,id} na ordem própria da pasta (folder.order) — ver
+// buildFolderItemsCards acima para os detalhes de fallback.
 //
 // A sidebar não lista mais as pastas individualmente (só o item combinado
 // "Folders" — a pedido do usuário), então renomear/excluir/reordenar uma
-// pasta só é possível aqui: os botões (⇕/✎/✕) embutidos no próprio
-// cabeçalho da seção (ver buildFolderSectionFromCards acima), visíveis só
-// no hover (exceto ⇕ quando já ativo — ver .section-reordering em
-// components.css).
-// `reorderMode` (task #461, opcional): repassado direto pra
+// pasta só é possível aqui: os botões (+ / ⚙ sempre, ✎ / ✕ só em modo de
+// edição) embutidos no próprio cabeçalho da seção (ver
+// buildFolderSectionFromCards acima), visíveis só no hover (exceto ⚙
+// quando já ativo — ver .section-editing em components.css).
+// `editMode` (task #461/#463, opcional): repassado direto pra
 // buildFolderSectionFromCards — ver comentário lá.
-function buildFolderSection(rows, folderId, folderName, values, hasIPs, key, order, reorderMode) {
-  const byId = new Map(rows.map(r => [r.id, r]));
-  const idsInFolder = rows.filter(r => (r.folder_ids || []).includes(folderId)).map(r => r.id);
-  const orderedIds = (order && order.length)
-    ? order.filter(id => idsInFolder.includes(id)).concat(idsInFolder.filter(id => !order.includes(id))) // comandos sem posição salva (ex.: pasta criada antes da migração) vão pro fim, nunca desaparecem
-    : idsInFolder;
-  const cards = orderedIds
-    .map(id => byId.get(id))
-    .filter(Boolean)
-    .map(r => buildCardHtmlForRow(r, values, hasIPs))
-    .filter(Boolean);
-  return buildFolderSectionFromCards(cards, folderId, folderName, key, true, false, reorderMode);
+function buildFolderSection(rows, folderId, folderName, values, hasIPs, key, notes, order, editMode) {
+  const cmdById = new Map(rows.filter(r => (r.folder_ids || []).includes(folderId)).map(r => [r.id, r]));
+  const notesById = new Map((notes || []).map(n => [n.id, n]));
+  const cards = buildFolderItemsCards(cmdById, notesById, order, values, hasIPs, true);
+  return buildFolderSectionFromCards(cards, folderId, folderName, key, true, false, editMode);
 }

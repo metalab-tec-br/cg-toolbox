@@ -298,6 +298,36 @@ CREATE TABLE IF NOT EXISTS folder_commands (
 );
 CREATE INDEX IF NOT EXISTS idx_folder_commands_command ON folder_commands(command_id);
 
+-- Notes — anotações livres (título + descrição em HTML sanitizado, podendo
+-- conter imagens coladas pelo usuário como data URI base64, redimensionadas
+-- no próprio editor) que só existem DENTRO de uma pasta (task Notes) — não
+-- há uma lista de notas independente de pastas, então ON DELETE CASCADE em
+-- folder_id: apagar a pasta apaga as notas dela (diferente de comandos, que
+-- sobrevivem à exclusão de uma pasta — eles só "saem" dela).
+-- `username` é o dono/autor (sempre o mesmo dono da pasta — só é possível
+-- criar uma nota dentro de uma pasta que já é sua, mesma regra de
+-- rename/delete/reorder de pasta) e é quem exclusivamente pode editar,
+-- clonar ou excluir a nota (ver PUT/DELETE/POST .../clone em
+-- server/index.js) — outro usuário só VÊ a nota (Group by "User folders",
+-- ou o novo seletor de escopo de pastas dentro de Folders), sem nenhuma
+-- ação disponível.
+-- `sort_order` compartilha a MESMA escala numérica de folder_commands.
+-- sort_order DENTRO da mesma pasta (não uma sequência própria) — é assim
+-- que notas e comandos podem ser intercalados numa única ordem por pasta
+-- (ver GET /api/folders[/all] em server/index.js, que junta as duas tabelas
+-- num único array `order` com {type, id}).
+CREATE TABLE IF NOT EXISTS notes (
+  id          SERIAL PRIMARY KEY,
+  folder_id   INTEGER NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+  username    TEXT NOT NULL,
+  title       TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '', -- HTML sanitizado no servidor (ver sanitizeNoteHtml em server/index.js) — texto + <img> com width/height
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_notes_folder ON notes(folder_id);
+
 -- Armazenamento genérico chave/valor por usuário — tema, idioma, configurações,
 -- históricos de busca (ver js/user-sync.js). `data_key` reaproveita as MESMAS
 -- chaves usadas no front-end e `value` guarda o valor bruto (string ou JSON

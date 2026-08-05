@@ -309,6 +309,20 @@
         <button type="button" class="seg-btn" data-val="version" onclick="setGroupBy('version')">Version</button>
       </div>
     </div>
+    <!-- Seletor de ESCOPO de pastas — só aparece DENTRO de Folders
+         (VIEW_FOLDERS_HOME), no lugar do dropdown "Group by" acima (os dois
+         nunca ficam visíveis juntos — ver updateGroupByOptionsForFoldersScope()
+         em js/folders.js). "My folders" (padrão) / um usuário escolhido
+         (lista dinâmica, montada de ALL_USERS_FOLDERS — ver
+         renderFolderScopeOptions()) / "All". Mesmo componente .dd/.dd-panel
+         seg dos outros dropdowns da toolbar. -->
+    <div class="dd ctb-groupby-dd" id="folderScopeDD" style="display:none;">
+      <span class="ctb-label" style="margin-right:0;">Folders</span>
+      <button type="button" class="dd-btn" id="folderScopeDDBtn" onclick="toggleDropdown('folderScopeDD')">
+        <span class="dd-label">My folders</span><span class="dd-arrow">▾</span>
+      </button>
+      <div class="dd-panel seg" id="folderScopeToggle"></div>
+    </div>
     <button type="button" class="icon-btn" onclick="expandAllSections()" title="Expand all">
       <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 5.5l6 5 6-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 1.5l6 5 6-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
@@ -1221,6 +1235,36 @@
     <div class="modal-foot" style="justify-content:flex-end;">
       <button class="btn" onclick="closeFolderPromptModal(null)">Cancel</button>
       <button class="btn btn-primary" id="folderPromptOkBtn" onclick="submitFolderPromptModal()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ NOTE EDITOR — create/edit de uma nota dentro de uma pasta própria
+     (task Notes, ver openNoteEditor()/saveNoteEditor() em js/folders.js).
+     Título simples + corpo "rico" num <div contenteditable> que aceita
+     colar imagens (convertidas pra data URI, ver _neHandlePaste) e
+     redimensioná-las arrastando o canto inferior-direito (ver
+     _neArmImageResize) — sem editor de terceiros, só o mínimo necessário
+     pro que foi pedido (texto + imagem colada/redimensionável). ══ -->
+<div class="modal-overlay" id="noteEditorOverlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title" id="noteEditorTitle">New note</span>
+      <button class="modal-close" onclick="closeNoteEditorModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="set-group">
+        <span class="set-label">Title</span>
+        <input class="set-input" type="text" id="noteTitleInput" placeholder="e.g. &quot;Change window&quot;, &quot;Escalation contacts&quot;" maxlength="120">
+      </div>
+      <div class="set-group">
+        <span class="set-label">Description</span>
+        <div class="note-editor-body" id="noteBodyEditor" contenteditable="true" data-placeholder="Write the note here — paste an image (Ctrl+V) to attach it, drag its bottom-right corner to resize."></div>
+      </div>
+    </div>
+    <div class="modal-foot" style="justify-content:flex-end;">
+      <button class="btn" onclick="closeNoteEditorModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNoteEditor()">Save</button>
     </div>
   </div>
 </div>

@@ -204,31 +204,97 @@ não for admin.
 ## Pastas (`/api/folders`)
 Substituiu a antiga feature "Favorites" — em vez de um único booleano marcado/
 desmarcado por comando, cada usuário cria suas próprias pastas (nome livre) e organiza
-os comandos nelas, podendo colocar o mesmo comando em várias pastas ao mesmo tempo.
-Tudo aqui é por usuário atual (independente de NTLM ou API key) e **privado**: não
-existe mais uma contagem/lista de "quem mais favoritou" visível entre usuários — o
-campo `folder_ids` no **Command** só reflete as pastas do usuário que está fazendo a
-requisição.
+comandos e **notes** (ver seção própria abaixo) nelas, podendo colocar o mesmo comando
+em várias pastas ao mesmo tempo. Tudo aqui é por usuário atual (independente de NTLM ou
+API key) e **privado**: o campo `folder_ids` no **Command** só reflete as pastas do
+usuário que está fazendo a requisição.
 
 - `GET /api/folders` → array de pastas do usuário atual:
   ```json
-  [{ "id": 3, "name": "VPN troubleshooting", "sort_order": 0, "command_ids": ["fwmonitor", "vpnshell"] }]
+  [{
+    "id": 3,
+    "name": "VPN troubleshooting",
+    "sort_order": 0,
+    "command_ids": ["fwmonitor", "vpnshell"],
+    "notes": [{ "id": 10, "folder_id": 3, "username": "rsilva", "title": "IP do site B", "description": "<p>...</p>", "sort_order": 1, "created_at": "...", "updated_at": "..." }],
+    "order": [{ "type": "command", "id": "fwmonitor" }, { "type": "note", "id": 10 }, { "type": "command", "id": "vpnshell" }]
+  }]
   ```
+  `order` é a lista combinada (comandos + notes) na ordem em que o usuário arrastou os
+  cards dentro da pasta — cada item é `{ "type": "command"|"note", "id": ... }`. Itens
+  de `command_ids`/`notes` que por algum motivo não apareçam em `order` (nunca deveria
+  acontecer, mas o front-end trata defensivamente) são exibidos ao final, comandos antes
+  de notes.
+- `GET /api/folders/all` → mesmo formato, só que para **todas** as pastas de **todos os
+  usuários** (cada pasta ganha um campo extra `"username"`). Usado pelo Group By "User
+  folders" (fora de Folders) e pelo seletor de escopo de pastas "All"/usuário
+  específico (dentro de Folders) — ver `docs/README.md`/comentários em `js/render.js`.
 - `POST /api/folders` — corpo `{ "name": "..." }`. `201` com a pasta criada
-  (`command_ids: []`). `400 validation_error` se faltar `name`. `409 conflict` se o
-  usuário já tiver uma pasta com esse nome (nomes são únicos por usuário, não
-  globalmente — dois usuários podem ter cada um sua própria pasta "Favorites").
+  (`command_ids: []`, `notes: []`, `order: []`). `400 validation_error` se faltar
+  `name`. `409 conflict` se o usuário já tiver uma pasta com esse nome (nomes são
+  únicos por usuário, não globalmente).
 - `PUT /api/folders/:id` — corpo `{ "name": "..." }`, renomeia. `404 not_found` se o id
   não existir ou pertencer a outro usuário (não distinguimos os dois casos). `409
   conflict` em caso de colisão de nome.
 - `DELETE /api/folders/:id` → `204`. Apaga a pasta; os comandos nela não são afetados,
-  só deixam de estar naquela pasta (`ON DELETE CASCADE` em `folder_commands`).
-  `404 not_found`.
-- `POST /api/folders/:id/commands/:commandId` → `204`. Adiciona o comando à pasta.
-  Idempotente. `404 not_found` se a pasta (do usuário atual) ou o comando não existirem.
+  só deixam de estar naquela pasta (`ON DELETE CASCADE` em `folder_commands`). **As
+  notes da pasta SÃO apagadas junto** (`ON DELETE CASCADE` em `notes` — notes só existem
+  dentro de uma pasta, diferente de comandos). `404 not_found`.
+- `POST /api/folders/:id/commands/:commandId` → `204`. Adiciona o comando à pasta,
+  posicionando-o após o último item existente (comando OU note, o que tiver o maior
+  `sort_order`). Idempotente. `404 not_found` se a pasta (do usuário atual) ou o comando
+  não existirem.
 - `DELETE /api/folders/:id/commands/:commandId` → `204`. Remove o comando da pasta
   (idempotente, mesmo se não estava nela). `404 not_found` se a pasta não existir/não
   for do usuário atual.
+- `POST /api/folders/:id/copy` — clona a pasta de outro usuário (corpo
+  `{ "name"?: "..." }`, opcional, senão reusa o nome original) para dentro das pastas do
+  usuário atual, copiando os `command_ids`. **Não copia as notes** — notes são anotações
+  pessoais do dono original, não fazem parte do "conjunto de comandos" que a cópia visa
+  replicar. `404 not_found` se a pasta de origem não existir.
+- `PUT /api/folders/:id/reorder` — corpo `{ "order": [{ "type": "command"|"note", "id": ... }, ...] }`
+  com a nova ordem completa (mistura comandos e notes livremente). `204`. Aceita também
+  o formato antigo `{ "command_ids": [...] }` por compatibilidade (equivalente a
+  `order` só com itens `type: "command"`, sem nenhuma note). `404 not_found` se a pasta
+  não for do usuário atual. Itens de `order` com `type: "note"` só têm seu `sort_order`
+  atualizado se a note pertencer ao usuário atual (proteção extra, além do check de
+  dono da pasta).
+
+---
+
+## Notes (`/api/notes` e `/api/folders/:id/notes`)
+Anotações de texto livre (título + descrição em HTML) que o usuário cria **dentro de
+uma pasta sua** para misturar com os comandos — por exemplo, para deixar lembretes,
+IPs de referência ou capturas de tela ao lado dos comandos relacionados. Compartilham a
+mesma escala de `sort_order` dos comandos da pasta (ver `order` em `GET /api/folders`
+acima), então podem ser arrastadas/intercaladas livremente entre eles.
+
+Regra de permissão: **uma note só existe dentro de uma pasta, e uma pasta só tem um
+dono** — logo dono da note == dono da pasta, sempre. Só esse usuário pode editar,
+clonar ou excluir a note; outros usuários só a veem (somente leitura) através do
+`GET /api/folders/all`, quando o Group By "User folders" ou o seletor de escopo "All"/
+usuário específico estiverem selecionados.
+
+A descrição (`description`) é HTML vindo do editor rich-text do front-end
+(`contenteditable`, com suporte a colar/redimensionar imagens como `data:image/...`) e
+passa por um sanitizador próprio no backend antes de gravar
+(`sanitizeNoteHtml()` em `server/index.js`) — tags fora de uma lista pequena permitida
+(`b,strong,i,em,u,br,p,div,span,ul,ol,li,a,img`) são removidas mantendo o texto interno;
+`<script>`/`<style>` são removidos por completo; `src` de `<img>` só é aceito se
+`data:image/...` ou `http(s)://`; `href` de `<a>` só se `http(s)://` (senão vira `#`),
+sempre forçando `target="_blank" rel="noopener noreferrer"`.
+
+- `POST /api/folders/:id/notes` — corpo `{ "title"?: "...", "description"?: "<p>...</p>" }`
+  (ambos opcionais, default `""`). `201` com a note criada, posicionada após o último
+  item existente na pasta (comando ou note). `404 not_found` se a pasta não for do
+  usuário atual.
+- `PUT /api/notes/:id` — corpo `{ "title"?, "description"? }`. `200` com a note
+  atualizada. `404 not_found` se a note não existir ou não pertencer ao usuário atual.
+- `DELETE /api/notes/:id` → `204`. `404 not_found` se a note não existir ou não
+  pertencer ao usuário atual.
+- `POST /api/notes/:id/clone` → `201` com uma nova note na **mesma pasta**, título
+  original + `" (copy)"`, posicionada ao final. `404 not_found` se a note de origem não
+  existir ou não pertencer ao usuário atual.
 
 ---
 

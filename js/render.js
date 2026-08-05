@@ -75,7 +75,16 @@ async function render() {
   // decide QUAIS comandos aparecem, Group by decide COMO organizá-los —
   // "My folders" (ver mais abaixo) segue sendo a única opção que agrupa por
   // pasta, esteja o usuário em Folders ou não.
-  if (VIEW_FOLDERS_HOME) {
+  // Só filtra `commands` pelas pastas do usuário ATUAL quando o escopo
+  // dentro de Folders é "My folders" (padrão, FOLDER_SCOPE indefinido ou
+  // 'mine') — nos escopos "All"/usuário escolhido (ver FOLDER_SCOPE em
+  // js/folders.js) o ramo VIEW_FOLDERS_HOME mais abaixo precisa da lista
+  // COMPLETA de comandos pra achar os cards das pastas de QUALQUER
+  // usuário (mesma necessidade que o Group by "User folders" já tinha fora
+  // de Folders, que nunca passou por este filtro porque VIEW_FOLDERS_HOME é
+  // false lá).
+  const folderScopeIsMine = typeof FOLDER_SCOPE === 'undefined' || !FOLDER_SCOPE || FOLDER_SCOPE === 'mine';
+  if (VIEW_FOLDERS_HOME && folderScopeIsMine) {
     commands = commands.filter(c => c.folder_ids && c.folder_ids.length);
   }
 
@@ -182,6 +191,78 @@ async function render() {
   const cvLabel = versionSel.isAllMode ? 'All' : cv;
   const ceLabel = envSel.isAllMode ? 'All' : envLabel(ce);
 
+  // Dentro de "Folders" (VIEW_FOLDERS_HOME), o Group by de sempre (Tópico/
+  // Versão/Created by) dá lugar a um seletor próprio de ESCOPO de pastas —
+  // "My folders" (padrão) / um usuário escolhido / "All" (ver
+  // #folderScopeDD em index.html e FOLDER_SCOPE em js/folders.js). Esse
+  // seletor decide DE QUEM são as pastas mostradas; Group by continua
+  // controlando a organização fora de Folders (inclusive "Folders"/"User
+  // folders" lá, que seguem funcionando como sempre — ver ramos abaixo).
+  // Sempre retorna aqui (nunca cai nos ramos de GROUP_BY abaixo) enquanto
+  // VIEW_FOLDERS_HOME estiver ativo.
+  if (VIEW_FOLDERS_HOME) {
+    const scope = (typeof FOLDER_SCOPE !== 'undefined' && FOLDER_SCOPE) || 'mine';
+    let folderGroups = '';
+    if (scope === 'mine') {
+      // Mesma regra de buildFolderSection: pasta com só notas (sem comando
+      // nenhum) também precisa aparecer — não dá pra derivar a lista de
+      // pastas a partir de commands.folder_ids sozinho.
+      const myFolders = (typeof FOLDERS !== 'undefined' ? FOLDERS : []).slice()
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      folderGroups = myFolders.map(folder => {
+        const editMode = typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(folder.id);
+        return buildFolderSection(commands, folder.id, folder.name, values, hasIPs, `${kp}folder${folder.id}`, folder.notes, folder.order, editMode);
+      }).join('');
+    } else {
+      const allFolders = typeof ALL_USERS_FOLDERS !== 'undefined' ? ALL_USERS_FOLDERS : [];
+      const targetUsername = scope.startsWith('user:') ? scope.slice('user:'.length) : null;
+      const relevant = targetUsername ? allFolders.filter(f => f.username === targetUsername) : allFolders;
+      if (scope === 'all') {
+        // Mesmo agrupamento por usuário do Group by "User folders" de fora
+        // de Folders (ver ramo GROUP_BY === 'user-folders' abaixo) — feito
+        // aqui de novo (em vez de reaproveitar aquele bloco) porque este
+        // roda fora do laço de GROUP_BY e não tem acesso aos `return`
+        // antecipados de lá.
+        const byUser = new Map();
+        relevant.forEach(f => { if (!byUser.has(f.username)) byUser.set(f.username, []); byUser.get(f.username).push(f); });
+        const usernames = [...byUser.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        folderGroups = usernames.map(username => {
+          const isOwn = typeof CURRENT_USER !== 'undefined' && CURRENT_USER === username;
+          const userKey = username.replace(/[^a-zA-Z0-9_-]/g, '_');
+          const userFolders = byUser.get(username).slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+          const folderSections = userFolders.map(f => {
+            const cmdById = new Map(commands.filter(c => f.command_ids.has(c.id)).map(c => [c.id, c]));
+            const notesById = new Map((f.notes || []).map(n => [n.id, n]));
+            const editMode = isOwn && typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(f.id);
+            const cards = buildFolderItemsCards(cmdById, notesById, f.order, values, hasIPs, isOwn);
+            return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}scope_${userKey}__folder${f.id}`, isOwn, !isOwn, editMode);
+          }).join('');
+          const cardCount = (folderSections.match(/<div class="card"/g) || []).length;
+          if (!cardCount) return '';
+          return collapsibleGroup(`${cv}__${ce}__scopeuser${userKey}`, `👤 <strong>${escAttr(username)}</strong> <span class="sec-count">${cardCount}</span>`, folderSections, 'section-creator');
+        }).join('');
+      } else {
+        // scope = 'user:<username>' — as pastas DESSA pessoa direto, sem o
+        // agrupamento "👤 username" (só faz sentido pra "All", que mistura
+        // várias pessoas na mesma tela).
+        const isOwn = typeof CURRENT_USER !== 'undefined' && CURRENT_USER === targetUsername;
+        const sortedFolders = relevant.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+        folderGroups = sortedFolders.map(f => {
+          const cmdById = new Map(commands.filter(c => f.command_ids.has(c.id)).map(c => [c.id, c]));
+          const notesById = new Map((f.notes || []).map(n => [n.id, n]));
+          const editMode = isOwn && typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(f.id);
+          const cards = buildFolderItemsCards(cmdById, notesById, f.order, values, hasIPs, isOwn);
+          return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}scopeuser__folder${f.id}`, isOwn, !isOwn, editMode);
+        }).join('');
+      }
+    }
+    if (!folderGroups) return '';
+    const comboHeader = combos.length > 1
+      ? `<div class="combo-header">🔀 <strong>${cvLabel}</strong> / <strong>${ceLabel}</strong></div>`
+      : '';
+    return comboHeader + envNote + folderGroups;
+  }
+
   // "Created by": um agrupamento recolhível por autor (created_by), cada um
   // com as mesmas seções de Ambiente/Tópico de sempre, mas só com os comandos
   // daquele autor. Autores em ordem alfabética (comparação sem caixa); "—"
@@ -223,14 +304,18 @@ async function render() {
   // uma da outra, não aninhadas (a pedido do usuário).
   if (GROUP_BY === 'my-folders') {
     const folderById = new Map((typeof FOLDERS !== 'undefined' ? FOLDERS : []).map(f => [f.id, f]));
-    const folderIdsInUse = [...new Set(commands.flatMap(c => c.folder_ids || []))]
+    // Pastas vazias de comando MAS com alguma nota (task Notes) também
+    // entram — antes só `commands.flatMap(folder_ids)` decidia quais pastas
+    // apareciam, o que escondia por completo uma pasta que só tivesse notas.
+    const folderIdsWithNotes = (typeof FOLDERS !== 'undefined' ? FOLDERS : []).filter(f => (f.notes || []).length).map(f => f.id);
+    const folderIdsInUse = [...new Set([...commands.flatMap(c => c.folder_ids || []), ...folderIdsWithNotes])]
       .filter(id => folderById.has(id))
       .sort((a, b) => folderById.get(a).name.localeCompare(folderById.get(b).name, undefined, { sensitivity: 'base' }));
     const folderGroups = folderIdsInUse
       .map(folderId => {
         const folder = folderById.get(folderId);
-        const reorderMode = typeof FOLDER_REORDER_MODE !== 'undefined' && FOLDER_REORDER_MODE.has(folderId);
-        return buildFolderSection(commands, folderId, folder.name, values, hasIPs, `${kp}folder${folderId}`, folder.order, reorderMode);
+        const editMode = typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(folderId);
+        return buildFolderSection(commands, folderId, folder.name, values, hasIPs, `${kp}folder${folderId}`, folder.notes, folder.order, editMode);
       })
       .join('');
     if (!folderGroups) return '';
@@ -271,18 +356,18 @@ async function render() {
       // "DOMÍNIO\usuario" (NTLM), mesmo cuidado do "Created by" acima.
       const userKey = username.replace(/[^a-zA-Z0-9_-]/g, '_');
       const folderSections = userFolders.map(f => {
-        const byId = new Map(commands.filter(c => f.command_ids.has(c.id)).map(c => [c.id, c]));
-        const orderedIds = (f.order && f.order.length)
-          ? f.order.filter(id => byId.has(id)).concat([...byId.keys()].filter(id => !f.order.includes(id)))
-          : [...byId.keys()];
-        const cards = orderedIds.map(id => buildCardHtmlForRow(byId.get(id), values, hasIPs)).filter(Boolean);
+        const cmdById = new Map(commands.filter(c => f.command_ids.has(c.id)).map(c => [c.id, c]));
+        const notesById = new Map((f.notes || []).map(n => [n.id, n]));
         // withActions só pra pasta do próprio usuário (dá pra renomear/
-        // excluir/reordenar); copyable pra pasta de OUTRO usuário (só um
-        // botão de copiar — ver buildFolderSectionFromCards). reorderMode só
-        // é relevante quando isOwn (a pasta de outro usuário nunca é
-        // arrastável, ver `active` em buildFolderSectionFromCards).
-        const reorderMode = isOwn && typeof FOLDER_REORDER_MODE !== 'undefined' && FOLDER_REORDER_MODE.has(f.id);
-        return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}${userKey}__folder${f.id}`, isOwn, !isOwn, reorderMode);
+        // excluir/reordenar/adicionar nota); copyable pra pasta de OUTRO
+        // usuário (só um botão de copiar — ver buildFolderSectionFromCards).
+        // editMode só é relevante quando isOwn (a pasta de outro usuário
+        // nunca é arrastável, ver `active` em buildFolderSectionFromCards).
+        // `ownFolder` (5º arg de buildFolderItemsCards) = isOwn: notas de
+        // outro usuário aparecem, mas sem clonar/editar/excluir.
+        const editMode = isOwn && typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(f.id);
+        const cards = buildFolderItemsCards(cmdById, notesById, f.order, values, hasIPs, isOwn);
+        return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}${userKey}__folder${f.id}`, isOwn, !isOwn, editMode);
       }).join('');
       const cardCount = (folderSections.match(/<div class="card"/g) || []).length;
       if (!cardCount) return '';

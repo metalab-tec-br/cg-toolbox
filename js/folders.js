@@ -36,13 +36,20 @@ async function reloadFoldersFromServer() {
   try {
     const res = await fetch('/api/folders');
     const data = await res.json();
-    // `order` (task #458) é a MESMA lista que o servidor já devolve em
-    // command_ids — ele já vem ordenado por sort_order (ver GET /api/folders
-    // em server/index.js) — só guardamos uma cópia própria porque
-    // command_ids vira um Set (checagem de membership O(1), usada em toda
-    // parte) e Sets não preservam uma noção de "posição" utilizável pra
-    // reconstruir a ordem de renderização depois.
-    FOLDERS = (data || []).map(f => ({ id: f.id, name: f.name, sort_order: f.sort_order, command_ids: new Set(f.command_ids || []), order: (f.command_ids || []).slice() }));
+    // `order` (task #458, estendido pela task Notes) já vem do servidor
+    // como um array combinado {type:'command'|'note', id} na ordem certa
+    // (ver GET /api/folders em server/index.js) — comandos E notas
+    // intercalados, não mais só command_ids. `notes` (task Notes) é a
+    // lista de notas da pasta, cada uma já com folder_id/title/description.
+    // `command_ids` continua um Set (checagem de membership O(1), usada em
+    // toda parte) — Sets não preservam posição, por isso `order` é mantido
+    // separado.
+    FOLDERS = (data || []).map(f => ({
+      id: f.id, name: f.name, sort_order: f.sort_order,
+      command_ids: new Set(f.command_ids || []),
+      notes: f.notes || [],
+      order: (f.order || []).slice(),
+    }));
     if (typeof render === 'function') render();
   } catch (e) {
     console.warn('Não foi possível carregar as pastas do servidor', e);
@@ -61,8 +68,21 @@ async function reloadAllUsersFoldersFromServer() {
   try {
     const res = await fetch('/api/folders/all');
     const data = await res.json();
-    ALL_USERS_FOLDERS = (data || []).map(f => ({ id: f.id, username: f.username, name: f.name, sort_order: f.sort_order, command_ids: new Set(f.command_ids || []), order: (f.command_ids || []).slice() }));
-    if (typeof render === 'function' && GROUP_BY === 'user-folders') render();
+    ALL_USERS_FOLDERS = (data || []).map(f => ({
+      id: f.id, username: f.username, name: f.name, sort_order: f.sort_order,
+      command_ids: new Set(f.command_ids || []),
+      notes: f.notes || [],
+      order: (f.order || []).slice(),
+    }));
+    // Re-renderiza se algo na tela agora depende desses dados: o Group by
+    // "User folders" de fora de Folders, OU o novo seletor de escopo de
+    // pastas dentro de Folders quando não está em "My folders" (ver
+    // FOLDER_SCOPE abaixo) — os dois só carregam ALL_USERS_FOLDERS sob
+    // demanda, então precisam de um render() depois que a resposta chega.
+    const needsRender = GROUP_BY === 'user-folders'
+      || (typeof VIEW_FOLDERS_HOME !== 'undefined' && VIEW_FOLDERS_HOME && typeof FOLDER_SCOPE !== 'undefined' && FOLDER_SCOPE !== 'mine');
+    if (typeof render === 'function' && needsRender) render();
+    if (typeof renderFolderScopeOptions === 'function') renderFolderScopeOptions();
   } catch (e) {
     console.warn('Não foi possível carregar as pastas de todos os usuários', e);
   }
@@ -78,6 +98,12 @@ async function reloadAllUsersFoldersFromServer() {
 // que VIEW_FOLDERS_HOME muda (viewAllFolders/goHome) e uma vez no boot,
 // logo depois de VIEW_FOLDERS_HOME ser inicializado acima.
 const GROUP_BY_HIDDEN_IN_FOLDERS = ['creator', 'user-folders'];
+// Dentro de Folders, o controle "Group by" da toolbar (#groupByDD) é
+// substituído por inteiro pelo seletor de ESCOPO de pastas (#folderScopeDD
+// — ver renderFolderScopeOptions()/setFolderScope() mais abaixo): "My
+// folders" (padrão) / um usuário escolhido / "All". Os dois dropdowns
+// nunca ficam visíveis ao mesmo tempo — só um "style.display" complementar,
+// mesmo padrão já usado pelos seg-btns escondidos abaixo.
 function updateGroupByOptionsForFoldersScope() {
   document.querySelectorAll('.seg-btn[data-val]').forEach(b => {
     if (GROUP_BY_HIDDEN_IN_FOLDERS.includes(b.dataset.val)) {
@@ -87,8 +113,71 @@ function updateGroupByOptionsForFoldersScope() {
   if (VIEW_FOLDERS_HOME && GROUP_BY_HIDDEN_IN_FOLDERS.includes(GROUP_BY) && typeof setGroupBy === 'function') {
     setGroupBy('topic');
   }
+  const groupByDD = document.getElementById('groupByDD');
+  const folderScopeDD = document.getElementById('folderScopeDD');
+  if (groupByDD) groupByDD.style.display = VIEW_FOLDERS_HOME ? 'none' : '';
+  if (folderScopeDD) folderScopeDD.style.display = VIEW_FOLDERS_HOME ? '' : 'none';
+  if (VIEW_FOLDERS_HOME) {
+    // O seletor de usuário precisa da lista cross-user (ALL_USERS_FOLDERS)
+    // pronta — carrega (ou refresca) sob demanda ao entrar em Folders, em
+    // vez de manter isso sempre quente no boot pra todo mundo (mesmo
+    // espírito de reloadAllUsersFoldersFromServer() já usado pelo Group by
+    // "User folders").
+    if (typeof reloadAllUsersFoldersFromServer === 'function') reloadAllUsersFoldersFromServer();
+    if (typeof renderFolderScopeOptions === 'function') renderFolderScopeOptions();
+  }
 }
 updateGroupByOptionsForFoldersScope();
+
+// ── Seletor de ESCOPO de pastas dentro de Folders (substitui Group by lá —
+// ver comentário acima) ──
+// FOLDER_SCOPE: 'mine' (padrão) | 'all' | 'user:<username>'. Só em memória
+// (não persistido) de propósito, mesma decisão já tomada para
+// FOLDER_EDIT_MODE — não precisa sobreviver a um reload da página.
+let FOLDER_SCOPE = 'mine';
+function folderScopeLabel(scope) {
+  if (scope === 'all') return 'All';
+  if (scope && scope.startsWith('user:')) return scope.slice('user:'.length);
+  return 'My folders';
+}
+// Lista de usuários pra escolher = quem tem pelo menos uma pasta hoje (ver
+// ALL_USERS_FOLDERS), exceto o próprio usuário atual — "My folders" já
+// cobre esse caso, não faz sentido duplicar na lista de "outro usuário".
+function folderScopeUsernames() {
+  const all = typeof ALL_USERS_FOLDERS !== 'undefined' ? ALL_USERS_FOLDERS : [];
+  const usernames = [...new Set(all.map(f => f.username))]
+    .filter(u => typeof CURRENT_USER === 'undefined' || u !== CURRENT_USER)
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  return usernames;
+}
+function renderFolderScopeOptions() {
+  const panel = document.getElementById('folderScopeToggle');
+  if (!panel) return;
+  const usernames = folderScopeUsernames();
+  const userRows = usernames.map(u => {
+    const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(u) : u;
+    const safe = typeof escapeCmdSearchHistoryHtml === 'function' ? escapeCmdSearchHistoryHtml(u) : u;
+    return `<button type="button" class="seg-btn${FOLDER_SCOPE === 'user:' + u ? ' on' : ''}" onclick="setFolderScope('user:${jsEsc}')">${safe}</button>`;
+  }).join('');
+  panel.innerHTML = `
+    <button type="button" class="seg-btn${FOLDER_SCOPE === 'mine' ? ' on' : ''}" onclick="setFolderScope('mine')">My folders</button>
+    ${userRows}
+    <button type="button" class="seg-btn${FOLDER_SCOPE === 'all' ? ' on' : ''}" onclick="setFolderScope('all')">All</button>
+  `;
+}
+function setFolderScope(scope) {
+  FOLDER_SCOPE = scope || 'mine';
+  renderFolderScopeOptions(); // reconstrói a lista com o item certo marcado ".on"
+  const btn = document.getElementById('folderScopeDDBtn');
+  const label = btn && btn.querySelector('.dd-label');
+  if (label) label.textContent = folderScopeLabel(FOLDER_SCOPE);
+  const dd = document.getElementById('folderScopeDD');
+  if (dd) dd.classList.remove('open');
+  if (FOLDER_SCOPE !== 'mine' && typeof ALL_USERS_FOLDERS !== 'undefined' && !ALL_USERS_FOLDERS.length && typeof reloadAllUsersFoldersFromServer === 'function') {
+    reloadAllUsersFoldersFromServer();
+  }
+  if (typeof render === 'function') render();
+}
 
 // ── Navegação: visão combinada de Folders / home ──
 // Clique no cabeçalho "Folders" da sidebar — funciona como um toggle: clicar
@@ -134,31 +223,33 @@ function toggleCommandInFolder(cmdId, folderId, itemEl) {
   if (!folder) return;
   const wasOn = folder.command_ids.has(cmdId);
   if (wasOn) folder.command_ids.delete(cmdId); else folder.command_ids.add(cmdId);
-  // Mantém folder.order (task #458, lista usada só pra RENDERIZAR na ordem
-  // certa — ver buildFolderSection em db-render-engine.js) sincronizado com
-  // o Set acima: remove do meio se saiu, ou entra no FIM se entrou (mesmo
-  // critério do backend — ver POST /api/folders/:id/commands/:commandId em
-  // server/index.js, que dá sort_order = MAX+1 pro novo membership).
-  if (!folder.order) folder.order = [...folder.command_ids];
+  // Mantém folder.order (task #458, agora um array de {type,id} — task
+  // Notes — usado só pra RENDERIZAR na ordem certa — ver buildFolderSection
+  // em db-render-engine.js) sincronizado com o Set acima: remove do meio se
+  // saiu, ou entra no FIM se entrou (mesmo critério do backend — ver POST
+  // /api/folders/:id/commands/:commandId em server/index.js, que dá
+  // sort_order = MAX+1 cross-table pro novo membership).
+  if (!folder.order) folder.order = [...folder.command_ids].map(id => ({ type: 'command', id }));
   if (wasOn) {
-    const idx = folder.order.indexOf(cmdId);
+    const idx = folder.order.findIndex(o => o.type === 'command' && o.id === cmdId);
     if (idx !== -1) folder.order.splice(idx, 1);
-  } else if (!folder.order.includes(cmdId)) {
-    folder.order.push(cmdId);
+  } else if (!folder.order.some(o => o.type === 'command' && o.id === cmdId)) {
+    folder.order.push({ type: 'command', id: cmdId });
   }
   // Mantém o snapshot cross-user (ALL_USERS_FOLDERS, ver Group by "User
-  // folders") coerente com a própria pasta do usuário atual — sem isso, a
-  // seção dele em "User folders" ficaria com a contagem/ordem antiga até o
-  // próximo reload (F5 ou re-escolher o Group by).
+  // folders" / seletor de escopo dentro de Folders) coerente com a própria
+  // pasta do usuário atual — sem isso, a seção dele em "User folders"
+  // ficaria com a contagem/ordem antiga até o próximo reload (F5 ou
+  // re-escolher o Group by/escopo).
   const ownInAllUsers = ALL_USERS_FOLDERS.find(f => f.id === folderId);
   if (ownInAllUsers) {
     if (wasOn) ownInAllUsers.command_ids.delete(cmdId); else ownInAllUsers.command_ids.add(cmdId);
-    if (!ownInAllUsers.order) ownInAllUsers.order = [...ownInAllUsers.command_ids];
+    if (!ownInAllUsers.order) ownInAllUsers.order = [...ownInAllUsers.command_ids].map(id => ({ type: 'command', id }));
     if (wasOn) {
-      const idx2 = ownInAllUsers.order.indexOf(cmdId);
+      const idx2 = ownInAllUsers.order.findIndex(o => o.type === 'command' && o.id === cmdId);
       if (idx2 !== -1) ownInAllUsers.order.splice(idx2, 1);
-    } else if (!ownInAllUsers.order.includes(cmdId)) {
-      ownInAllUsers.order.push(cmdId);
+    } else if (!ownInAllUsers.order.some(o => o.type === 'command' && o.id === cmdId)) {
+      ownInAllUsers.order.push({ type: 'command', id: cmdId });
     }
   }
 
@@ -236,15 +327,15 @@ async function promptCreateFolder(cmdIdToAddAfter) {
     }
     const folder = await res.json();
     const commandIds = new Set(folder.command_ids || []);
-    const order = (folder.command_ids || []).slice();
+    const order = (folder.command_ids || []).map(id => ({ type: 'command', id }));
     if (cmdIdToAddAfter) {
       commandIds.add(cmdIdToAddAfter);
-      order.push(cmdIdToAddAfter);
+      order.push({ type: 'command', id: cmdIdToAddAfter });
       fetch(`/api/folders/${folder.id}/commands/${encodeURIComponent(cmdIdToAddAfter)}`, { method: 'POST' }).catch(e => {
         console.warn('Falha ao adicionar o comando à nova pasta no servidor (mantido localmente)', e);
       });
     }
-    FOLDERS.push({ id: folder.id, name: folder.name, sort_order: folder.sort_order, command_ids: commandIds, order });
+    FOLDERS.push({ id: folder.id, name: folder.name, sort_order: folder.sort_order, command_ids: commandIds, notes: [], order });
     render(); // reconstrói os cards para o dropdown de pastas (e a seção da pasta, se estiver em Folders) já refletirem a pasta nova
   } catch (e) {
     alert('Failed to create folder. Please try again.');
@@ -276,10 +367,10 @@ async function promptRenameFolder(id, currentName, ev) {
 }
 function deleteFolderConfirm(id, name, ev) {
   if (ev) ev.stopPropagation();
-  openConfirmModal(`Delete folder "${name}"? Commands inside it are not deleted — they just leave this folder. This action cannot be undone.`).then(ok => {
+  openConfirmModal(`Delete folder "${name}"? Commands inside it are not deleted — they just leave this folder. Notes inside it ARE deleted along with the folder (notes only exist inside a folder). This action cannot be undone.`).then(ok => {
     if (!ok) return;
     FOLDERS = FOLDERS.filter(f => f.id !== id);
-    FOLDER_REORDER_MODE.delete(id); // não deixa "vazando" um modo de edição pra um id de pasta que não existe mais
+    FOLDER_EDIT_MODE.delete(id); // não deixa "vazando" um modo de edição pra um id de pasta que não existe mais
     fetch(`/api/folders/${id}`, { method: 'DELETE' }).catch(e => {
       console.warn('Falha ao excluir pasta no servidor (mantida localmente)', e);
     });
@@ -287,22 +378,25 @@ function deleteFolderConfirm(id, name, ev) {
   });
 }
 
-// ── Modo de edição de ordem por pasta (task #461) ──
-// Arrastar os cards só é possível DENTRO desse modo — fora dele, mesmo numa
-// pasta própria, os cards renderizam normais (sem alça de arrastar, ver
-// wrapCardsForFolderDrag em db-render-engine.js), pra evitar reordenar algo
-// por acidente ao rolar a tela ou clicar num card. `FOLDER_REORDER_MODE` é
-// um Set de folderIds — cada pasta liga/desliga o próprio modo
-// independentemente das outras, e o estado não precisa sobreviver a um
-// reload da página (não é persistido em localStorage/servidor).
-let FOLDER_REORDER_MODE = new Set();
+// ── Modo de edição da pasta (task #461, consolidado na task #463) ──
+// Um único botão "⚙ Edit folder" no cabeçalho liga/desliga esse modo por
+// pasta — SÓ dentro dele é que aparecem Renomear (✎)/Excluir (✕) e os
+// cards ficam arrastáveis (embrulhados em .folder-card-row, ver
+// wrapCardsForFolderDrag em db-render-engine.js). Fora desse modo, mesmo
+// numa pasta própria, a seção mostra só os cards + os botões "+ Note"/"⚙
+// Edit" sempre visíveis — renomear/excluir/reordenar por acidente (rolar a
+// tela, clicar num card) não deveria ser possível sem entrar deliberadamente
+// no modo de edição. `FOLDER_EDIT_MODE` é um Set de folderIds — cada pasta
+// liga/desliga o próprio modo independentemente das outras; não persiste
+// entre reloads (mesma decisão de sempre pra esse tipo de estado de UI).
+let FOLDER_EDIT_MODE = new Set();
 // `ev` (opcional): chamado a partir do cabeçalho da seção (.sec-folder-
 // actions, ver buildFolderSectionFromCards em db-render-engine.js) —
 // mesmo motivo de stopPropagation() de promptRenameFolder/deleteFolderConfirm.
-function toggleFolderReorderMode(folderId, ev) {
+function toggleFolderEditMode(folderId, ev) {
   if (ev) ev.stopPropagation();
-  if (FOLDER_REORDER_MODE.has(folderId)) FOLDER_REORDER_MODE.delete(folderId);
-  else FOLDER_REORDER_MODE.add(folderId);
+  if (FOLDER_EDIT_MODE.has(folderId)) FOLDER_EDIT_MODE.delete(folderId);
+  else FOLDER_EDIT_MODE.add(folderId);
   render();
 }
 
@@ -354,25 +448,36 @@ document.addEventListener('dragend', ev => {
     const folderId = Number(row.dataset.folderId);
     const container = row.parentElement;
     if (folderId && container) {
-      const orderedIds = [...container.querySelectorAll(`.folder-card-row[data-folder-id="${folderId}"]`)]
-        .map(r => { const card = r.querySelector('.card'); return card ? card.dataset.cmdId : null; })
+      // Cada row embrulha OU um card de comando (data-cmd-id) OU um card de
+      // nota (data-note-id, ver buildNoteCardHtml em db-render-engine.js) —
+      // lê qualquer um dos dois pra remontar o array combinado {type,id} na
+      // ordem em que ficaram no DOM depois do drag.
+      const orderedTagged = [...container.querySelectorAll(`.folder-card-row[data-folder-id="${folderId}"]`)]
+        .map(r => {
+          const card = r.querySelector('.card');
+          if (!card) return null;
+          if (card.dataset.noteId) return { type: 'note', id: Number(card.dataset.noteId) };
+          if (card.dataset.cmdId) return { type: 'command', id: card.dataset.cmdId };
+          return null;
+        })
         .filter(Boolean);
-      if (orderedIds.length) reorderFolderCommands(folderId, orderedIds);
+      if (orderedTagged.length) reorderFolderItems(folderId, orderedTagged);
     }
   }
   _fcDragRow = null;
 });
-// Persiste a nova ordem — otimista (atualiza FOLDERS/ALL_USERS_FOLDERS local
-// na hora; a UI já está com a ordem certa, já que veio de um reorder no
-// próprio DOM) + PUT em segundo plano. Não chama render() — reconstruir o
-// HTML aqui destruiria a própria row que acabou de ser soltada.
-function reorderFolderCommands(folderId, orderedIds) {
+// Persiste a nova ordem (comandos E notas — task Notes) — otimista (atualiza
+// FOLDERS/ALL_USERS_FOLDERS local na hora; a UI já está com a ordem certa,
+// já que veio de um reorder no próprio DOM) + PUT em segundo plano. Não
+// chama render() — reconstruir o HTML aqui destruiria a própria row que
+// acabou de ser soltada. `orderedTagged` é um array de {type, id}.
+function reorderFolderItems(folderId, orderedTagged) {
   const folder = FOLDERS.find(f => f.id === folderId);
-  if (folder) folder.order = orderedIds.slice();
+  if (folder) folder.order = orderedTagged.slice();
   const ownInAllUsers = ALL_USERS_FOLDERS.find(f => f.id === folderId);
-  if (ownInAllUsers) ownInAllUsers.order = orderedIds.slice();
+  if (ownInAllUsers) ownInAllUsers.order = orderedTagged.slice();
   fetch(`/api/folders/${folderId}/reorder`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command_ids: orderedIds }),
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: orderedTagged }),
   }).catch(e => {
     console.warn('Falha ao salvar a nova ordem da pasta no servidor (mantida localmente)', e);
   });
@@ -396,9 +501,15 @@ function copyFolderFromUser(folderId, folderName, ev) {
         return;
       }
       const folder = await res.json();
+      // /copy não traz notas (task Notes) — só os comandos (ver comentário
+      // em POST /api/folders/:id/copy, server/index.js): notas são
+      // anotações pessoais de quem escreveu, não fazem parte da "curadoria"
+      // que se importa ao copiar a pasta de alguém. `notes: []`/`order`
+      // derivado só de command_ids, então.
       FOLDERS.push({
         id: folder.id, name: folder.name, sort_order: folder.sort_order,
-        command_ids: new Set(folder.command_ids || []), order: (folder.command_ids || []).slice(),
+        command_ids: new Set(folder.command_ids || []), notes: [],
+        order: (folder.command_ids || []).map(id => ({ type: 'command', id })),
       });
       render(); // a pasta nova precisa aparecer nos dropdowns de pasta de cada card, e em "Folders"/"My folders" se o usuário for lá depois
     } catch (e) {
@@ -406,6 +517,202 @@ function copyFolderFromUser(folderId, folderName, ev) {
     }
   });
 }
+
+// ── Notes (task Notes) — anotações livres dentro de uma pasta própria ──
+// Editor compartilhado create/edit num modal (#noteEditorOverlay em
+// index.html), mesmo padrão de openFolderPromptModal acima. Título é texto
+// simples; a descrição é HTML "rico" digitado num <div contenteditable>
+// (#noteBodyEditor) que aceita colar imagens (convertidas pra data URI e
+// inseridas como <img>, ver _neHandlePaste) e redimensioná-las arrastando o
+// canto inferior direito (ver _neArmImageResize). O servidor sanitiza o
+// HTML antes de gravar (sanitizeNoteHtml em server/index.js) — o front-end
+// não precisa (e não deveria) confiar no próprio HTML gerado como seguro
+// por si só, mas também não faz sanitização própria aqui: só o servidor é a
+// fonte de verdade do que fica salvo.
+let _noteEditorFolderId = null;
+let _noteEditorNoteId = null;
+function openNoteEditor(mode, folderId, noteId, ev) {
+  if (ev) ev.stopPropagation();
+  _noteEditorFolderId = folderId;
+  _noteEditorNoteId = noteId || null;
+  let title = '', description = '';
+  if (mode === 'edit' && noteId) {
+    const folder = FOLDERS.find(f => f.id === folderId);
+    const note = folder && (folder.notes || []).find(n => n.id === noteId);
+    if (note) { title = note.title || ''; description = note.description || ''; }
+  }
+  const titleEl = document.getElementById('noteEditorTitle');
+  if (titleEl) titleEl.textContent = mode === 'edit' ? 'Edit note' : 'New note';
+  const titleInput = document.getElementById('noteTitleInput');
+  if (titleInput) titleInput.value = title;
+  const body = document.getElementById('noteBodyEditor');
+  if (body) {
+    body.innerHTML = description;
+    _neArmExistingImages(body);
+  }
+  const overlay = document.getElementById('noteEditorOverlay');
+  if (overlay) overlay.classList.add('show');
+  setTimeout(() => { if (titleInput) { titleInput.focus(); titleInput.select(); } }, 0);
+}
+function closeNoteEditorModal() {
+  const overlay = document.getElementById('noteEditorOverlay');
+  if (overlay) overlay.classList.remove('show');
+  _noteEditorFolderId = null;
+  _noteEditorNoteId = null;
+}
+async function saveNoteEditor() {
+  const titleInput = document.getElementById('noteTitleInput');
+  const bodyEl = document.getElementById('noteBodyEditor');
+  const title = ((titleInput && titleInput.value) || '').trim();
+  const description = bodyEl ? bodyEl.innerHTML : '';
+  if (!title) { alert('Enter a title for the note.'); return; }
+  const folderId = _noteEditorFolderId, noteId = _noteEditorNoteId;
+  try {
+    const res = noteId
+      ? await fetch(`/api/notes/${noteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, description }) })
+      : await fetch(`/api/folders/${folderId}/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, description }) });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      alert(errBody.message || 'Failed to save note.');
+      return;
+    }
+    const note = await res.json();
+    const folder = FOLDERS.find(f => f.id === note.folder_id);
+    if (folder) {
+      if (!folder.notes) folder.notes = [];
+      const idx = folder.notes.findIndex(n => n.id === note.id);
+      if (idx !== -1) folder.notes[idx] = note; else folder.notes.push(note);
+      if (!folder.order) folder.order = [];
+      if (!folder.order.some(o => o.type === 'note' && o.id === note.id)) folder.order.push({ type: 'note', id: note.id });
+    }
+    closeNoteEditorModal();
+    render();
+  } catch (e) {
+    alert('Failed to save note. Please try again.');
+  }
+}
+function deleteNoteConfirm(noteId, title, ev) {
+  if (ev) ev.stopPropagation();
+  openConfirmModal(`Delete note "${title}"? This action cannot be undone.`).then(ok => {
+    if (!ok) return;
+    FOLDERS.forEach(f => {
+      if (f.notes) f.notes = f.notes.filter(n => n.id !== noteId);
+      if (f.order) f.order = f.order.filter(o => !(o.type === 'note' && o.id === noteId));
+    });
+    render();
+    fetch(`/api/notes/${noteId}`, { method: 'DELETE' }).catch(e => {
+      console.warn('Falha ao excluir nota no servidor (mantida localmente)', e);
+    });
+  });
+}
+// Clona uma nota PRÓPRIA na MESMA pasta (título com sufixo " (copy)", ver
+// POST /api/notes/:id/clone em server/index.js) — mesmo espírito do
+// "Duplicate command", mas sem precisar abrir editor: já cria a cópia
+// direto e a tela reflete na hora.
+async function cloneNote(noteId, ev) {
+  if (ev) ev.stopPropagation();
+  try {
+    const res = await fetch(`/api/notes/${noteId}/clone`, { method: 'POST' });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      alert(errBody.message || 'Failed to clone note.');
+      return;
+    }
+    const note = await res.json();
+    const folder = FOLDERS.find(f => f.id === note.folder_id);
+    if (folder) {
+      if (!folder.notes) folder.notes = [];
+      folder.notes.push(note);
+      if (!folder.order) folder.order = [];
+      folder.order.push({ type: 'note', id: note.id });
+    }
+    render();
+  } catch (e) {
+    alert('Failed to clone note. Please try again.');
+  }
+}
+
+// ── Colar/redimensionar imagens dentro da nota (task Notes) ──
+// Cola uma imagem (Ctrl+V com uma imagem na área de transferência) dentro
+// do editor: intercepta o evento de paste, lê o arquivo via FileReader
+// (mesma técnica já usada pra linhas de comando tipo 'image', ver
+// _ceHandleImageFileInput em js/command-editor.js) e insere um <img> no
+// ponto do cursor como data URI base64 — sem upload nem endpoint próprio de
+// arquivo, a imagem vira parte do próprio HTML da nota. Colar texto normal
+// continua funcionando do jeito padrão do navegador (contenteditable).
+function _neHandlePaste(ev) {
+  const items = (ev.clipboardData && ev.clipboardData.items) || [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.type && item.type.startsWith('image/')) {
+      ev.preventDefault();
+      const file = item.getAsFile();
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => _neInsertImage(reader.result);
+      reader.readAsDataURL(file);
+      return;
+    }
+  }
+}
+function _neInsertImage(dataUrl) {
+  const editor = document.getElementById('noteBodyEditor');
+  if (!editor) return;
+  const img = document.createElement('img');
+  img.src = dataUrl;
+  img.width = 320; // largura inicial razoável — arrastável depois pelo canto (ver _neArmImageResize)
+  editor.focus();
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount && editor.contains(sel.anchorNode)) {
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(img);
+    range.setStartAfter(img);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } else {
+    editor.appendChild(img);
+  }
+  _neArmImageResize(img);
+}
+// Redimensiona arrastando o canto inferior-direito da imagem (últimos 16px
+// x16px) — só altera a largura (atributo `width`, o mesmo que
+// sanitizeNoteHtml preserva no servidor); a altura acompanha
+// proporcionalmente sozinha (comportamento padrão do navegador pra um
+// <img width="N"> sem height fixado).
+function _neArmImageResize(img) {
+  img.style.cursor = 'nwse-resize';
+  img.addEventListener('mousedown', ev => {
+    const rect = img.getBoundingClientRect();
+    const nearCorner = (ev.clientX > rect.right - 16) && (ev.clientY > rect.bottom - 16);
+    if (!nearCorner) return;
+    ev.preventDefault();
+    const startX = ev.clientX;
+    const startWidth = rect.width;
+    function onMove(moveEv) {
+      const newWidth = Math.max(40, Math.min(900, startWidth + (moveEv.clientX - startX)));
+      img.width = Math.round(newWidth);
+      img.removeAttribute('height');
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+// Ao abrir o editor pra EDITAR uma nota existente, as imagens que já
+// estavam na descrição também precisam da alça de redimensionar — só as
+// coladas na hora (via _neInsertImage) ganham isso automaticamente.
+function _neArmExistingImages(container) {
+  container.querySelectorAll('img').forEach(img => _neArmImageResize(img));
+}
+document.getElementById('noteBodyEditor') && document.getElementById('noteBodyEditor').addEventListener('paste', _neHandlePaste);
+document.getElementById('noteEditorOverlay') && document.getElementById('noteEditorOverlay').addEventListener('click', ev => {
+  if (ev.target.id === 'noteEditorOverlay') closeNoteEditorModal();
+});
 
 // Filtra os cards pelo texto digitado no campo de pesquisa (nome, descrição, tags e o
 // próprio texto dos comandos). Roda depois do filtro de pastas, então só esconde
