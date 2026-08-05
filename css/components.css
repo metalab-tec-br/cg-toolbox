@@ -805,13 +805,15 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .note-delete-btn:hover { border-color: var(--red); color: var(--red); }
 
 /* ─── NOTES (título + descrição livre dentro de uma pasta) ─── */
-/* Fundo do card/card-head da nota volta a ser o mesmo cinza/branco padrão
-   de .card/.card-head (pedido do usuário: "deixe a anotação com o fundo
-   branco igual do comando") — a versão anterior pintava o card inteiro de
-   amarelo (post-it); agora só o badge "NOTE" abaixo carrega a cor, como
-   único identificador visual de que é uma nota (mesmo peso de qualquer
-   outra badge/tag do app). --postit-* (theme.css) seguem existindo só
-   para esse badge. */
+/* Só a FAIXA DO TÍTULO (.card-head) da nota fica amarela — pedido do
+   usuário, apontando exatamente essa faixa na captura de tela: "o que eu
+   quero que fique amarelo é o fundo dessa parte que selecionei". O corpo/
+   descrição (.note-body, abaixo) continua branco/cinza igual ao comando
+   (pedido anterior: "deixe a anotação com o fundo branco igual do
+   comando") — o resto do .card (borda geral) também não muda. */
+.card[data-note-id] .card-head {
+  background: var(--postit-head-bg); border-bottom-color: var(--postit-border);
+}
 /* "Note" na frente do título — único jeito de diferenciar visualmente de um
    card de comando dentro da mesma seção de pasta (mesma aparência de
    .card/.card-head/.card-actions, ver card() em terminal-renderer.js). */
