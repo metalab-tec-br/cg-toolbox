@@ -1490,16 +1490,19 @@ function checkScheduledBackup() {
     }
   })();
 }
-setInterval(checkScheduledBackup, 60 * 1000);
-checkScheduledBackup();
-
 // ════════════════════════════════════════════════
 // Startup — aguarda o Postgres (cg-toolbox-db) responder e o schema ser
-// aplicado antes de começar a aceitar requisições HTTP.
+// aplicado antes de começar a aceitar requisições HTTP. O agendamento de
+// backup (setInterval) só é registrado DEPOIS disso — chamá-lo antes faria
+// checkScheduledBackup() consultar `user_data` numa corrida contra o CREATE
+// TABLE do initDb() (mesmo processo, mesma tabela), gerando um erro
+// "relation does not exist" inofensivo mas ruidoso no primeiro boot.
 // ════════════════════════════════════════════════
 (async () => {
   try {
     await initDb();
+    setInterval(checkScheduledBackup, 60 * 1000);
+    checkScheduledBackup();
     app.listen(PORT, () => {
       console.log(`CG Toolbox backend listening on port ${PORT}`);
     });
