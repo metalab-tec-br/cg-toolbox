@@ -229,7 +229,8 @@ async function render() {
     const folderGroups = folderIdsInUse
       .map(folderId => {
         const folder = folderById.get(folderId);
-        return buildFolderSection(commands, folderId, folder.name, values, hasIPs, `${kp}folder${folderId}`, folder.order);
+        const reorderMode = typeof FOLDER_REORDER_MODE !== 'undefined' && FOLDER_REORDER_MODE.has(folderId);
+        return buildFolderSection(commands, folderId, folder.name, values, hasIPs, `${kp}folder${folderId}`, folder.order, reorderMode);
       })
       .join('');
     if (!folderGroups) return '';
@@ -277,8 +278,11 @@ async function render() {
         const cards = orderedIds.map(id => buildCardHtmlForRow(byId.get(id), values, hasIPs)).filter(Boolean);
         // withActions só pra pasta do próprio usuário (dá pra renomear/
         // excluir/reordenar); copyable pra pasta de OUTRO usuário (só um
-        // botão de copiar — ver buildFolderSectionFromCards).
-        return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}${userKey}__folder${f.id}`, isOwn, !isOwn);
+        // botão de copiar — ver buildFolderSectionFromCards). reorderMode só
+        // é relevante quando isOwn (a pasta de outro usuário nunca é
+        // arrastável, ver `active` em buildFolderSectionFromCards).
+        const reorderMode = isOwn && typeof FOLDER_REORDER_MODE !== 'undefined' && FOLDER_REORDER_MODE.has(f.id);
+        return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}${userKey}__folder${f.id}`, isOwn, !isOwn, reorderMode);
       }).join('');
       const cardCount = (folderSections.match(/<div class="card"/g) || []).length;
       if (!cardCount) return '';

@@ -279,11 +279,31 @@ function deleteFolderConfirm(id, name, ev) {
   openConfirmModal(`Delete folder "${name}"? Commands inside it are not deleted — they just leave this folder. This action cannot be undone.`).then(ok => {
     if (!ok) return;
     FOLDERS = FOLDERS.filter(f => f.id !== id);
+    FOLDER_REORDER_MODE.delete(id); // não deixa "vazando" um modo de edição pra um id de pasta que não existe mais
     fetch(`/api/folders/${id}`, { method: 'DELETE' }).catch(e => {
       console.warn('Falha ao excluir pasta no servidor (mantida localmente)', e);
     });
     render();
   });
+}
+
+// ── Modo de edição de ordem por pasta (task #461) ──
+// Arrastar os cards só é possível DENTRO desse modo — fora dele, mesmo numa
+// pasta própria, os cards renderizam normais (sem alça de arrastar, ver
+// wrapCardsForFolderDrag em db-render-engine.js), pra evitar reordenar algo
+// por acidente ao rolar a tela ou clicar num card. `FOLDER_REORDER_MODE` é
+// um Set de folderIds — cada pasta liga/desliga o próprio modo
+// independentemente das outras, e o estado não precisa sobreviver a um
+// reload da página (não é persistido em localStorage/servidor).
+let FOLDER_REORDER_MODE = new Set();
+// `ev` (opcional): chamado a partir do cabeçalho da seção (.sec-folder-
+// actions, ver buildFolderSectionFromCards em db-render-engine.js) —
+// mesmo motivo de stopPropagation() de promptRenameFolder/deleteFolderConfirm.
+function toggleFolderReorderMode(folderId, ev) {
+  if (ev) ev.stopPropagation();
+  if (FOLDER_REORDER_MODE.has(folderId)) FOLDER_REORDER_MODE.delete(folderId);
+  else FOLDER_REORDER_MODE.add(folderId);
+  render();
 }
 
 // ── Reordenar os comandos DENTRO de uma pasta (task #458) ──

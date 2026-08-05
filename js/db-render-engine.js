@@ -480,20 +480,29 @@ function wrapCardsForFolderDrag(cards, folderId) {
 // texto livre cadastrado pelo usuário — passa por escAttr() antes de virar
 // título (inserido como HTML cru) para não permitir HTML injection via nome
 // de pasta malicioso.
-// `withActions` controla se aparecem os botões de renomear/excluir
-// (.sec-folder-actions, hover-only, ver components.css) E se os cards ficam
-// arrastáveis para reordenar (task #458) — só fazem sentido numa pasta que
-// pertence ao usuário atual (o backend recusa ambas as operações numa pasta
-// de outra pessoa). `copyable` (task #459) mostra em vez disso um único
-// botão de copiar a pasta — usado quando é a pasta de OUTRO usuário (Group
-// by "User folders"); nunca junto com withActions.
-function buildFolderSectionFromCards(cards, folderId, folderName, key, withActions, copyable) {
+// `withActions` controla se aparecem os botões de renomear/excluir/
+// reordenar (.sec-folder-actions, hover-only, ver components.css) — só
+// fazem sentido numa pasta que pertence ao usuário atual (o backend recusa
+// as três operações numa pasta de outra pessoa). `copyable` (task #459)
+// mostra em vez disso um único botão de copiar a pasta — usado quando é a
+// pasta de OUTRO usuário (Group by "User folders"); nunca junto com
+// withActions.
+// `reorderMode` (task #461) — os cards só ficam arrastáveis (envolvidos em
+// .folder-card-row, ver wrapCardsForFolderDrag) enquanto o usuário está
+// EDITANDO a ordem da pasta (toggle "⇕" no cabeçalho, ver
+// toggleFolderReorderMode em js/folders.js). Fora desse modo, mesmo numa
+// pasta própria, os cards são renderizados normais — arrastar/soltar
+// acidentalmente ao rolar a tela ou clicar num card não deveria reordenar
+// nada sem o usuário ter entrado deliberadamente no modo de edição.
+function buildFolderSectionFromCards(cards, folderId, folderName, key, withActions, copyable, reorderMode) {
   if (!cards.length) return '';
   const nameEsc = escAttr(folderName);
   const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(folderName) : nameEsc;
   let actions = '';
   if (withActions) {
+    const reorderBtn = `<button type="button" class="sec-folder-btn${reorderMode ? ' on' : ''}" onmousedown="event.preventDefault()" onclick="toggleFolderReorderMode(${folderId}, event)" title="${reorderMode ? 'Done reordering' : 'Reorder commands'}">⇕</button>`;
     actions = `<span class="sec-folder-actions">
+    ${reorderBtn}
     <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="promptRenameFolder(${folderId}, '${jsEsc}', event)" title="Rename folder">✎</button>
     <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${folderId}, '${jsEsc}', event)" title="Delete folder">✕</button>
   </span>`;
@@ -503,8 +512,9 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
   </span>`;
   }
   const headerHtml = `${folderIcon(true, 12)} ${nameEsc} <span class="sec-count">${cards.length}</span>${actions}`;
-  const body = withActions ? wrapCardsForFolderDrag(cards, folderId) : cards.join('');
-  return collapsibleGroup(key || `folder${folderId}`, headerHtml, body);
+  const active = withActions && reorderMode;
+  const body = active ? wrapCardsForFolderDrag(cards, folderId) : cards.join('');
+  return collapsibleGroup(key || `folder${folderId}`, headerHtml, body, active ? 'section-reordering' : undefined);
 }
 
 // Uma seção de PASTA do usuário ATUAL (ícone de pasta + nome + seus cards) —
@@ -522,10 +532,14 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
 // comportamento anterior a esta feature.
 //
 // A sidebar não lista mais as pastas individualmente (só o item combinado
-// "Folders" — a pedido do usuário), então renomear/excluir uma pasta só é
-// possível aqui: dois botões (✎/✕) embutidos no próprio cabeçalho da seção
-// (ver buildFolderSectionFromCards acima), visíveis só no hover.
-function buildFolderSection(rows, folderId, folderName, values, hasIPs, key, order) {
+// "Folders" — a pedido do usuário), então renomear/excluir/reordenar uma
+// pasta só é possível aqui: os botões (⇕/✎/✕) embutidos no próprio
+// cabeçalho da seção (ver buildFolderSectionFromCards acima), visíveis só
+// no hover (exceto ⇕ quando já ativo — ver .section-reordering em
+// components.css).
+// `reorderMode` (task #461, opcional): repassado direto pra
+// buildFolderSectionFromCards — ver comentário lá.
+function buildFolderSection(rows, folderId, folderName, values, hasIPs, key, order, reorderMode) {
   const byId = new Map(rows.map(r => [r.id, r]));
   const idsInFolder = rows.filter(r => (r.folder_ids || []).includes(folderId)).map(r => r.id);
   const orderedIds = (order && order.length)
@@ -536,5 +550,5 @@ function buildFolderSection(rows, folderId, folderName, values, hasIPs, key, ord
     .filter(Boolean)
     .map(r => buildCardHtmlForRow(r, values, hasIPs))
     .filter(Boolean);
-  return buildFolderSectionFromCards(cards, folderId, folderName, key, true);
+  return buildFolderSectionFromCards(cards, folderId, folderName, key, true, false, reorderMode);
 }

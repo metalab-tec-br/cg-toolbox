@@ -485,6 +485,22 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
   cursor: pointer; font-size: 10px; line-height: 1;
 }
 .sec-folder-btn:hover { background: var(--surf3); color: var(--text); }
+/* Toggle "⇕ Reorder commands" (task #461) — enquanto ativo (.on), fica
+   destacado com a mesma cor de accent usada em outros toggles ligados do
+   app (.fav-btn.on/.folders-head-row.on), e MESMO SEM hover no cabeçalho o
+   grupo de ações continua visível (regra .section-reordering abaixo) — sem
+   isso não haveria um jeito óbvio de desligar o modo de novo sem passar o
+   mouse por cima. */
+.sec-folder-btn.on { background: var(--teal-bg); color: var(--teal); }
+
+/* Seção de pasta em modo de edição de ordem (task #461, ver
+   toggleFolderReorderMode em js/folders.js) — destaque de borda tracejada
+   pra ficar claro que os cards ali dentro estão arrastáveis (e só ali, só
+   enquanto esse modo estiver ligado); mantém .sec-folder-actions visível
+   sem precisar de hover, pra sempre existir um jeito óbvio de apertar "Done
+   reordering" de novo. */
+.section.section-reordering { border: 1px dashed var(--teal); border-radius: 8px; padding: 10px 12px; }
+.section.section-reordering > .sec-title .sec-folder-actions { display: flex; }
 
 /* Drag-to-reorder dos comandos DENTRO de uma pasta (task #458, ver
    wrapCardsForFolderDrag em db-render-engine.js e _fcArmDrag em
