@@ -25,19 +25,17 @@
   --green: #4ADE80; --green-bg: rgba(74,222,128,.08);
   --text: #E6EDF3; --muted: #8B949E; --dim: #484F58;
   --str: #A5D6FF;
-  /* Post-it das Notes (pedido do usuário: "aparência das notes com as cores
-     no estilo postit") — papel amarelo claro no corpo/descrição, uma faixa
-     um pouco mais escura no título, e um texto escuro fixo pra ler bem em
-     cima do amarelo. Valores fixos (não redefinidos no tema claro, igual
-     --teal acima): um post-it é reconhecido pela cor em si, não deve mudar
-     com o tema claro/escuro do app. Ajustado a pedido do usuário ("o
-     amarelo ficou muito forte, ajuste no mesmo tom do cinza dos comandos")
-     — bem mais claro/dessaturado que a 1ª versão (era #FEF9C3/#FDE68A,
-     tom de marca-texto), agora no mesmo peso visual sutil de --surf/--surf2
-     (cinza quase branco dos cards de comando), só com uma leve tintura
-     amarela por cima. */
-  --postit-bg: #FFFDF2; --postit-head-bg: #FFFAEB;
-  --postit-border: #F3E4B8; --postit-text: #8A6D1E;
+  /* Post-it das Notes — SÓ a faixa do título (.card-head) usa isto (ver
+     components.css); o corpo/descrição é o --surf/--text padrão dos
+     comandos. Precisou virar THEME-SCOPED (dark aqui em :root, claro logo
+     abaixo) depois do pedido "no modo escuro ficou ruim, coloca um cinza":
+     o amarelo claro (ótimo no tema claro) ficava uma faixa clara berrante
+     e com texto ilegível em cima do app escuro — diferente de --teal/--red/
+     etc. acima, que valem pros dois temas, aqui cada tema precisa da SUA
+     própria cor de "destaque discreto". No escuro é só um cinza um degrau
+     mais claro que o cabeçalho normal (--surf3), sem tingir de amarelo —
+     opção escolhida pelo usuário entre 3 alternativas oferecidas. */
+  --postit-head-bg: var(--surf3); --postit-border: var(--bdr2); --postit-text: var(--text);
   --mono: 'JetBrains Mono', monospace;
   --sans: 'Inter', sans-serif;
   --sidebar-w: 210px;
@@ -62,4 +60,9 @@
   --green: #15803D; --green-bg: rgba(21,128,61,.08);
   --text: #1F2328; --muted: #57606A; --dim: #8C959F;
   --str: #0969DA;
+  /* Post-it das Notes no tema claro — papel amarelo claro (pedido original:
+     "amarelo pouquinho mais escuro no título"), texto escuro fixo pra ler
+     bem em cima do amarelo. Ver comentário completo em :root (tema escuro
+     usa cinza em vez de amarelo, pedido à parte). */
+  --postit-head-bg: #FFFAEB; --postit-border: #F3E4B8; --postit-text: #8A6D1E;
 }
