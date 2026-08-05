@@ -113,7 +113,7 @@
    trocar de aba. Com height fixo, as três abas usam sempre a mesma caixa —
    quem tem menos conteúdo (Register) sobra espaço em branco, quem tem mais
    rola dentro de .settings-content (overflow-y already set ali). */
-#settingsOverlay .modal-box { height: min(680px, 92vh); max-height: 92vh; width: min(760px, 100%); overflow: hidden; }
+#settingsOverlay .modal-box { height: min(680px, 92vh); max-height: 92vh; width: min(940px, 96vw); overflow: hidden; }
 #settingsOverlay .set-group { gap: 4px; }
 
 /* ─── Configurações: layout em abas (nav lateral + painel de conteúdo) ───
