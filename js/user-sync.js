@@ -18,9 +18,17 @@
 // definem applyTheme/etc.) já terão rodado por completo antes da resposta
 // chegar, então é seguro chamá-los de volta aqui.
 // ════════════════════════════════════════════════
-const USER_SYNCED_KEYS = new Set([
-  'cpa-settings', 'cpa-theme', 'cpa-query-history', 'cpa-cmdsearch-history',
-]);
+const USER_SYNCED_KEYS = new Set(['cpa-settings', 'cpa-theme']);
+// Os dois históricos (busca de comandos / parâmetros) agora usam uma chave
+// DINÂMICA por usuário — 'cpa-query-history:<username>' / 'cpa-cmdsearch-
+// history:<username>' (ver js/query-bar.js e js/folders.js) — em vez da
+// chave fixa antiga, pra impedir que o histórico de um usuário apareça
+// pra outro que faça login local (js/auth.js) no mesmo navegador. Por
+// isso a checagem abaixo usa prefixo em vez de comparar a chave inteira.
+const USER_SYNCED_KEY_PREFIXES = ['cpa-query-history:', 'cpa-cmdsearch-history:'];
+function isUserSyncedKey(key) {
+  return USER_SYNCED_KEYS.has(key) || USER_SYNCED_KEY_PREFIXES.some(p => key.startsWith(p));
+}
 
 let CURRENT_USER = null;
 
@@ -34,7 +42,7 @@ let _pendingUserDataSync = {};
 let _userDataSyncTimer = null;
 Storage.prototype.setItem = function (key, value) {
   _origLSSetItem.call(this, key, value);
-  if (USER_SYNCED_KEYS.has(key)) {
+  if (isUserSyncedKey(key)) {
     _pendingUserDataSync[key] = value;
     clearTimeout(_userDataSyncTimer);
     _userDataSyncTimer = setTimeout(flushUserDataSync, 400);

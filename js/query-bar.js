@@ -152,20 +152,34 @@ function onQueryKeydown(ev) {
 // reabrir o painel, mostramos as mais recentes primeiro; entradas com mais de
 // 7 dias são descartadas automaticamente. A lista mostra ~10 itens por vez e
 // rola para ver o restante (dentro da janela de 7 dias).
-const QUERY_HISTORY_KEY = 'cpa-query-history';
+// A chave no localStorage inclui o usuário atual (CURRENT_USER, ver
+// js/user-sync.js) — sem isso, dois usuários que fazem login/logout local
+// (ver js/auth.js) no MESMO navegador acabariam vendo o histórico de busca
+// um do outro, já que o localStorage é compartilhado pelo navegador, não
+// pela sessão/usuário lógico da aplicação (pedido explícito do usuário:
+// "o histórico não pode aparecer para outros usuários"). Enquanto
+// CURRENT_USER ainda não foi resolvido (fetch assíncrono a /api/me em
+// initUserSync, que roda ANTES deste script mas só termina depois — ver
+// user-sync.js), load/save simplesmente não fazem nada em vez de cair num
+// balde "anônimo" compartilhado — falha fechada, nunca mistura dados.
+function queryHistoryKey() {
+  return 'cpa-query-history:' + CURRENT_USER;
+}
 const QUERY_HISTORY_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const QUERY_HISTORY_MAX_ITEMS = 200; // teto de segurança, independente da janela de 7 dias
 
 function loadQueryHistoryRaw() {
+  if (typeof CURRENT_USER === 'undefined' || !CURRENT_USER) return [];
   try {
-    const raw = localStorage.getItem(QUERY_HISTORY_KEY);
+    const raw = localStorage.getItem(queryHistoryKey());
     const arr = raw ? JSON.parse(raw) : [];
     return Array.isArray(arr) ? arr : [];
   } catch (e) { return []; }
 }
 
 function saveQueryHistoryRaw(arr) {
-  try { localStorage.setItem(QUERY_HISTORY_KEY, JSON.stringify(arr)); } catch (e) {}
+  if (typeof CURRENT_USER === 'undefined' || !CURRENT_USER) return;
+  try { localStorage.setItem(queryHistoryKey(), JSON.stringify(arr)); } catch (e) {}
 }
 
 // Lê o histórico já filtrado pela janela de 7 dias (mais recente primeiro). Se

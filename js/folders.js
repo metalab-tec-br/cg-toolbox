@@ -777,19 +777,30 @@ function clearCommandSearch() {
 // localStorage, mesma janela de 7 dias e mesmo limite de ~10 itens visíveis com scroll.
 // Como aqui é um único texto livre (sem tags/labels), o salvamento acontece só ao sair
 // do campo (blur/clique fora) ou ao limpar — nunca a cada tecla digitada.
-const CMD_SEARCH_HISTORY_KEY = 'cpa-cmdsearch-history';
+// A chave inclui o usuário atual (CURRENT_USER, ver js/user-sync.js) —
+// mesmo motivo/mesma técnica do histórico de query-bar.js: sem isso, dois
+// usuários que fazem login/logout local no mesmo navegador (js/auth.js)
+// veriam o histórico de busca um do outro, já que o localStorage é do
+// navegador, não da sessão lógica da aplicação. Enquanto CURRENT_USER
+// ainda não foi resolvido, load/save não fazem nada (falha fechada, nunca
+// um balde "anônimo" compartilhado entre usuários).
+function cmdSearchHistoryKey() {
+  return 'cpa-cmdsearch-history:' + CURRENT_USER;
+}
 const CMD_SEARCH_HISTORY_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const CMD_SEARCH_HISTORY_MAX_ITEMS = 200;
 
 function loadCmdSearchHistoryRaw() {
+  if (typeof CURRENT_USER === 'undefined' || !CURRENT_USER) return [];
   try {
-    const raw = localStorage.getItem(CMD_SEARCH_HISTORY_KEY);
+    const raw = localStorage.getItem(cmdSearchHistoryKey());
     const arr = raw ? JSON.parse(raw) : [];
     return Array.isArray(arr) ? arr : [];
   } catch (e) { return []; }
 }
 function saveCmdSearchHistoryRaw(arr) {
-  try { localStorage.setItem(CMD_SEARCH_HISTORY_KEY, JSON.stringify(arr)); } catch (e) {}
+  if (typeof CURRENT_USER === 'undefined' || !CURRENT_USER) return;
+  try { localStorage.setItem(cmdSearchHistoryKey(), JSON.stringify(arr)); } catch (e) {}
 }
 function loadCmdSearchHistory() {
   const now = Date.now();
