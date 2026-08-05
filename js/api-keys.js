@@ -84,9 +84,7 @@ async function renderApiKeyList() {
       <td>${_akEscHtml(_akFormatExpiry(r.expires_at))}</td>
       <td>${_akEscHtml(_akFormatDate(r.last_used_at))}</td>
       <td>
-        ${r.revoked_at
-          ? '<span class="set-hint">Revoked</span>'
-          : `<button type="button" class="btn btn-sm" onclick="deleteApiKey(${r.id}, '${_akEscJsAttr(r.name)}')">Delete</button>`}
+        <button type="button" class="btn btn-sm" onclick="deleteApiKey(${r.id}, '${_akEscJsAttr(r.name)}')">Delete</button>
       </td>
     </tr>
   `;
