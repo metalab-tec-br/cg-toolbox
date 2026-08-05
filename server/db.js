@@ -88,6 +88,42 @@ async function runMigrations() {
   } catch (err) {
     console.error('[db] Falha ao rodar migrações:', err.message);
   }
+
+  // Migração de dados (não de schema, mas mesmo lugar/mesma filosofia de
+  // idempotência): feature "Favorites" (tabela legada user_favorites) virou
+  // "Folders" — cada usuário que tinha favoritos ganha uma pasta chamada
+  // "Favorites" com os mesmos comandos. to_regclass() confirma que a tabela
+  // legada ainda existe antes de tentar ler dela (numa instalação nova ela
+  // vem vazia do CREATE TABLE IF NOT EXISTS, então o loop simplesmente não
+  // encontra nenhum username e não faz nada). O upsert com
+  // "DO UPDATE ... RETURNING id" garante idempotência mesmo re-rodando em
+  // todo boot: se a pasta "Favorites" já existir para o usuário, ainda
+  // conseguimos o id dela (um DO NOTHING puro não devolve linha nenhuma) para
+  // o INSERT de folder_commands, que por sua vez tem sua própria PK composta
+  // como proteção contra duplicar membership numa segunda execução.
+  try {
+    const { rows: legacyCheck } = await pool.query(`SELECT to_regclass('public.user_favorites') AS t`);
+    if (legacyCheck[0] && legacyCheck[0].t) {
+      const { rows: users } = await pool.query('SELECT DISTINCT username FROM user_favorites');
+      for (const { username } of users) {
+        const { rows: folderRows } = await pool.query(
+          `INSERT INTO folders (username, name) VALUES ($1, 'Favorites')
+           ON CONFLICT (username, name) DO UPDATE SET name = EXCLUDED.name
+           RETURNING id`,
+          [username]
+        );
+        const folderId = folderRows[0].id;
+        await pool.query(
+          `INSERT INTO folder_commands (folder_id, command_id)
+           SELECT $1, command_id FROM user_favorites WHERE username = $2
+           ON CONFLICT DO NOTHING`,
+          [folderId, username]
+        );
+      }
+    }
+  } catch (err) {
+    console.error('[db] Falha ao migrar favoritos legados para folders:', err.message);
+  }
 }
 
 // Garante que sempre existe pelo menos uma conta local com role='admin' —

@@ -287,13 +287,13 @@ function applyCommandEditingSetting(enabled) {
 
 // Agrupamento do resultado: 'topic' (uma seção recolhível por Tópico — padrão),
 // 'version' (um bloco recolhível por Versão/Ambiente, com as seções de Tópico
-// aninhadas), ou 'creator' (um bloco recolhível por quem cadastrou o comando —
+// aninhadas), 'creator' (um bloco recolhível por quem cadastrou o comando —
 // created_by —, também com as mesmas seções de Tópico aninhadas dentro de
-// cada autor; ver uso em js/render.js). Substituiu a antiga preferência
-// "Sort by creator" (um simples reordenar da lista) por um agrupamento de
-// verdade, a pedido do usuário.
+// cada autor; ver uso em js/render.js), ou 'my-folders' (um bloco recolhível
+// por pasta do próprio usuário — ver js/folders.js — substituiu o antigo
+// 'favorites', que agrupava por quem tinha favoritado, cross-user).
 function normalizeGroupBy(mode) {
-  return (mode === 'version') ? 'version' : (mode === 'creator') ? 'creator' : (mode === 'favorites') ? 'favorites' : 'topic';
+  return (mode === 'version') ? 'version' : (mode === 'creator') ? 'creator' : (mode === 'my-folders') ? 'my-folders' : 'topic';
 }
 function applyGroupBySetting(mode) {
   GROUP_BY = normalizeGroupBy(mode);
@@ -302,7 +302,7 @@ function applyGroupBySetting(mode) {
 // Texto mostrado no botão dropdown "Group by" (barra de ferramentas) —
 // mantido em sincronia com GROUP_BY sempre que ele muda.
 function groupByLabel(mode) {
-  return mode === 'version' ? 'Version' : mode === 'creator' ? 'Created by' : mode === 'favorites' ? 'User favorites' : 'Topic';
+  return mode === 'version' ? 'Version' : mode === 'creator' ? 'Created by' : mode === 'my-folders' ? 'My folders' : 'Topic';
 }
 function syncGroupByToggleUI(mode) {
   const wrap = document.getElementById('groupByToggle');

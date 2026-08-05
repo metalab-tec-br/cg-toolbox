@@ -67,10 +67,10 @@ bindMultiSelect('mType', '.seg-btn', 'data-val', () => updateModalMultiLabel('mT
 
 // Troca de aba do modal de Configurações (User preferences / Registration /
 // System / Users) — ver .settings-nav-btn/.settings-pane em index.html e
-// components.css. Só a aba "prefs" usa o rodapé Cancel/Save/Clear
-// favorites/Restore defaults; nas outras (Registration/System/Users) não há
-// nada para salvar, então o rodapé fica vazio — fechar é só pelo X do
-// cabeçalho (removido o antigo botão "Close" redundante, ver histórico).
+// components.css. Só a aba "prefs" usa o rodapé Cancel/Save/Restore
+// defaults; nas outras (Registration/System/Users) não há nada para salvar,
+// então o rodapé fica vazio — fechar é só pelo X do cabeçalho (removido o
+// antigo botão "Close" redundante, ver histórico).
 function switchSettingsPane(pane) {
   document.querySelectorAll('.settings-nav-btn').forEach(b => b.classList.toggle('on', b.dataset.pane === pane));
   document.querySelectorAll('.settings-pane').forEach(p => { p.style.display = (p.dataset.pane === pane) ? '' : 'none'; });
@@ -104,11 +104,9 @@ function openSettingsModal() {
   if (typeof ccRefreshCascade === 'function') ccRefreshCascade();
   gvSet('mLogFile', s.logFile);
   syncShowDetailsToggleUI(s.showCardDetails === true);
-  const clearBtn = document.getElementById('mClearFavBtn');
-  if (clearBtn) {
-    clearBtn.textContent = FAVORITES.size ? `🗑️ Clear favorites (${FAVORITES.size})` : '🗑️ Clear favorites';
-    clearBtn.disabled = FAVORITES.size === 0;
-  }
+  // O antigo botão "Clear favorites" (mClearFavBtn) foi removido junto com a
+  // migração para Folders (ver js/folders.js) — excluir uma pasta específica
+  // agora é feito direto na sidebar (botão ✕ em cada linha de pasta).
   document.getElementById('settingsOverlay').classList.add('show');
 }
 function closeSettingsModal() {
@@ -147,8 +145,9 @@ function saveSettingsModal() {
   updateTypeDDLabel();
   if (typeof ccRefreshCascade === 'function') ccRefreshCascade();
   gvSet('f-log', s.logFile);
-  VIEW_FAVORITES = s.home !== 'menu';
-  document.getElementById('favNavRow').classList.toggle('on', VIEW_FAVORITES);
+  VIEW_FOLDERS_HOME = s.home === 'folders';
+  VIEW_FOLDER_ID = null;
+  if (typeof updateFoldersNavHighlight === 'function') updateFoldersNavHighlight();
   closeSettingsModal();
   render();
 }

@@ -74,11 +74,28 @@
     </div>
   </div>
 
-  <div class="sb-block">
+  <!-- Folders — substitui Favorites (ver js/folders.js). #foldersNavRow clicado
+       seleciona a visão combinada (todos os comandos que estão em QUALQUER
+       pasta do usuário); a setinha (foldersToggle) só expande/recolhe a lista
+       de pastas individuais abaixo, sem mudar a visão atual. Cada pasta
+       listada (foldersDynamicList, preenchida por renderFoldersSidebarList())
+       é clicável para filtrar só por ela, com botões de renomear/excluir que
+       aparecem no hover (ver .folder-row-actions em components.css). -->
+  <div class="sb-block" id="foldersBlock">
     <div class="sb-list">
-      <div class="sb-row on" id="favNavRow" onclick="toggleFavoritesView()">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" style="flex-shrink:0;"><path d="M12 3.5l2.66 5.39 5.95.87-4.3 4.2 1.02 5.93L12 17.4l-5.33 2.8 1.02-5.93-4.3-4.2 5.95-.87L12 3.5z"/></svg>
-        <span>Favorites</span>
+      <div class="sb-row folders-head-row" id="foldersNavRow">
+        <span class="folders-head-main" onclick="viewAllFolders()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" style="flex-shrink:0;"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.2h8.5A1.5 1.5 0 0 1 21 8.7v9.8A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5v-12z"/></svg>
+          <span>Folders</span>
+        </span>
+        <button type="button" class="folders-toggle" onclick="toggleFoldersExpanded()" title="Expand/collapse folders">
+          <svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M1 2l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="folders-nested" id="foldersDynamicList"></div>
+      <div class="sb-row folders-new-row" onclick="promptCreateFolder()">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>New folder</span>
       </div>
     </div>
   </div>
@@ -295,7 +312,7 @@
       <div class="dd-panel seg" id="groupByToggle">
         <button type="button" class="seg-btn" data-val="creator" onclick="setGroupBy('creator')">Created by</button>
         <button type="button" class="seg-btn" data-val="topic" onclick="setGroupBy('topic')">Topic</button>
-        <button type="button" class="seg-btn" data-val="favorites" onclick="setGroupBy('favorites')">User favorites</button>
+        <button type="button" class="seg-btn" data-val="my-folders" onclick="setGroupBy('my-folders')">My folders</button>
         <button type="button" class="seg-btn" data-val="version" onclick="setGroupBy('version')">Version</button>
       </div>
     </div>
@@ -305,15 +322,31 @@
     <button type="button" class="icon-btn" onclick="collapseAllSections()" title="Collapse all">
       <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M2 10.5l6-5 6 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 14.5l6-5 6 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
-    <!-- "Add command" stays here in the toolbar. Import/Export commands moved
-         into the Settings modal → "System" tab (see #settingsOverlay,
+    <!-- "Add" stays here in the toolbar, now a dropdown offering "Add command"
+         or "Add folder" (ver js/folders.js: promptCreateFolder()) — reaproveita
+         o mesmo componente .dd/.dd-panel/.sb-row já usado pelos filtros da
+         sidebar (toggleDropdown/closeAllDropdowns em js/state.js), sem JS
+         novo só para abrir/fechar. Import/Export commands moved into the
+         Settings modal → "System" tab (see #settingsOverlay,
          .settings-pane[data-pane="system"]) — no longer gated behind Admin
          mode, which was removed entirely. -->
     <div class="ctb-cmd-actions" id="cmdActionsBlock">
-      <button type="button" class="btn ctb-cmd-btn admin-highlight" onclick="openCommandEditor('create')">
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-        <span>Add command</span>
-      </button>
+      <div class="dd" id="addDD">
+        <button type="button" class="btn ctb-cmd-btn admin-highlight" id="addDDBtn" onclick="toggleDropdown('addDD')">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span>Add</span><span class="dd-arrow">▾</span>
+        </button>
+        <div class="dd-panel" id="addDDPanel">
+          <div class="sb-row" onclick="closeAllDropdowns(); openCommandEditor('create')">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <span>Add command</span>
+          </div>
+          <div class="sb-row" onclick="closeAllDropdowns(); promptCreateFolder()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" style="flex-shrink:0;"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.2h8.5A1.5 1.5 0 0 1 21 8.7v9.8A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5v-12z"/></svg>
+            <span>Add folder</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="content" id="out"></div>
@@ -439,7 +472,7 @@
           <div class="dd-panel seg" id="mGroupBy">
             <button type="button" class="seg-btn" data-val="creator">Created by</button>
             <button type="button" class="seg-btn" data-val="topic">Topic</button>
-            <button type="button" class="seg-btn" data-val="favorites">User favorites</button>
+            <button type="button" class="seg-btn" data-val="my-folders">My folders</button>
             <button type="button" class="seg-btn" data-val="version">Version</button>
           </div>
         </div>
@@ -448,10 +481,10 @@
         <span class="set-label">Home page</span>
         <div class="dd" id="mHomeDD">
           <button type="button" class="dd-btn" id="mHomeDDBtn" onclick="toggleDropdown('mHomeDD')">
-            <span class="dd-label">Favoritos</span><span class="dd-arrow">▾</span>
+            <span class="dd-label">Folders</span><span class="dd-arrow">▾</span>
           </button>
           <div class="dd-panel seg" id="mHome">
-            <button type="button" class="seg-btn" data-val="favorites">Favorites</button>
+            <button type="button" class="seg-btn" data-val="folders">Folders</button>
             <button type="button" class="seg-btn" data-val="menu">Command menu</button>
             <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mHomeDD')">Close</button></div>
           </div>
@@ -667,7 +700,10 @@
     </div><!-- /.settings-layout -->
     <div class="modal-foot">
       <div style="display:flex;gap:8px;" id="settingsFootLeft">
-        <button type="button" class="btn btn-ghost" id="mClearFavBtn" onclick="clearFavoritesConfirm()">🗑️ Clear favorites</button>
+        <!-- "Clear favorites" removido — não faz mais sentido como ação global
+             agora que existem várias pastas (ver js/folders.js); excluir uma
+             pasta específica é feito direto na sidebar (botão ✕ em cada
+             linha de pasta, com confirmação). -->
         <button class="btn btn-ghost" onclick="restoreDefaultsModal()">Restore defaults</button>
       </div>
       <div style="display:flex;gap:8px;">
@@ -1172,6 +1208,29 @@
   </div>
 </div>
 
+<!-- ══ FOLDER NAME — prompt de criar/renomear pasta (replaces native prompt(),
+     same pattern as confirmOverlay above) — ver openFolderPromptModal() em
+     js/folders.js. Título e botão mudam conforme o modo (create/rename). ══ -->
+<div class="modal-overlay" id="folderPromptOverlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title" id="folderPromptTitle">New folder</span>
+      <button class="modal-close" onclick="closeFolderPromptModal(null)">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="set-group">
+        <span class="set-label">Name</span>
+        <input class="set-input" type="text" id="folderPromptInput" placeholder="e.g. &quot;Favorites&quot;, &quot;VPN troubleshooting&quot;" maxlength="80">
+      </div>
+      <p class="confirm-msg" id="folderPromptError" style="display:none;color:var(--red);"></p>
+    </div>
+    <div class="modal-foot" style="justify-content:flex-end;">
+      <button class="btn" onclick="closeFolderPromptModal(null)">Cancel</button>
+      <button class="btn btn-primary" id="folderPromptOkBtn" onclick="submitFolderPromptModal()">Create</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ NEW API KEY — name prompt (replaces native prompt(), same pattern as
      confirmOverlay above) ══ -->
 <div class="modal-overlay" id="apiKeyNameOverlay">
@@ -1428,7 +1487,7 @@
 <script src="js/catalogs.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/confirm-modal.js"></script>
-<script src="js/favorites.js"></script>
+<script src="js/folders.js"></script>
 <script src="js/settings-modal.js"></script>
 <script src="js/syntax-highlight.js"></script>
 <script src="js/terminal-renderer.js"></script>

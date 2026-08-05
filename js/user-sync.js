@@ -6,12 +6,12 @@
 // qualquer navegador/máquina onde acesse a aplicação.
 //
 // Estratégia: localStorage continua sendo a fonte "instantânea" usada por
-// theme.js/settings.js/query-bar.js/favorites.js (evita a tela piscar
-// enquanto a rede não respondeu) — mas ao carregar a página ela é semeada com o
-// que o servidor tem para este usuário, e toda escrita nas chaves relevantes é
-// replicada de volta ao servidor (best-effort, silenciosa). Favoritos são um caso
-// à parte (ver favorites.js): não usam mais localStorage como fonte de verdade,
-// porque precisam ser visíveis/contáveis entre usuários diferentes.
+// theme.js/settings.js/query-bar.js (evita a tela piscar enquanto a rede não
+// respondeu) — mas ao carregar a página ela é semeada com o que o servidor
+// tem para este usuário, e toda escrita nas chaves relevantes é replicada de
+// volta ao servidor (best-effort, silenciosa). Folders são um caso à parte
+// (ver folders.js): vivem só no servidor, sem cache local, porque são um
+// recurso privado por usuário sem necessidade de pintura instantânea.
 //
 // Este script é o PRIMEIRO <script> da página para que a requisição ao servidor
 // comece o quanto antes — mas como fetch() é assíncrono, os demais scripts (que
@@ -69,7 +69,7 @@ function reapplyAfterUserSync() {
     if (typeof syncThemeToggleUI === 'function') syncThemeToggleUI(theme);
   }
   if (typeof applyDefaultsFromSettings === 'function') applyDefaultsFromSettings();
-  if (typeof reloadFavoritesFromServer === 'function') reloadFavoritesFromServer();
+  if (typeof reloadFoldersFromServer === 'function') reloadFoldersFromServer();
   if (typeof render === 'function') render();
 }
 

@@ -123,7 +123,7 @@ function updateDDLabel(btnId, text, color) {
 // Tópico): 'All' quando nada estiver marcado (estado padrão — sem 'all' sentinela, ver
 // bindMultiSelect/toggleSidebarFilterAll abaixo), o nome do item quando só um estiver
 // marcado, ou a contagem quando vários. Também destaca o botão (mesmo tratamento visual
-// do item ativo "Favoritos" — ver #favNavRow.on/.dd-btn.filter-active) sempre que
+// do item ativo "Folders" — ver #foldersNavRow.on/.dd-btn.filter-active) sempre que
 // houver algo marcado — assim fica óbvio, de relance, quais filtros da sidebar estão
 // realmente restringindo o resultado.
 function updateMultiDDLabel(listId, btnId, keyAttr, stateArr, pluralWord) {
@@ -174,7 +174,11 @@ function readMultiSelectValue(containerId, itemSelector, keyAttr, specificKeys) 
 }
 
 function onSidebarFilterChange() {
-  if (VIEW_FAVORITES) { VIEW_FAVORITES = false; document.getElementById('favNavRow').classList.remove('on'); }
+  if (VIEW_FOLDERS_HOME || VIEW_FOLDER_ID != null) {
+    VIEW_FOLDERS_HOME = false;
+    VIEW_FOLDER_ID = null;
+    if (typeof updateFoldersNavHighlight === 'function') updateFoldersNavHighlight();
+  }
   render();
 }
 bindMultiSelect('vendorList', '.sb-row', 'data-vd', () => {
@@ -244,8 +248,9 @@ function resetSidebarFilterToAny(containerId) {
 }
 // "Clear filters" reseta Vendor/System/Versão/Ambiente/Tópico de uma vez só (um único
 // render no final) — diferente das mudanças individuais de filtro
-// (onSidebarFilterChange), ele NÃO tira o usuário do modo Favoritos (VIEW_FAVORITES),
-// por isso chama render() diretamente em vez de passar por onSidebarFilterChange().
+// (onSidebarFilterChange), ele NÃO tira o usuário da visão de Folders
+// (VIEW_FOLDERS_HOME/VIEW_FOLDER_ID), por isso chama render() diretamente em
+// vez de passar por onSidebarFilterChange().
 function clearAllSidebarFilters() {
   Object.keys(SB_FILTER_CFG).forEach(resetSidebarFilterToAny);
   if (typeof ccRefreshCascade === 'function') ccRefreshCascade();

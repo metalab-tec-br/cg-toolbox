@@ -243,6 +243,10 @@ CREATE TABLE IF NOT EXISTS command_diff_lines (
 -- FK — não há uma tabela de usuários).
 -- ════════════════════════════════════════════════
 
+-- LEGACY — feature "Favorites" substituída por "Folders" (ver folders/
+-- folder_commands abaixo). Mantida só para a migração de dados em
+-- server/db.js::runMigrations() (copia cada usuário com favoritos para uma
+-- pasta "Favorites"); o app não lê nem escreve mais nesta tabela.
 CREATE TABLE IF NOT EXISTS user_favorites (
   username   TEXT NOT NULL,
   command_id TEXT NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
@@ -250,6 +254,36 @@ CREATE TABLE IF NOT EXISTS user_favorites (
   PRIMARY KEY (username, command_id)
 );
 CREATE INDEX IF NOT EXISTS idx_user_favorites_command ON user_favorites(command_id);
+
+-- Folders — substitui "Favorites": cada usuário organiza comandos em pastas
+-- próprias (nome livre, ex.: "Favorites", "VPN troubleshooting"), e um mesmo
+-- comando pode estar em várias pastas ao mesmo tempo (tabela de junção
+-- folder_commands, N:N). Pastas são privadas — não há noção de pasta
+-- compartilhada/pública nem de "quem mais tem este comando na pasta dele"
+-- (diferente do antigo favorite_count/favorited_by cross-user).
+-- UNIQUE(username, name) evita duas pastas com o mesmo nome para o mesmo
+-- usuário (mensagem amigável no 409, ver POST /api/folders).
+CREATE TABLE IF NOT EXISTS folders (
+  id         SERIAL PRIMARY KEY,
+  username   TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (username, name)
+);
+CREATE INDEX IF NOT EXISTS idx_folders_username ON folders(username);
+
+-- command_id com ON DELETE CASCADE (igual user_favorites antes) — apagar um
+-- comando limpa sozinho a sua presença em qualquer pasta. folder_id com ON
+-- DELETE CASCADE — apagar uma pasta limpa sozinha suas linhas de membership,
+-- sem precisar de um passo manual em DELETE /api/folders/:id.
+CREATE TABLE IF NOT EXISTS folder_commands (
+  folder_id  INTEGER NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+  command_id TEXT NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (folder_id, command_id)
+);
+CREATE INDEX IF NOT EXISTS idx_folder_commands_command ON folder_commands(command_id);
 
 -- Armazenamento genérico chave/valor por usuário — tema, idioma, configurações,
 -- históricos de busca (ver js/user-sync.js). `data_key` reaproveita as MESMAS

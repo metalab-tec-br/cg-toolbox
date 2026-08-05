@@ -160,7 +160,8 @@ usuário atual. `404 not_found` / `400 validation_error` / `403 forbidden`.
 
 ### `DELETE /api/commands/:id` — **(admin)**
 Remove o comando e (via `ON DELETE CASCADE`) todas as suas linhas/tags/diffs/escopo/
-favoritos. `204` no sucesso, `404 not_found`, `403 forbidden` se o chamador não for admin.
+membership em pastas. `204` no sucesso, `404 not_found`, `403 forbidden` se o chamador
+não for admin.
 
 ### Formato do objeto **Command** (resposta)
 ```json
@@ -168,8 +169,7 @@ favoritos. `204` no sucesso, `404 not_found`, `403 forbidden` se o chamador não
   "id": "fwmonitor",
   "topic": "troubleshooting",
   "topics": ["troubleshooting"],
-  "favorite_count": 2,
-  "favorited_by": ["rsilva", "CG2000\\jsilva"],
+  "folder_ids": [3, 7],
   "icon": "📄",
   "sort_order": 0,
   "requires_ips": true,
@@ -201,14 +201,34 @@ favoritos. `204` no sucesso, `404 not_found`, `403 forbidden` se o chamador não
 
 ---
 
-## Favoritos (`/api/favorites`)
-Por usuário atual (independente de NTLM ou API key). `favorite_count`/`favorited_by`
-no **Command** já agregam todos os usuários — estes endpoints são só para o "meu".
+## Pastas (`/api/folders`)
+Substituiu a antiga feature "Favorites" — em vez de um único booleano marcado/
+desmarcado por comando, cada usuário cria suas próprias pastas (nome livre) e organiza
+os comandos nelas, podendo colocar o mesmo comando em várias pastas ao mesmo tempo.
+Tudo aqui é por usuário atual (independente de NTLM ou API key) e **privado**: não
+existe mais uma contagem/lista de "quem mais favoritou" visível entre usuários — o
+campo `folder_ids` no **Command** só reflete as pastas do usuário que está fazendo a
+requisição.
 
-- `GET /api/favorites` → array de `command_id` (strings) favoritados pelo usuário atual.
-- `POST /api/favorites/:commandId` → `204`. `404 not_found` se o comando não existir.
-  Idempotente (favoritar de novo não duplica nem dá erro).
-- `DELETE /api/favorites/:commandId` → `204` (idempotente, mesmo se não era favorito).
+- `GET /api/folders` → array de pastas do usuário atual:
+  ```json
+  [{ "id": 3, "name": "VPN troubleshooting", "sort_order": 0, "command_ids": ["fwmonitor", "vpnshell"] }]
+  ```
+- `POST /api/folders` — corpo `{ "name": "..." }`. `201` com a pasta criada
+  (`command_ids: []`). `400 validation_error` se faltar `name`. `409 conflict` se o
+  usuário já tiver uma pasta com esse nome (nomes são únicos por usuário, não
+  globalmente — dois usuários podem ter cada um sua própria pasta "Favorites").
+- `PUT /api/folders/:id` — corpo `{ "name": "..." }`, renomeia. `404 not_found` se o id
+  não existir ou pertencer a outro usuário (não distinguimos os dois casos). `409
+  conflict` em caso de colisão de nome.
+- `DELETE /api/folders/:id` → `204`. Apaga a pasta; os comandos nela não são afetados,
+  só deixam de estar naquela pasta (`ON DELETE CASCADE` em `folder_commands`).
+  `404 not_found`.
+- `POST /api/folders/:id/commands/:commandId` → `204`. Adiciona o comando à pasta.
+  Idempotente. `404 not_found` se a pasta (do usuário atual) ou o comando não existirem.
+- `DELETE /api/folders/:id/commands/:commandId` → `204`. Remove o comando da pasta
+  (idempotente, mesmo se não estava nela). `404 not_found` se a pasta não existir/não
+  for do usuário atual.
 
 ---
 

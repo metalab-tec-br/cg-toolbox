@@ -310,14 +310,17 @@ function escAttr(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// Ícone de estrela (favoritos) — contorno monocromático (currentColor), mesmo padrão
-// dos demais ícones SVG do app (edit-btn/copy-btn acima). `filled` decide entre a
-// variante preenchida (favoritado) e a de contorno (não favoritado); a cor em si
-// (cinza vs. amarelo) continua vindo do CSS (.fav-btn / .fav-btn.on), não do SVG.
-function starIcon(filled, size) {
+// Ícone de pasta (Folders, substitui a antiga estrela de Favoritos — ver
+// js/folders.js) — contorno monocromático (currentColor), mesmo padrão dos
+// demais ícones SVG do app (edit-btn/copy-btn acima; mesmo path usado no
+// cabeçalho "Folders" da sidebar, ver index.html). `filled` decide entre a
+// variante preenchida (comando está em pelo menos uma pasta) e a de contorno
+// (não está em nenhuma); a cor em si (cinza vs. destaque) continua vindo do
+// CSS (.fav-btn / .fav-btn.on), não do SVG.
+function folderIcon(filled, size) {
   const s = size || 13;
   const fillAttr = filled ? 'currentColor' : 'none';
-  return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="${fillAttr}" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3.5l2.66 5.39 5.95.87-4.3 4.2 1.02 5.93L12 17.4l-5.33 2.8 1.02-5.93-4.3-4.2 5.95-.87L12 3.5z"/></svg>`;
+  return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="${fillAttr}" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.2h8.5A1.5 1.5 0 0 1 21 8.7v9.8A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5v-12z"/></svg>`;
 }
 
 // Formata timestamps do SQLite ('YYYY-MM-DD HH:MM:SS', sempre UTC — ver
@@ -334,22 +337,42 @@ function formatAuditDate(s) {
 }
 
 // Popover de autoria/auditoria — mostrado ao passar o mouse sobre o ícone/badge de
-// Favoritos (.fav-wrap:hover, ver components.css). Traz quem criou o comando, quem
-// fez a última alteração (cai em createdBy enquanto ninguém editou — ver
-// shapeCommand em server/index.js), quando, e quantos/quais usuários favoritaram
-// (lista fica recolhida por padrão, um clique no link a expande).
-function favAuditPopover({ createdBy, modifiedBy, updatedAt, favoriteCount = 0, favoritedBy = [] }) {
-  const listId = 'fl' + (++_uid);
-  const favLine = favoriteCount > 0
-    ? `<div class="fav-audit-row"><span class="fav-audit-k">Favorited by:</span><span>${favoriteCount} user${favoriteCount === 1 ? '' : 's'}</span></div>
-       <div class="fav-audit-list-toggle" onclick="(function(el){var l=el.nextElementSibling;var open=l.style.display!=='none';l.style.display=open?'none':'block';el.textContent=open?'Show list ▾':'Hide list ▴';})(this)">Show list ▾</div>
-       <ul class="fav-audit-list" id="${listId}" style="display:none">${favoritedBy.map(u => `<li>${escAttr(u)}</li>`).join('')}</ul>`
-    : `<div class="fav-audit-row"><span class="fav-audit-k">Favorited by:</span><span>No users yet</span></div>`;
+// pastas (.fav-wrap:hover, ver components.css). Traz quem criou o comando e quem fez
+// a última alteração (cai em createdBy enquanto ninguém editou — ver shapeCommand em
+// server/index.js) e quando. Antes também listava "quem favoritou" (favoriteCount/
+// favoritedBy) — removido junto com a migração para Folders (ver js/folders.js),
+// já que pastas são privadas a cada usuário, sem lista cross-user para mostrar aqui.
+function auditPopover({ createdBy, modifiedBy, updatedAt }) {
   return `<div class="fav-audit-pop">
     <div class="fav-audit-row"><span class="fav-audit-k">Created by:</span><span>${escAttr(createdBy || '—')}</span></div>
     <div class="fav-audit-row"><span class="fav-audit-k">Modified by:</span><span>${escAttr(modifiedBy || createdBy || '—')}</span></div>
     <div class="fav-audit-row"><span class="fav-audit-k">Modified on:</span><span>${escAttr(formatAuditDate(updatedAt))}</span></div>
-    ${favLine}
+  </div>`;
+}
+
+// Dropdown de pastas de um card — checkbox por pasta do usuário (marcada = o
+// comando já está nela) mais um item "+ New folder" no rodapé. Aberto/fechado
+// via toggleFolderMenu() (ver js/folders.js), que fecha os demais dropdowns
+// de pasta abertos antes de abrir este. Cada item chama
+// toggleCommandInFolder(cmdId, folderId, itemEl) diretamente (sem esperar
+// re-render — ver comentário em js/folders.js sobre a atualização otimista).
+function folderMenuHtml(cmdId, folderIds) {
+  const idSet = new Set(folderIds || []);
+  const folders = (typeof FOLDERS !== 'undefined' ? FOLDERS : []).slice()
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  const items = folders.map(f => {
+    const on = idSet.has(f.id);
+    return `<div class="folder-menu-item${on ? ' on' : ''}" onclick="toggleCommandInFolder('${cmdId}', ${f.id}, this)">
+      <span class="folder-menu-chk">${on ? '✓' : ''}</span><span class="folder-menu-name">${escAttr(f.name)}</span>
+    </div>`;
+  }).join('');
+  const emptyHtml = folders.length ? '' : `<div class="folder-menu-empty">No folders yet.</div>`;
+  return `<div class="folder-menu-pop">
+    ${emptyHtml}${items}
+    <div class="folder-menu-divider"></div>
+    <div class="folder-menu-item folder-menu-new" onclick="document.querySelectorAll('.folder-menu-pop.open').forEach(p=>p.classList.remove('open')); promptCreateFolder('${cmdId}')">
+      <span class="folder-menu-chk"></span><span class="folder-menu-name">+ New folder</span>
+    </div>
   </div>`;
 }
 
@@ -389,19 +412,20 @@ function scopeTagsHtml(scope) {
   return `<span class="scope-tags">${vd}${sy}${ve}${en}</span>`;
 }
 
-function card({ id, name, desc, about, tags = [], lines, diffs, favoriteCount = 0, favoritedBy = [], createdBy, modifiedBy, updatedAt, isSystem = false, vendors, systems, versions, environments }) {
+function card({ id, name, desc, about, tags = [], lines, diffs, folderIds = [], createdBy, modifiedBy, updatedAt, isSystem = false, vendors, systems, versions, environments }) {
   const did = 'd' + (++_uid);
   const tagHtml = tags.map(([cls, lbl]) => `<span class="tag ${cls}">${lbl}</span>`).join('');
   const scopeHtml = scopeTagsHtml({ vendors, systems, versions, environments });
-  const favOn = id && FAVORITES.has(id);
-  // Passa o nome do comando (escapado — ver jsAttrEscape em query-bar.js) para que a
-  // confirmação de remoção dos favoritos possa citar o nome, não só o id interno.
-  // A contagem de favoritos não tem mais um badge próprio no card — já aparece
-  // no popover de autoria (quem criou/alterou/favoritou), que abre ao passar o
-  // mouse sobre .fav-wrap (só o botão de estrela agora).
+  const inAnyFolder = !!(folderIds && folderIds.length);
+  // O botão agora abre um dropdown de pastas (toggleFolderMenu, ver
+  // js/folders.js/js/terminal-renderer.js: folderMenuHtml) em vez de
+  // favoritar/desfavoritar direto no clique — cada pasta marcada/desmarcada
+  // individualmente dentro do dropdown. O popover de autoria continua
+  // aparecendo ao passar o mouse sobre .fav-wrap, independente do dropdown.
   const favHtml = id ? `<span class="fav-wrap">
-    <button class="fav-btn${favOn ? ' on' : ''}" onclick="toggleFavorite('${id}', '${jsAttrEscape(name || '')}')" title="${favOn ? 'Remove from favorites' : 'Add to favorites'}">${starIcon(favOn)}</button>
-    ${favAuditPopover({ createdBy, modifiedBy, updatedAt, favoriteCount, favoritedBy })}
+    <button class="fav-btn${inAnyFolder ? ' on' : ''}" onclick="toggleFolderMenu(event, this)" title="${inAnyFolder ? 'In folders' : 'Add to folder'}">${folderIcon(inAnyFolder)}</button>
+    ${folderMenuHtml(id, folderIds)}
+    ${auditPopover({ createdBy, modifiedBy, updatedAt })}
   </span>` : '';
   // Incluir/duplicar/editar/excluir ficam disponíveis para TODOS os usuários
   // em comandos comuns — não existe restrição de "só o dono edita" (ver
@@ -448,7 +472,7 @@ function card({ id, name, desc, about, tags = [], lines, diffs, favoriteCount = 
       </div>
     </div>` : '';
 
-  return `<div class="card" data-fav-id="${id || ''}">
+  return `<div class="card" data-cmd-id="${id || ''}">
     <div class="card-head">
       <span class="card-name">${name}</span>
       ${scopeHtml}

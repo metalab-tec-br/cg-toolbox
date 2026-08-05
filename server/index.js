@@ -341,15 +341,28 @@ async function lookupUpnFromAD(samAccountName) {
 // ════════════════════════════════════════════════
 // Helpers de leitura de comandos
 // ════════════════════════════════════════════════
-async function shapeCommand(row) {
-  const [tagsQ, vendorsQ, systemsQ, versionsQ, envQ, topicsQ, favQ, linesQ, diffsQ] = await Promise.all([
+// `username` é usado só para calcular folder_ids (pastas do usuário ATUAL que
+// contêm este comando — pastas são privadas, ver comentário acima de
+// GET /api/folders). Opcional: chamadores que não têm um usuário resolvido
+// (não deveria acontecer em uso normal, getCurrentUsername sempre devolve
+// algo) simplesmente recebem folder_ids: [].
+async function shapeCommand(row, username) {
+  const [tagsQ, vendorsQ, systemsQ, versionsQ, envQ, topicsQ, folderQ, linesQ, diffsQ] = await Promise.all([
     pool.query('SELECT css_class, label FROM command_tags WHERE command_id = $1 ORDER BY sort_order, id', [row.id]),
     pool.query('SELECT vendor FROM command_vendors WHERE command_id = $1 ORDER BY vendor', [row.id]),
     pool.query('SELECT system FROM command_systems WHERE command_id = $1 ORDER BY system', [row.id]),
     pool.query('SELECT version FROM command_versions WHERE command_id = $1 ORDER BY version', [row.id]),
     pool.query('SELECT environment FROM command_environments WHERE command_id = $1 ORDER BY environment', [row.id]),
     pool.query('SELECT topic FROM command_topics WHERE command_id = $1 ORDER BY topic', [row.id]),
-    pool.query('SELECT username FROM user_favorites WHERE command_id = $1 ORDER BY username', [row.id]),
+    username
+      ? pool.query(
+          `SELECT fc.folder_id FROM folder_commands fc
+           JOIN folders f ON f.id = fc.folder_id
+           WHERE fc.command_id = $1 AND f.username = $2
+           ORDER BY fc.folder_id`,
+          [row.id, username]
+        )
+      : Promise.resolve({ rows: [] }),
     pool.query('SELECT variant, sort_order, line_type, prompt, content, supports_export, image_data FROM command_lines WHERE command_id = $1 ORDER BY variant, sort_order, id', [row.id]),
     pool.query('SELECT id, version, note, sort_order FROM command_diffs WHERE command_id = $1 ORDER BY sort_order, id', [row.id]),
   ]);
@@ -360,7 +373,7 @@ async function shapeCommand(row) {
   const versions = versionsQ.rows.map(v => v.version);
   const environments = envQ.rows.map(e => e.environment);
   const topics = topicsQ.rows.map(t => t.topic);
-  const favoritedBy = favQ.rows.map(f => f.username);
+  const folderIds = folderQ.rows.map(f => f.folder_id);
 
   const shapeLine = l => ({
     line_type: l.line_type,
@@ -389,8 +402,7 @@ async function shapeCommand(row) {
     id: row.id,
     topic: row.topic,
     topics: topics.length ? topics : [row.topic],
-    favorite_count: favoritedBy.length,
-    favorited_by: favoritedBy,
+    folder_ids: folderIds,
     icon: row.icon,
     sort_order: row.sort_order,
     requires_ips: !!row.requires_ips,
@@ -428,7 +440,7 @@ async function findCommand(id) {
 }
 
 // Mantido para compatibilidade com os poucos lugares que só precisam saber SE
-// o comando existe (ex.: POST /api/favorites).
+// o comando existe (ex.: POST /api/folders/:id/commands/:commandId).
 async function getCommandRow(id) {
   return findCommand(id);
 }
@@ -480,7 +492,8 @@ app.get('/api/commands', async (req, res) => {
     sql += (sort === 'creator') ? ' ORDER BY created_by, sort_order, id' : ' ORDER BY sort_order, id';
 
     const { rows } = await pool.query(sql, params);
-    const shaped = await Promise.all(rows.map(r => shapeCommand(r)));
+    const username = getCurrentUsername(req);
+    const shaped = await Promise.all(rows.map(r => shapeCommand(r, username)));
     res.json(shaped);
   } catch (err) {
     console.error(err);
@@ -495,7 +508,7 @@ app.get('/api/commands/:id', async (req, res) => {
   try {
     const row = await findCommand(req.params.id);
     if (!row) return res.status(404).json({ error: 'not_found', message: `Command '${req.params.id}' not found` });
-    res.json(await shapeCommand(row));
+    res.json(await shapeCommand(row, getCurrentUsername(req)));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
@@ -521,27 +534,86 @@ app.get('/api/me', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════
-// Favoritos por usuário (ver user_favorites) — compartilhados: o GET /api/commands
-// já traz favorite_count/favorited_by agregados de TODOS os usuários; estes
-// endpoints são só para ler/alterar os favoritos do usuário ATUAL.
+// Folders — substitui a antiga feature "Favorites" (ver migração de dados em
+// server/db.js::runMigrations()). Cada usuário organiza comandos em pastas
+// PRÓPRIAS (nome livre) e um mesmo comando pode estar em várias pastas ao
+// mesmo tempo (folder_commands, N:N — ver schema.sql). Diferente de
+// favoritos, pastas são privadas: não existe uma view "quem mais tem este
+// comando" — ver shapeCommand()'s folder_ids, que só reflete as pastas do
+// usuário que está fazendo a requisição.
 // ════════════════════════════════════════════════
-app.get('/api/favorites', async (req, res) => {
+
+// Lista as pastas do usuário atual, cada uma já com a lista de command_ids
+// que contém — evita 1 request por pasta no front-end.
+app.get('/api/folders', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
-    const { rows } = await pool.query('SELECT command_id FROM user_favorites WHERE username = $1 ORDER BY created_at', [username]);
-    res.json(rows.map(r => r.command_id));
+    const { rows } = await pool.query(
+      `SELECT f.id, f.name, f.sort_order,
+              COALESCE(array_agg(fc.command_id) FILTER (WHERE fc.command_id IS NOT NULL), '{}') AS command_ids
+       FROM folders f
+       LEFT JOIN folder_commands fc ON fc.folder_id = f.id
+       WHERE f.username = $1
+       GROUP BY f.id
+       ORDER BY f.sort_order, f.name`,
+      [username]
+    );
+    res.json(rows.map(r => ({ id: r.id, name: r.name, sort_order: r.sort_order, command_ids: r.command_ids })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
 
-app.post('/api/favorites/:commandId', async (req, res) => {
+// Cria uma pasta nova para o usuário atual. 409 se ele já tiver uma pasta com
+// esse nome (UNIQUE(username, name), ver schema.sql — err.code 23505 é o
+// código padrão do Postgres para violação de constraint única).
+app.post('/api/folders', async (req, res) => {
+  const name = String((req.body && req.body.name) || '').trim();
+  try {
+    if (!name) return res.status(400).json({ error: 'validation_error', message: '"name" is required' });
+    const username = getCurrentUsername(req);
+    const { rows } = await pool.query(
+      'INSERT INTO folders (username, name) VALUES ($1, $2) RETURNING id, name, sort_order',
+      [username, name]
+    );
+    res.status(201).json({ id: rows[0].id, name: rows[0].name, sort_order: rows[0].sort_order, command_ids: [] });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'conflict', message: `You already have a folder named "${name}"` });
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// Renomeia uma pasta do usuário atual. 404 tanto se o id não existir quanto
+// se existir mas for de OUTRO usuário — não vazamos a distinção, mesmo
+// tratamento dado a outros recursos privados por usuário nesta API.
+app.put('/api/folders/:id', async (req, res) => {
+  const name = String((req.body && req.body.name) || '').trim();
+  try {
+    if (!name) return res.status(400).json({ error: 'validation_error', message: '"name" is required' });
+    const username = getCurrentUsername(req);
+    const { rows } = await pool.query(
+      'UPDATE folders SET name = $1 WHERE id = $2 AND username = $3 RETURNING id, name, sort_order',
+      [name, req.params.id, username]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not_found', message: `Folder '${req.params.id}' not found` });
+    res.json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'conflict', message: `You already have a folder named "${name}"` });
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// Apaga uma pasta do usuário atual — folder_commands é limpo sozinho via ON
+// DELETE CASCADE (ver schema.sql); os comandos em si e as OUTRAS pastas do
+// usuário não são afetados.
+app.delete('/api/folders/:id', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
-    const { commandId } = req.params;
-    if (!(await getCommandRow(commandId))) return res.status(404).json({ error: 'not_found', message: `Command '${commandId}' not found` });
-    await pool.query('INSERT INTO user_favorites (username, command_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [username, commandId]);
+    const { rowCount } = await pool.query('DELETE FROM folders WHERE id = $1 AND username = $2', [req.params.id, username]);
+    if (!rowCount) return res.status(404).json({ error: 'not_found', message: `Folder '${req.params.id}' not found` });
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -549,10 +621,33 @@ app.post('/api/favorites/:commandId', async (req, res) => {
   }
 });
 
-app.delete('/api/favorites/:commandId', async (req, res) => {
+// Adiciona um comando a uma pasta do usuário atual — idempotente (marcar de
+// novo não dá erro, ON CONFLICT DO NOTHING). 404 se a pasta não existir/não
+// for do usuário, ou se o comando não existir.
+app.post('/api/folders/:id/commands/:commandId', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
-    await pool.query('DELETE FROM user_favorites WHERE username = $1 AND command_id = $2', [username, req.params.commandId]);
+    const { id, commandId } = req.params;
+    const folder = await pool.query('SELECT id FROM folders WHERE id = $1 AND username = $2', [id, username]);
+    if (!folder.rows.length) return res.status(404).json({ error: 'not_found', message: `Folder '${id}' not found` });
+    if (!(await getCommandRow(commandId))) return res.status(404).json({ error: 'not_found', message: `Command '${commandId}' not found` });
+    await pool.query('INSERT INTO folder_commands (folder_id, command_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, commandId]);
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// Remove um comando de uma pasta do usuário atual — não afeta o comando em
+// si nem sua presença em outras pastas.
+app.delete('/api/folders/:id/commands/:commandId', async (req, res) => {
+  try {
+    const username = getCurrentUsername(req);
+    const { id, commandId } = req.params;
+    const folder = await pool.query('SELECT id FROM folders WHERE id = $1 AND username = $2', [id, username]);
+    if (!folder.rows.length) return res.status(404).json({ error: 'not_found', message: `Folder '${id}' not found` });
+    await pool.query('DELETE FROM folder_commands WHERE folder_id = $1 AND command_id = $2', [id, commandId]);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -1031,7 +1126,7 @@ app.post('/api/commands', async (req, res) => {
 
     await logAudit(username, 'create', id, cols.name);
     const row = await findCommand(id);
-    res.status(201).json(await shapeCommand(row));
+    res.status(201).json(await shapeCommand(row, username));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
@@ -1104,7 +1199,7 @@ app.put('/api/commands/:id', async (req, res) => {
 
     await logAudit(currentUser, 'update', id, cols.name);
     const row = await findCommand(id);
-    res.json(await shapeCommand(row));
+    res.json(await shapeCommand(row, currentUser));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
@@ -1121,8 +1216,8 @@ app.delete('/api/commands/:id', requireAdmin, async (req, res) => {
     if (!found) return res.status(404).json({ error: 'not_found', message: `Command '${id}' not found` });
     // Sem restrição de dono (mesma decisão do PUT acima) — mas exige role='admin' (requireAdmin acima).
     const currentUser = getCurrentUsername(req);
-    // command_id em user_favorites tem FK ON DELETE CASCADE (ver schema.sql)
-    // — apagar o comando já limpa os favoritos sozinho.
+    // command_id em folder_commands tem FK ON DELETE CASCADE (ver schema.sql)
+    // — apagar o comando já limpa sozinho sua presença em qualquer pasta.
     await pool.query('DELETE FROM commands WHERE id = $1', [id]);
     await logAudit(currentUser, 'delete', id, found.name);
     res.status(204).end();

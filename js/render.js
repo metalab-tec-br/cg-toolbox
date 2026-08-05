@@ -42,11 +42,11 @@ async function render() {
   // Preferência "System commands" (sidebar, seção Options — ver js/settings.js)
   // — quando desligada, some com os comandos de referência (created_by='System',
   // is_system=true) e mostra só os criados/duplicados por usuários. Exceção:
-  // um comando System que o usuário favoritou continua aparecendo mesmo assim —
-  // "desligar System commands" é para reduzir ruído, não para esconder algo que
-  // a própria pessoa marcou como importante.
+  // um comando System que o usuário guardou em alguma pasta continua aparecendo
+  // mesmo assim — "desligar System commands" é para reduzir ruído, não para
+  // esconder algo que a própria pessoa organizou como importante.
   if (typeof SHOW_SYSTEM_COMMANDS !== 'undefined' && !SHOW_SYSTEM_COMMANDS) {
-    commands = commands.filter(c => !c.is_system || (typeof FAVORITES !== 'undefined' && FAVORITES.has(c.id)));
+    commands = commands.filter(c => !c.is_system || (c.folder_ids && c.folder_ids.length));
   }
 
   // Filtro real por Vendor/Sistema (topo da hierarquia multi-fabricante ESTRITA)
@@ -106,7 +106,7 @@ async function render() {
     const env = (CATALOGS.environments || []).find(x => x.key === key);
     return env ? env.label : key;
   }
-  const show = tp => VIEW_FAVORITES || topicSel.length === 0 || topicSel.includes(tp);
+  const show = tp => VIEW_FOLDERS_HOME || VIEW_FOLDER_ID != null || topicSel.length === 0 || topicSel.includes(tp);
 
   const envNotesText = {
     all: 'All (all environments): commands are generated using the <strong>Standalone</strong> default. Switch the Environment to Cluster HA / VSX / Maestro / MDS when you need the specific syntax (<code>vsenv</code>, <code>asg_cmd</code>, <code>mdsenv</code>, etc.).',
@@ -193,29 +193,32 @@ async function render() {
     return comboHeader + envNote + creatorGroups;
   }
 
-  // "User favorites": mesmo padrão do "Created by" acima, mas agrupando por
-  // QUEM FAVORITOU (command.favorited_by, ver server/index.js) em vez de quem
-  // criou. Um comando favoritado por várias pessoas aparece em mais de uma
-  // seção (uma por usuário); comandos sem nenhum favorito não aparecem em
-  // nenhum grupo (não existe seção "sem favoritos" — diferente do "—" do
-  // Created by, que existe para registros antigos sem autoria).
-  if (GROUP_BY === 'favorites') {
-    const favUsers = [...new Set(commands.flatMap(c => c.favorited_by || []))].sort((a, b) =>
-      a.localeCompare(b, undefined, { sensitivity: 'base' })
-    );
-    const favGroups = favUsers.map(user => {
-      const subset = commands.filter(c => (c.favorited_by || []).includes(user));
-      const userKey = user.replace(/[^a-zA-Z0-9_-]/g, '_');
-      const body = buildSections(subset, `${kp}${userKey}__`);
+  // "My folders": mesmo padrão do "Created by" acima, mas agrupando pelas
+  // PASTAS do próprio usuário (command.folder_ids, ver server/index.js:
+  // shapeCommand()) em vez de quem criou. Substituiu o antigo "User favorites"
+  // (agrupamento cross-user por quem favoritou) — pastas são privadas, então
+  // aqui só existe a perspectiva de quem está olhando a tela. Um comando
+  // guardado em várias pastas aparece em mais de uma seção (uma por pasta);
+  // comandos fora de qualquer pasta não aparecem em nenhum grupo (não existe
+  // seção "sem pasta" — diferente do "—" do Created by).
+  if (GROUP_BY === 'my-folders') {
+    const folderNameById = new Map((typeof FOLDERS !== 'undefined' ? FOLDERS : []).map(f => [f.id, f.name]));
+    const folderIdsInUse = [...new Set(commands.flatMap(c => c.folder_ids || []))]
+      .filter(id => folderNameById.has(id))
+      .sort((a, b) => folderNameById.get(a).localeCompare(folderNameById.get(b), undefined, { sensitivity: 'base' }));
+    const folderGroups = folderIdsInUse.map(folderId => {
+      const subset = commands.filter(c => (c.folder_ids || []).includes(folderId));
+      const body = buildSections(subset, `${kp}folder${folderId}__`);
       const cardCount = (body.match(/<div class="card"/g) || []).length;
       if (!cardCount) return '';
-      return collapsibleGroup(`${cv}__${ce}__${userKey}`, `⭐ <strong>${escAttr(user)}</strong> <span class="sec-count">${cardCount}</span>`, body, 'section-creator');
+      const folderName = folderNameById.get(folderId);
+      return collapsibleGroup(`${cv}__${ce}__folder${folderId}`, `${folderIcon(true, 13)} <strong>${escAttr(folderName)}</strong> <span class="sec-count">${cardCount}</span>`, body, 'section-creator');
     }).join('');
-    if (!favGroups) return '';
+    if (!folderGroups) return '';
     const comboHeader = combos.length > 1
       ? `<div class="combo-header">🔀 <strong>${cvLabel}</strong> / <strong>${ceLabel}</strong></div>`
       : '';
-    return comboHeader + envNote + favGroups;
+    return comboHeader + envNote + folderGroups;
   }
 
   const bodyHtml = envNote + buildSections(commands, kp);
@@ -238,7 +241,8 @@ async function render() {
   }); // fim do map de combos
 
   out.innerHTML = [combosTruncatedNote, ...comboBlocks].join('');
-  if (VIEW_FAVORITES) applyFavoritesFilter();
+  if (VIEW_FOLDER_ID != null) applyFolderFilter();
+  else if (VIEW_FOLDERS_HOME) applyAnyFolderFilter();
   applySearchFilter();
 }
 

@@ -384,7 +384,7 @@ function buildEmptyStateCard(row, values, tags, about) {
     about, tags,
     lines: dbLinesToTerm(emptyLines, values),
     diffs, raw,
-    favoriteCount: row.favorite_count, favoritedBy: row.favorited_by,
+    folderIds: row.folder_ids,
     createdBy: row.created_by, modifiedBy: row.modified_by, updatedAt: row.updated_at, isSystem: row.is_system,
     vendors: row.vendors, systems: row.systems, versions: row.versions, environments: row.environments,
   });
@@ -424,7 +424,7 @@ function buildCardHtmlForRow(row, values, hasIPs) {
     name: resolveTokens(row.name, values),
     desc: resolveTokens(row.desc, values),
     about, tags, lines, diffs, raw,
-    favoriteCount: row.favorite_count, favoritedBy: row.favorited_by,
+    folderIds: row.folder_ids,
     createdBy: row.created_by, modifiedBy: row.modified_by, updatedAt: row.updated_at, isSystem: row.is_system,
     vendors: row.vendors, systems: row.systems, versions: row.versions, environments: row.environments,
   });

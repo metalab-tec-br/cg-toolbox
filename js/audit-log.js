@@ -6,7 +6,7 @@
 // deleted automatically by the server — this screen is read-only.
 //
 // Available to every user (no Admin mode gate), same as the other
-// modal-foot buttons (Clear favorites/Restore defaults).
+// modal-foot button (Restore defaults).
 // ════════════════════════════════════════════════
 
 function _alEscHtml(s) {

@@ -95,7 +95,7 @@
 .btn:disabled:hover { border-color: var(--bdr); }
 .btn-sm { padding: 4px 9px; font-size: 11px; }
 /* Realce visual (fundo/borda/texto na cor de destaque) — mesmo tratamento do
-   item ativo da sidebar (#favNavRow.on). Puramente estético: sinaliza os
+   item ativo da sidebar (.folders-head-row.on). Puramente estético: sinaliza os
    botões de "ações em lote"/gestão (Adicionar comando, Import/Export
    commands, os 6 atalhos de cadastro em Configurações → Registration), sem
    nenhuma relação com controle de acesso (o antigo "Admin mode" foi
@@ -399,7 +399,7 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .dd.open .dd-btn { border-color: var(--teal); }
 /* Destaca o dropdown da sidebar (Versão/Ambiente/Tópico) sempre que o filtro
    estiver restringindo algo (diferente de 'All') — mesmo tratamento visual
-   do item ativo "Favoritos" (ver #favNavRow.on em layout.css), para ficar
+   do item ativo "Folders" (ver .folders-head-row.on em layout.css), para ficar
    óbvio de relance quais filtros estão em uso. 'All' não recebe destaque
    (ver updateMultiDDLabel em js/state.js). */
 .dd-btn.filter-active { background: var(--teal-bg); border-color: var(--teal); color: var(--teal); }
@@ -578,14 +578,18 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 }
 .fav-btn:hover { border-color: var(--yellow); color: var(--yellow); }
 .fav-btn.on { background: var(--yellow-bg); border-color: var(--yellow); color: var(--yellow); }
-/* Hover sobre .fav-wrap (botão de estrela) mostra o popover de autoria/auditoria
-   (.fav-audit-pop, ver terminal-renderer.js: favAuditPopover()), que já traz a
-   contagem de quem favoritou — não há mais um badge de contagem separado no card. */
+/* .fav-btn agora abre o dropdown de pastas (.folder-menu-pop, ao clicar — ver
+   toggleFolderMenu() em js/folders.js) em vez de favoritar direto. O popover
+   de autoria/auditoria (.fav-audit-pop) continua aparecendo ao passar o
+   mouse sobre todo o .fav-wrap, igual antes, só sem a linha "Favorited by"
+   (removida — pastas são privadas, sem lista cross-user para mostrar). */
 .fav-wrap { display: flex; align-items: center; gap: 3px; flex-shrink: 0; position: relative; }
-/* Popover de autoria/auditoria (Criado por / Alterado por / Data alteração /
-   Favoritado por). Escondido por padrão; aparece ao passar o mouse sobre todo
-   o .fav-wrap (não só o ícone), com uma pequena "ponte" invisible (::before)
-   para não sumir no espaço entre o botão e o popover. */
+/* Popover de autoria/auditoria (Criado por / Alterado por / Data alteração).
+   Escondido por padrão; aparece ao passar o mouse sobre todo o .fav-wrap (não
+   só o ícone), com uma pequena "ponte" invisible (::before) para não sumir no
+   espaço entre o botão e o popover. Fica oculto enquanto o dropdown de pastas
+   estiver aberto (:has — navegadores sem suporte simplesmente mostram os
+   dois sobrepostos, cosmético, não quebra nada). */
 .fav-audit-pop {
   display: none; position: absolute; top: 100%; right: 0; margin-top: 6px;
   z-index: 30; width: max-content; max-width: 320px;
@@ -598,21 +602,39 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
   content: ''; position: absolute; bottom: 100%; right: 8px; height: 8px; left: 0;
 }
 .fav-wrap:hover .fav-audit-pop { display: block; }
+.fav-wrap:has(.folder-menu-pop.open) .fav-audit-pop { display: none; }
 /* Cada linha (rótulo + valor) numa única linha, sem quebrar — é o que estava
    quebrando "Modified on: DD/MM/AAAA, HH:MM" em duas linhas antes (o popover
    tinha largura fixa/curta demais). Agora a largura se ajusta ao conteúdo
    (width: max-content acima), então basta impedir a quebra do valor. */
 .fav-audit-row { display: flex; justify-content: space-between; gap: 14px; white-space: nowrap; }
 .fav-audit-k { color: var(--muted); flex-shrink: 0; }
-.fav-audit-list-toggle {
-  margin-top: 4px; color: var(--teal); cursor: pointer; font-size: 10.5px; user-select: none;
+
+/* Dropdown de pastas de um card (ver folderMenuHtml() em
+   js/terminal-renderer.js e toggleFolderMenu()/toggleCommandInFolder() em
+   js/folders.js) — mesma "família visual" do popover de auditoria acima
+   (mesmo fundo/borda/sombra), só que controlado por clique (.open) em vez de
+   hover, e alinhado à ESQUERDA do botão (não à direita, como o audit-pop)
+   para não colidir com a borda direita do card em telas estreitas. */
+.folder-menu-pop {
+  display: none; position: absolute; top: 100%; left: 0; margin-top: 6px;
+  z-index: 31; width: max-content; min-width: 160px; max-width: 260px;
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: 7px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.22); padding: 4px;
+  font-size: 12px; color: var(--text); text-align: left; cursor: default;
 }
-.fav-audit-list-toggle:hover { text-decoration: underline; }
-.fav-audit-list {
-  margin: 4px 0 0; padding-left: 16px; max-height: 120px; overflow-y: auto;
-  color: var(--txt);
+.folder-menu-pop.open { display: block; }
+.folder-menu-item {
+  display: flex; align-items: center; gap: 7px; padding: 6px 8px; border-radius: 5px;
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.fav-audit-list li { font-size: 10.5px; line-height: 1.7; }
+.folder-menu-item:hover { background: var(--surf2); }
+.folder-menu-item.on { color: var(--teal); }
+.folder-menu-chk { width: 12px; flex-shrink: 0; text-align: center; font-weight: 700; }
+.folder-menu-name { overflow: hidden; text-overflow: ellipsis; }
+.folder-menu-empty { padding: 6px 8px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.folder-menu-divider { height: 1px; background: var(--bdr); margin: 4px 2px; }
+.folder-menu-new { color: var(--teal); }
 .edit-btn {
   background: var(--surf); border: 1px solid var(--bdr); border-radius: 5px;
   color: var(--muted); cursor: pointer; line-height: 1;
