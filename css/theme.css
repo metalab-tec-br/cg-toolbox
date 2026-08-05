@@ -30,9 +30,14 @@
      um pouco mais escura no título, e um texto escuro fixo pra ler bem em
      cima do amarelo. Valores fixos (não redefinidos no tema claro, igual
      --teal acima): um post-it é reconhecido pela cor em si, não deve mudar
-     com o tema claro/escuro do app. */
-  --postit-bg: #FEF9C3; --postit-head-bg: #FDE68A;
-  --postit-border: #FACC15; --postit-text: #713F12;
+     com o tema claro/escuro do app. Ajustado a pedido do usuário ("o
+     amarelo ficou muito forte, ajuste no mesmo tom do cinza dos comandos")
+     — bem mais claro/dessaturado que a 1ª versão (era #FEF9C3/#FDE68A,
+     tom de marca-texto), agora no mesmo peso visual sutil de --surf/--surf2
+     (cinza quase branco dos cards de comando), só com uma leve tintura
+     amarela por cima. */
+  --postit-bg: #FFFDF2; --postit-head-bg: #FFF9E0;
+  --postit-border: #F0E0A8; --postit-text: #8A6D1E;
   --mono: 'JetBrains Mono', monospace;
   --sans: 'Inter', sans-serif;
   --sidebar-w: 210px;

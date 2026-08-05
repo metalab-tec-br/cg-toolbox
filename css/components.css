@@ -815,7 +815,7 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    usava a cor de destaque (--teal); agora acompanha a paleta do post-it. */
 .note-badge {
   font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px;
-  color: var(--postit-text); background: rgba(113,63,18,.14); border-radius: 3px;
+  color: var(--postit-text); background: rgba(138,109,30,.12); border-radius: 3px;
   padding: 1px 5px; margin-right: 4px; vertical-align: middle;
 }
 /* Botões de ação da nota (clonar/editar/excluir) — mesmo componente
@@ -824,9 +824,9 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    própria cor de texto do post-it. Excluir mantém o destaque vermelho no
    hover (ação destrutiva), só o fundo/borda de repouso mudam. */
 .card[data-note-id] .edit-btn {
-  background: rgba(113,63,18,.08); border-color: var(--postit-border); color: var(--postit-text);
+  background: rgba(138,109,30,.06); border-color: var(--postit-border); color: var(--postit-text);
 }
-.card[data-note-id] .edit-btn:hover { background: rgba(113,63,18,.18); border-color: var(--postit-text); color: var(--postit-text); }
+.card[data-note-id] .edit-btn:hover { background: rgba(138,109,30,.16); border-color: var(--postit-text); color: var(--postit-text); }
 .card[data-note-id] .note-delete-btn:hover { background: var(--red-bg); border-color: var(--red); color: var(--red); }
 /* Corpo da nota — HTML livre (sanitizado no servidor, ver sanitizeNoteHtml
    em server/index.js), pode ter texto formatado + imagens coladas. Imagens
