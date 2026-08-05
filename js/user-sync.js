@@ -69,7 +69,26 @@ function renderCurrentUserUI(username) {
 // do localStorage "frio" (antes da resposta do servidor chegar) — chamado uma vez,
 // assim que os dados reais do usuário chegam, para não atrasar a primeira pintura
 // da tela esperando essa requisição.
-function reapplyAfterUserSync() {
+//
+// Precisa ser `async` e usar `await` no reloadFoldersFromServer() abaixo —
+// bug reportado: "com a home page definida com a folders nenhum comando nem
+// pasta são carregados". Causa: depois do fix de VIEW_FOLDERS_HOME (ver
+// applyDefaultsFromSettings() em settings.js), quando a Home page é
+// "Folders" a tela entra direto no ramo VIEW_FOLDERS_HOME de render.js, que
+// usa a variável global FOLDERS (js/folders.js) pra montar as seções. Antes
+// deste fix, reloadFoldersFromServer() era disparado (fetch assíncrono, sem
+// aguardar) e o render() logo em seguida rodava ANTES do fetch resolver —
+// com FOLDERS ainda vazio ([], valor inicial em folders.js), o ramo
+// VIEW_FOLDERS_HOME monta 0 seções e a função de combo retorna '' (ver
+// render.js: "if (!folderGroups) return '';"), deixando a tela em branco
+// até reloadFoldersFromServer() completar e chamar render() de novo por
+// conta própria — o que deveria acontecer, mas na prática ficava sujeito a
+// condição de corrida (o próprio render() daqui também é assíncrono, por
+// causa do fetchCommands() dentro dele, então a ordem de quem termina
+// primeiro não era garantida). Aguardar aqui garante que FOLDERS já está
+// populado (ou definitivamente vazio, se o fetch falhar — reloadFoldersFromServer
+// trata esse erro internamente) antes do render() final rodar.
+async function reapplyAfterUserSync() {
   if (typeof applyTheme === 'function') {
     let theme = 'light';
     try { theme = localStorage.getItem('cpa-theme') || 'light'; } catch (e) {}
@@ -77,7 +96,7 @@ function reapplyAfterUserSync() {
     if (typeof syncThemeToggleUI === 'function') syncThemeToggleUI(theme);
   }
   if (typeof applyDefaultsFromSettings === 'function') applyDefaultsFromSettings();
-  if (typeof reloadFoldersFromServer === 'function') reloadFoldersFromServer();
+  if (typeof reloadFoldersFromServer === 'function') await reloadFoldersFromServer();
   if (typeof render === 'function') render();
 }
 
