@@ -364,6 +364,25 @@ function applyDefaultsFromSettings() {
   applyCommandEditingSetting(true);
   GROUP_BY = normalizeGroupBy(s.groupBy); // sem render() aqui — render() inicial ainda vai rodar
   syncGroupByToggleUI(GROUP_BY);
+  // Home page = "Folders" (bug reportado: configurar isso não abria a visão
+  // de pastas). VIEW_FOLDERS_HOME (js/folders.js) só era calculada a partir
+  // de `s.home` UMA vez, na leitura "fria" do localStorage feita no parse de
+  // folders.js (antes de qualquer resposta de rede) — quando o usuário
+  // acessa de um navegador/máquina diferente daquele onde salvou a
+  // preferência, esse localStorage local ainda está vazio/default ('menu'),
+  // e quando os dados reais do servidor chegam (ver reapplyAfterUserSync()
+  // em js/user-sync.js, que chama esta função de novo) nada recalculava
+  // VIEW_FOLDERS_HOME — ela ficava congelada em `false`. `typeof` guard: na
+  // primeira chamada (fim deste arquivo, síncrona) folders.js ainda não
+  // rodou e a variável não existe ainda; a chamada de user-sync.js roda
+  // depois de todo script já ter carregado, e antes do render()/
+  // reloadFoldersFromServer() que a usam.
+  if (typeof VIEW_FOLDERS_HOME !== 'undefined') {
+    VIEW_FOLDERS_HOME = s.home === 'folders';
+    const nav = document.getElementById('foldersNavRow');
+    if (nav) nav.classList.toggle('on', VIEW_FOLDERS_HOME);
+    if (typeof updateGroupByOptionsForFoldersScope === 'function') updateGroupByOptionsForFoldersScope();
+  }
 }
 applyDefaultsFromSettings();
 // Assíncrono, best-effort — não atrasa a primeira pintura da tela (mesmo
