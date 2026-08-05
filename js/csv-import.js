@@ -82,7 +82,7 @@ function splitCell(cell) { return String(cell || '').split(',').map(s => s.trim(
 // IP/Port, Prompt, Command, Note). SEM coluna de ID — o id é sempre gerado
 // automaticamente a partir do Name (ver slugifyName/buildImportPayload
 // abaixo), é um detalhe interno, igual ao editor manual (ver
-// _ceBindVendorSeg em js/command-editor.js, onde o ID também é oculto/
+// _ceBindSingleSeg em js/command-editor.js, onde o ID também é oculto/
 // auto-gerado). Uma linha de exemplo real ajuda mais que uma linha de
 // instruções — os detalhes ficam no texto do modal. ──
 const IMPORT_HEADERS = [
@@ -216,14 +216,18 @@ function buildImportPayload(obj, existingIdsInBatch) {
   // salvo num comando, ver validateBody em server/index.js) — uma célula
   // vazia, "all", ou só com valores não reconhecidos rejeita a linha inteira,
   // igual ao tratamento já existente para "Topics" logo acima.
-  // A command belongs to exactly one vendor (unlike System/Version/Environment/
-  // Topic below, which allow several) — mirrors the single-select Vendor field
-  // in the "New command" editor (see _ceBindVendorSeg in js/command-editor.js).
+  // A command belongs to exactly one vendor and exactly one system (unlike
+  // Version/Environment/Topic below, which allow several) — mirrors the
+  // single-select Vendor/System fields in the "New command" editor (see
+  // _ceBindSingleSeg in js/command-editor.js).
   const vendors = resolveMultiCatalog(getCell(obj, 'Vendor', 'Vendors'), CATALOGS.vendors || [], warnings, 'Vendor', 'vendor');
   if (!vendors.length) return { error: 'No valid "Vendor" (exactly one is required — must match an existing vendor)' };
   if (vendors.length > 1) return { error: `"Vendor" must have exactly one value, found ${vendors.length} (${vendors.join(', ')}) — a command belongs to a single vendor` };
   const systems = resolveMultiCatalog(getCell(obj, 'System', 'Operating System', 'OS'), CATALOGS.systems || [], warnings, 'System', 'system');
-  if (!systems.length) return { error: 'No valid "System" (at least one is required — must match an existing system)' };
+  if (!systems.length) return { error: 'No valid "System" (exactly one is required — must match an existing system)' };
+  // Same single-value rule as Vendor above (see _ceBindSingleSeg in
+  // js/command-editor.js) — a command belongs to exactly one System.
+  if (systems.length > 1) return { error: `"System" must have exactly one value, found ${systems.length} (${systems.join(', ')}) — a command belongs to a single system` };
   const versions = resolveMultiCatalog(getCell(obj, 'Versions', 'Version'), CATALOGS.versions || [], warnings, 'Version', 'version');
   if (!versions.length) return { error: 'No valid "Version" (at least one is required — must match an existing version)' };
   const environments = resolveMultiCatalog(getCell(obj, 'Environments', 'Environment'), CATALOGS.environments || [], warnings, 'Environment', 'environment');

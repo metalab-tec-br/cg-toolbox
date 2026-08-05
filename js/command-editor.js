@@ -153,16 +153,18 @@ function _ceSetMultiSeg(containerId, vals, ddBtnId, allLabel, pluralLabel) {
 function _ceGetMultiSeg(containerId) {
   return [...document.querySelectorAll('#' + containerId + ' .seg-btn.on')].map(b => b.dataset.val);
 }
-// ── Vendor is single-select, not multi ──────────────
-// A command belongs to exactly one Vendor (unlike System/Version/Environment/
-// Topic, which a command can have several of) — clicking a Vendor option
-// always selects ONLY that one (like a radio button: no toggle-off, no
-// stacking with a previous pick), still using the same .seg-btn/.on markup
+// ── Vendor and System are single-select, not multi ──────────────
+// A command belongs to exactly one Vendor and exactly one System (unlike
+// Version/Environment/Topic, which a command can have several of) — clicking
+// an option always selects ONLY that one (like a radio button: no toggle-off,
+// no stacking with a previous pick), still using the same .seg-btn/.on markup
 // and dropdown-label mechanics as the multi-select fields above so the rest
-// of the code (_ceGetMultiSeg('cmdVendorSeg'), _ceApplyEditorCascade, the
-// payload builder, etc.) keeps working unchanged — it just never sees more
-// than 1 item selected.
-function _ceBindVendorSeg(containerId, ddBtnId) {
+// of the code (_ceGetMultiSeg('cmdVendorSeg'/'cmdSysSeg'), _ceApplyEditorCascade,
+// the payload builder, etc.) keeps working unchanged — it just never sees more
+// than 1 item selected. Since only one option can ever end up checked, the
+// dropdown also closes itself right after the click — no reason to make the
+// user close it manually like the genuinely multi-select fields below.
+function _ceBindSingleSeg(containerId, ddBtnId) {
   const c = _ce(containerId);
   if (!c) return;
   c.addEventListener('click', ev => {
@@ -171,9 +173,11 @@ function _ceBindVendorSeg(containerId, ddBtnId) {
     c.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('on', b === btn));
     _ceUpdateMultiSegDDLabel(containerId, ddBtnId, null, 'selected');
     if (typeof _ceApplyEditorCascade === 'function') _ceApplyEditorCascade();
+    const dd = c.closest('.dd');
+    if (dd) dd.classList.remove('open');
   });
 }
-function _ceSetVendorSeg(containerId, vals, ddBtnId) {
+function _ceSetSingleSeg(containerId, vals, ddBtnId) {
   const val = Array.isArray(vals) ? vals[0] : vals;
   document.querySelectorAll('#' + containerId + ' .seg-btn').forEach(b => b.classList.toggle('on', val != null && b.dataset.val === val));
   _ceUpdateMultiSegDDLabel(containerId, ddBtnId, null, 'selected');
@@ -589,8 +593,8 @@ function _ceResetForm() {
    'cmdAboutPurpose', 'cmdAboutWhen', 'cmdAboutObs', 'cmdRawTemplate']
     .forEach(id => { _ce(id).value = ''; });
   _ce('cmdTagsList').innerHTML = '';
-  _ceSetVendorSeg('cmdVendorSeg', [], 'cmdVendorDDBtn');
-  _ceSetMultiSeg('cmdSysSeg', [], 'cmdSysDDBtn', null, 'selected');
+  _ceSetSingleSeg('cmdVendorSeg', [], 'cmdVendorDDBtn');
+  _ceSetSingleSeg('cmdSysSeg', [], 'cmdSysDDBtn');
   _ceSetMultiSeg('cmdVersionsSeg', [], 'cmdVersionsDDBtn', null, 'selected');
   _ceSetMultiSeg('cmdEnvSeg', [], 'cmdEnvDDBtn', null, 'selected');
   _ceApplyEditorCascade();
@@ -627,8 +631,8 @@ async function _cePopulateForm(id) {
     cmdEditorAddTag({ css_class: tg.css_class, label: tg.label || '' });
   });
 
-  _ceSetVendorSeg('cmdVendorSeg', row.vendors || [], 'cmdVendorDDBtn');
-  _ceSetMultiSeg('cmdSysSeg', row.systems || [], 'cmdSysDDBtn', null, 'selected');
+  _ceSetSingleSeg('cmdVendorSeg', row.vendors || [], 'cmdVendorDDBtn');
+  _ceSetSingleSeg('cmdSysSeg', row.systems || [], 'cmdSysDDBtn');
   _ceSetMultiSeg('cmdVersionsSeg', row.versions || [], 'cmdVersionsDDBtn', null, 'selected');
   _ceSetMultiSeg('cmdEnvSeg', row.environments || [], 'cmdEnvDDBtn', null, 'selected');
   _ceApplyEditorCascade();
@@ -841,17 +845,17 @@ function cmdEditorDelete() {
 // settings-modal.js's #settingsOverlay handling.
 // ════════════════════════════════════════════════
 _ceBindMultiSeg('cmdTopicSeg', 'cmdTopicDDBtn', null, 'selected'); // a command can belong to more than one Topic
-// Vendor/System/Version/Environment: "All" is a filter-only concept — a
-// command being registered/edited must have at least one explicit value in
-// each of these, so (like Topic) the empty-selection label falls back to
-// null ("0") instead of "All", to avoid implying an unselected list is valid.
-// cmdSysSeg passes _ceApplyEditorCascade as onToggle so checking/unchecking a
-// System re-filters which Versions are shown (see _ceApplyEditorCascade
-// above) — Version has nothing below it in this cascade, so it doesn't need
-// one. cmdVendorSeg is bound separately below (_ceBindVendorSeg) since a
-// command belongs to exactly one Vendor, not several.
-_ceBindVendorSeg('cmdVendorSeg', 'cmdVendorDDBtn');
-_ceBindMultiSeg('cmdSysSeg', 'cmdSysDDBtn', null, 'selected', _ceApplyEditorCascade);
+// Version/Environment: "All" is a filter-only concept — a command being
+// registered/edited must have at least one explicit value in each of these,
+// so (like Topic) the empty-selection label falls back to null ("0") instead
+// of "All", to avoid implying an unselected list is valid. Vendor and System
+// are bound separately below (_ceBindSingleSeg) since a command belongs to
+// exactly one Vendor and exactly one System, not several — System re-filters
+// which Versions are shown via _ceApplyEditorCascade (called from within
+// _ceBindSingleSeg itself), so Version has nothing below it in this cascade
+// and doesn't need an onToggle.
+_ceBindSingleSeg('cmdVendorSeg', 'cmdVendorDDBtn');
+_ceBindSingleSeg('cmdSysSeg', 'cmdSysDDBtn');
 _ceBindMultiSeg('cmdVersionsSeg', 'cmdVersionsDDBtn', null, 'selected');
 _ceBindMultiSeg('cmdEnvSeg', 'cmdEnvDDBtn', null, 'selected');
 document.getElementById('cmdEditorOverlay').addEventListener('click', ev => {
