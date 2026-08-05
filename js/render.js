@@ -65,6 +65,20 @@ async function render() {
     commands = commands.filter(c => !c.systems || !c.systems.length || c.systems.some(s => ST.sys.includes(s)));
   }
 
+  // "Folders" (clique em #foldersNavRow na sidebar, ver js/folders.js) é só
+  // um FILTRO DE ESCOPO — restringe a tela aos comandos que estão em
+  // QUALQUER pasta do usuário — e não mais uma organização própria que
+  // ignorava o "Group by" selecionado. Antes, entrar em Folders sempre
+  // forçava uma seção por pasta mesmo com Group by = Topic marcado, o que
+  // deixava os dois controles conflitando (dropdown dizendo "Topic" mas a
+  // tela mostrando pastas). Agora os dois eixos são independentes: Folders
+  // decide QUAIS comandos aparecem, Group by decide COMO organizá-los —
+  // "My folders" (ver mais abaixo) segue sendo a única opção que agrupa por
+  // pasta, esteja o usuário em Folders ou não.
+  if (VIEW_FOLDERS_HOME) {
+    commands = commands.filter(c => c.folder_ids && c.folder_ids.length);
+  }
+
   // Campo de busca unificado (src:/dst:/dport:/... — ver query-bar.js): só oferece o chip
   // "Adicionar filtro" de um campo se algum comando exibido para o Tópico/Ambiente atual
   // realmente usa aquele parâmetro.
@@ -141,42 +155,22 @@ async function render() {
       stripLeadingSymbols(b.label), undefined, { sensitivity: 'base' }
     )
   );
-  // Monta as seções para um subconjunto de `commands` — extraído para função
-  // porque o modo "Created by" repete isso uma vez por autor (ver mais
-  // abaixo), com `keyPrefix` distinto para manter o recolher/expandir de
-  // cada seção independente entre autores.
-  //
-  // Navegando por Folders (VIEW_FOLDERS_HOME — clique em "Folders" na
-  // sidebar, ver js/folders.js), o conteúdo é organizado por PASTA em vez de
-  // por Tópico: uma seção recolhível por pasta (mesmo estilo visual/
-  // comportamento das seções de Tópico — expande/recolhe, mostra a
-  // contagem), cada uma com todos os comandos que o usuário guardou ali
-  // dentro, sem separar por Ambiente/Tópico. Substituiu o esquema antigo de
-  // renderizar tudo normalmente por Tópico e só ESCONDER depois os cards
-  // fora da pasta (ver histórico de applyFolderFilter/applyAnyFolderFilter)
-  // — este esquema não dava a sensação de "pasta" pedida, só filtrava a
-  // mesma grade de sempre. A sidebar não navega mais por pasta individual
-  // (removido o VIEW_FOLDER_ID/lista de pastas a pedido do usuário) — aqui
-  // sempre aparecem TODAS as pastas do usuário, uma seção cada.
+  // Monta as seções (Environment + uma por Tópico) para um subconjunto de
+  // `commands` — extraído para função porque os modos "Created by" e "My
+  // folders" repetem isso uma vez por grupo (ver mais abaixo), com
+  // `keyPrefix` distinto para manter o recolher/expandir de cada seção
+  // independente entre grupos. Usada sempre que o Group by NÃO for "My
+  // folders" — inclusive dentro de Folders (VIEW_FOLDERS_HOME só filtra
+  // QUAIS comandos chegam aqui, ver acima; não muda como são organizados).
   function buildSections(rows, keyPrefix) {
     const sections = [];
-    if (VIEW_FOLDERS_HOME) {
-      const folderNameById = new Map((typeof FOLDERS !== 'undefined' ? FOLDERS : []).map(f => [f.id, f.name]));
-      const sortedIds = [...folderNameById.keys()].sort((a, b) =>
-        folderNameById.get(a).localeCompare(folderNameById.get(b), undefined, { sensitivity: 'base' })
-      );
-      sortedIds.forEach(fid => {
-        sections.push(buildFolderSection(rows, fid, folderNameById.get(fid), values, hasIPs, keyPrefix + 'folder' + fid));
-      });
-    } else {
-      const envCards = buildEnvCards(rows, ce, values);
-      if (envCards.length) sections.push(section('🏗️', `Environment: ${envLabel(ce)}`, envCards, keyPrefix + 'environment'));
-      topicsSorted.forEach(tp => {
-        if (show(tp.key)) {
-          sections.push(buildTopicSection(rows, tp.key, '', tp.label, values, hasIPs, keyPrefix + tp.key));
-        }
-      });
-    }
+    const envCards = buildEnvCards(rows, ce, values);
+    if (envCards.length) sections.push(section('🏗️', `Environment: ${envLabel(ce)}`, envCards, keyPrefix + 'environment'));
+    topicsSorted.forEach(tp => {
+      if (show(tp.key)) {
+        sections.push(buildTopicSection(rows, tp.key, '', tp.label, values, hasIPs, keyPrefix + tp.key));
+      }
+    });
     return sections.join('');
   }
 
@@ -216,33 +210,25 @@ async function render() {
     return comboHeader + envNote + creatorGroups;
   }
 
-  // "My folders": mesmo padrão do "Created by" acima, mas agrupando pelas
-  // PASTAS do próprio usuário (command.folder_ids, ver server/index.js:
-  // shapeCommand()) em vez de quem criou. Substituiu o antigo "User favorites"
-  // (agrupamento cross-user por quem favoritou) — pastas são privadas, então
-  // aqui só existe a perspectiva de quem está olhando a tela. Um comando
-  // guardado em várias pastas aparece em mais de uma seção (uma por pasta);
-  // comandos fora de qualquer pasta não aparecem em nenhum grupo (não existe
-  // seção "sem pasta" — diferente do "—" do Created by).
+  // "My folders": agrupa pelas PASTAS do próprio usuário (command.folder_ids,
+  // ver server/index.js: shapeCommand()) em vez de por Tópico/quem criou.
+  // Substituiu o antigo "User favorites" (agrupamento cross-user por quem
+  // favoritou) — pastas são privadas, então aqui só existe a perspectiva de
+  // quem está olhando a tela. Um comando guardado em várias pastas aparece em
+  // mais de uma seção (uma por pasta); comandos fora de qualquer pasta não
+  // aparecem em nenhum grupo (não existe seção "sem pasta" — diferente do
+  // "—" do Created by). Cada pasta usa buildFolderSection() (mesma função da
+  // visão "Folders" da sidebar) — cards diretos, SEM sub-seções de Tópico,
+  // porque "agrupar por pasta" e "agrupar por tópico" são visões alternativas
+  // uma da outra, não aninhadas (a pedido do usuário).
   if (GROUP_BY === 'my-folders') {
     const folderNameById = new Map((typeof FOLDERS !== 'undefined' ? FOLDERS : []).map(f => [f.id, f.name]));
     const folderIdsInUse = [...new Set(commands.flatMap(c => c.folder_ids || []))]
       .filter(id => folderNameById.has(id))
       .sort((a, b) => folderNameById.get(a).localeCompare(folderNameById.get(b), undefined, { sensitivity: 'base' }));
-    const folderGroups = folderIdsInUse.map(folderId => {
-      const subset = commands.filter(c => (c.folder_ids || []).includes(folderId));
-      const body = buildSections(subset, `${kp}folder${folderId}__`);
-      const cardCount = (body.match(/<div class="card"/g) || []).length;
-      if (!cardCount) return '';
-      const folderName = folderNameById.get(folderId);
-      const nameEsc = escAttr(folderName);
-      const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(folderName) : nameEsc;
-      const actions = `<span class="sec-folder-actions">
-        <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="promptRenameFolder(${folderId}, '${jsEsc}', event)" title="Rename folder">✎</button>
-        <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${folderId}, '${jsEsc}', event)" title="Delete folder">✕</button>
-      </span>`;
-      return collapsibleGroup(`${cv}__${ce}__folder${folderId}`, `${folderIcon(true, 13)} <strong>${nameEsc}</strong> <span class="sec-count">${cardCount}</span>${actions}`, body, 'section-creator');
-    }).join('');
+    const folderGroups = folderIdsInUse
+      .map(folderId => buildFolderSection(commands, folderId, folderNameById.get(folderId), values, hasIPs, `${kp}folder${folderId}`))
+      .join('');
     if (!folderGroups) return '';
     const comboHeader = combos.length > 1
       ? `<div class="combo-header">🔀 <strong>${cvLabel}</strong> / <strong>${ceLabel}</strong></div>`
@@ -270,10 +256,10 @@ async function render() {
   }); // fim do map de combos
 
   out.innerHTML = [combosTruncatedNote, ...comboBlocks].join('');
-  // buildSections() já monta uma seção por pasta quando navegando por Folders
-  // (ver acima) — mas se nenhuma pasta tiver comandos para os filtros atuais
-  // (ou o usuário ainda não tiver nenhuma pasta), nenhuma seção é gerada e a
-  // tela fica em branco sem esse aviso.
+  // Folders (VIEW_FOLDERS_HOME) já filtrou `commands` lá em cima para só os
+  // que estão em alguma pasta — se isso zerar a lista (ou o usuário ainda
+  // não tiver nenhuma pasta) para os filtros/Group by atuais, nenhuma seção
+  // é gerada e a tela fica em branco sem esse aviso.
   if (VIEW_FOLDERS_HOME && !out.querySelector('.section')) {
     out.insertAdjacentHTML('beforeend', `<div class="empty"><div class="empty-ico">${folderIcon(false, 40)}</div><p>No commands in any folder yet for the current filters.</p></div>`);
   }

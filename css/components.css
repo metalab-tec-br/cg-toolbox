@@ -652,7 +652,15 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .folder-menu-item:hover { background: var(--surf2); }
 .folder-menu-item.on { color: var(--teal); }
 .folder-menu-chk { width: 12px; flex-shrink: 0; text-align: center; font-weight: 700; }
-.folder-menu-name { overflow: hidden; text-overflow: ellipsis; }
+/* flex-shrink: 0 é o que faltava aqui — como este span tem overflow:hidden
+   (para o text-overflow:ellipsis de nomes MUITO longos, além do max-width do
+   pop), o tamanho mínimo automático dele dentro do flex row (.folder-menu-item)
+   resolve para 0 em vez do min-content do texto (regra do flexbox: overflow
+   != visible zera o min-width:auto do item) — na prática, o navegador
+   comprimia/cortava o nome mesmo sobrando espaço de sobra, porque nada aqui
+   impedia esse encolhimento. Nomes de pasta comuns (bem menores que os 260px
+   de max-width do pop) agora sempre aparecem por inteiro. */
+.folder-menu-name { overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
 .folder-menu-empty { padding: 6px 8px; color: var(--muted); font-size: 11px; white-space: nowrap; }
 .folder-menu-divider { height: 1px; background: var(--bdr); margin: 4px 2px; }
 .folder-menu-new { color: var(--teal); }
