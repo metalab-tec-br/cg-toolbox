@@ -27,7 +27,7 @@
   font-family: var(--sans); max-width: 160px;
 }
 .hdr-user:empty, .hdr-user:has(#currentUserLabel:empty) { display: none; }
-.hdr-user-ico { font-size: 14px; opacity: .7; }
+.hdr-user-ico { opacity: .7; flex-shrink: 0; }
 #currentUserLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .theme-toggle {
   background: var(--surf2); border: 1px solid var(--bdr); border-radius: 6px;
