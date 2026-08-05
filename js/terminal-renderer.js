@@ -506,9 +506,17 @@ let COLLAPSED_SECTIONS = loadCollapsedSections();
 // no modo "Agrupar por Versão", para o bloco inteiro de uma combinação Versão/Ambiente.
 function collapsibleGroup(key, headerHtml, bodyHtml, extraClass) {
   const collapsed = COLLAPSED_SECTIONS.has(key);
+  // O clique de recolher/expandir ficava no cabeçalho INTEIRO (.sec-title) —
+  // pedido do usuário: "ao clicar na linha as pastas estão recolhendo e
+  // expandindo, deixe essa ação somente ao clicar nos botões de expandir e
+  // recolher". Agora o onclick fica só no ícone (.sec-chevron); o resto do
+  // cabeçalho (nome, contagem, botões de pasta) não recolhe mais por
+  // engano. Os botões globais "Expand all"/"Collapse all" da toolbar
+  // (expandAllSections/collapseAllSections) não usam este onclick — não são
+  // afetados por esta mudança.
   return `<div class="section${extraClass ? ' ' + extraClass : ''}${collapsed ? ' collapsed' : ''}" data-sec-key="${key}">
-    <div class="sec-title" onclick="toggleSection('${key}')">
-      <svg class="sec-chevron" width="8" height="8" viewBox="0 0 10 10" fill="none"><path d="M1 2l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="sec-title">
+      <svg class="sec-chevron" width="8" height="8" viewBox="0 0 10 10" fill="none" onclick="toggleSection('${key}')"><path d="M1 2l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       ${headerHtml}
     </div>
     <div class="sec-body">${bodyHtml}</div>
