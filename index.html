@@ -618,7 +618,7 @@
           <div class="audit-log-wrap" id="apiKeyListWrap">
             <table class="audit-log-table">
               <thead>
-                <tr><th>Name</th><th>Key</th><th>Created by</th><th>Created</th><th>Last used</th><th></th></tr>
+                <tr><th>Name</th><th>Role</th><th>Key</th><th>Created by</th><th>Created</th><th>Last used</th><th></th></tr>
               </thead>
               <tbody id="apiKeyListTbody"></tbody>
             </table>
@@ -1044,10 +1044,6 @@
         </div>
       </div>
     </div>
-    <div class="modal-foot">
-      <div></div>
-      <button class="btn" onclick="closeCatalogAdmin('vendors')">Close</button>
-    </div>
   </div>
 </div>
 
@@ -1068,10 +1064,6 @@
           <button type="button" class="btn btn-sm" onclick="catAdminAddSystem()">+ Add system</button>
         </div>
       </div>
-    </div>
-    <div class="modal-foot">
-      <div></div>
-      <button class="btn" onclick="closeCatalogAdmin('systems')">Close</button>
     </div>
   </div>
 </div>
@@ -1094,10 +1086,6 @@
         </div>
       </div>
     </div>
-    <div class="modal-foot">
-      <div></div>
-      <button class="btn" onclick="closeCatalogAdmin('versions')">Close</button>
-    </div>
   </div>
 </div>
 
@@ -1118,10 +1106,6 @@
         </div>
       </div>
     </div>
-    <div class="modal-foot">
-      <div></div>
-      <button class="btn" onclick="closeCatalogAdmin('environments')">Close</button>
-    </div>
   </div>
 </div>
 
@@ -1141,10 +1125,6 @@
           <button type="button" class="btn btn-sm" onclick="catAdminAddTopic()">+ Add topic</button>
         </div>
       </div>
-    </div>
-    <div class="modal-foot">
-      <div></div>
-      <button class="btn" onclick="closeCatalogAdmin('topics')">Close</button>
     </div>
   </div>
 </div>
@@ -1167,10 +1147,6 @@
           <button type="button" class="btn btn-sm" onclick="catAdminAddParameter()">+ Add parameter</button>
         </div>
       </div>
-    </div>
-    <div class="modal-foot">
-      <div></div>
-      <button class="btn" onclick="closeCatalogAdmin('parameters')">Close</button>
     </div>
   </div>
 </div>
@@ -1204,6 +1180,18 @@
       <div class="set-group">
         <span class="set-label">Name</span>
         <input class="set-input" type="text" id="apiKeyNameInput" placeholder='e.g. &quot;Integration X&quot; or the team/system that will use it' maxlength="120">
+      </div>
+      <!-- Mesmo modelo de permissões admin|user dos usuários locais/NTLM (ver
+           #newUserRoleSelect acima) — uma key 'user' passa pelos mesmos gates
+           que um usuário comum (requireAdmin em server/index.js), sem acesso
+           a excluir comandos, backup & restore, audit log, gerenciar chaves/
+           usuários. Padrão "User" (menor privilégio). -->
+      <div class="set-group">
+        <span class="set-label">Role</span>
+        <select class="set-input" id="apiKeyRoleSelect">
+          <option value="user" selected>User</option>
+          <option value="admin">Admin</option>
+        </select>
       </div>
     </div>
     <div class="modal-foot" style="justify-content:flex-end;">

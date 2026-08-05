@@ -209,7 +209,10 @@ async function getOrCreateUserRole(username) {
 }
 
 async function getCurrentRole(req) {
-  if (req.apiKey) return 'admin';
+  // Ver api_keys.role em schema.sql — keys criadas antes deste campo existir
+  // ficam com o DEFAULT 'admin' (mesmo acesso total de sempre); keys novas
+  // escolhem 'admin' ou 'user' na criação (ver POST /api/api-keys abaixo).
+  if (req.apiKey) return req.apiKey.role || 'admin';
   if (req.userRole) return req.userRole; // já resolvido pelo middleware de sessão local
   return getOrCreateUserRole(getCurrentUsername(req));
 }
@@ -666,7 +669,7 @@ app.put('/api/global-settings', async (req, res) => {
 app.get('/api/api-keys', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, name, key_prefix, created_by, created_at, last_used_at, revoked_at
+      `SELECT id, name, key_prefix, role, created_by, created_at, last_used_at, revoked_at
        FROM api_keys ORDER BY (revoked_at IS NULL) DESC, created_at DESC`
     );
     res.json(rows);
@@ -676,10 +679,18 @@ app.get('/api/api-keys', requireAdmin, async (req, res) => {
   }
 });
 
+// Mesmo modelo de permissões (admin|user) dos usuários locais/NTLM — ver
+// users.role em schema.sql e ADMIN_ROLES abaixo. Padrão 'user' (menor
+// privilégio) quando o campo não é enviado.
+const API_KEY_ROLES = ['admin', 'user'];
 app.post('/api/api-keys', requireAdmin, async (req, res) => {
-  const { name } = req.body || {};
+  const { name, role } = req.body || {};
   if (!name || typeof name !== 'string' || !name.trim()) {
     return res.status(400).json({ error: 'validation_error', message: '"name" is required' });
+  }
+  const finalRole = role || 'user';
+  if (!API_KEY_ROLES.includes(finalRole)) {
+    return res.status(400).json({ error: 'validation_error', message: `"role" must be one of: ${API_KEY_ROLES.join(', ')}` });
   }
   try {
     const rawKey = generateApiKey();
@@ -687,10 +698,10 @@ app.post('/api/api-keys', requireAdmin, async (req, res) => {
     const keyPrefix = rawKey.slice(0, 12);
     const createdBy = getCurrentUsername(req);
     const { rows } = await pool.query(
-      `INSERT INTO api_keys (name, key_prefix, key_hash, created_by)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, name, key_prefix, created_by, created_at, last_used_at, revoked_at`,
-      [name.trim(), keyPrefix, keyHash, createdBy]
+      `INSERT INTO api_keys (name, key_prefix, key_hash, role, created_by)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, key_prefix, role, created_by, created_at, last_used_at, revoked_at`,
+      [name.trim(), keyPrefix, keyHash, finalRole, createdBy]
     );
     res.status(201).json({ ...rows[0], key: rawKey });
   } catch (err) {

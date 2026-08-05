@@ -57,6 +57,7 @@ async function initDb({ retries = 30, delayMs = 2000 } = {}) {
     try {
       await pool.query(schemaSql);
       console.log('[db] Conectado ao PostgreSQL e schema aplicado.');
+      await runMigrations();
       await seedDefaultAdmin();
       return;
     } catch (err) {
@@ -64,6 +65,24 @@ async function initDb({ retries = 30, delayMs = 2000 } = {}) {
       console.warn(`[db] Falha ao conectar/aplicar schema (tentativa ${attempt}/${retries}): ${err.message} — tentando de novo em ${delayMs}ms...`);
       await new Promise(r => setTimeout(r, delayMs));
     }
+  }
+}
+
+// Pequenos ajustes idempotentes em bancos que já existiam ANTES de uma coluna
+// nova ser adicionada ao schema — `CREATE TABLE IF NOT EXISTS` (acima) não
+// altera uma tabela que já existe de um deploy anterior, então uma coluna
+// adicionada depois da criação inicial de uma tabela precisa de um
+// `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` explícito aqui. Seguro rodar em
+// todo boot, inclusive numa instalação nova onde a coluna já veio do CREATE
+// TABLE (o IF NOT EXISTS simplesmente não faz nada nesse caso).
+async function runMigrations() {
+  try {
+    // api_keys.role (admin|user) — ver comentário em schema.sql. DEFAULT
+    // 'admin' preserva o acesso total das keys criadas antes deste campo
+    // existir.
+    await pool.query(`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'admin'`);
+  } catch (err) {
+    console.error('[db] Falha ao rodar migrações:', err.message);
   }
 }
 

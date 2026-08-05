@@ -28,7 +28,7 @@ async function renderApiKeyList() {
   const tbody = document.getElementById('apiKeyListTbody');
   const empty = document.getElementById('apiKeyListEmpty');
   if (!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="6" class="audit-log-loading">Loading…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="7" class="audit-log-loading">Loading…</td></tr>`;
   if (empty) empty.style.display = 'none';
   let rows = [];
   try {
@@ -36,7 +36,7 @@ async function renderApiKeyList() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     rows = await res.json();
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" class="audit-log-loading">Failed to load API keys. Please try again.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="audit-log-loading">Failed to load API keys. Please try again.</td></tr>`;
     return;
   }
   if (!rows.length) {
@@ -47,6 +47,7 @@ async function renderApiKeyList() {
   tbody.innerHTML = rows.map(r => `
     <tr style="${r.revoked_at ? 'opacity:.5;' : ''}">
       <td>${_akEscHtml(r.name)}</td>
+      <td>${r.role === 'admin' ? 'Admin' : 'User'}</td>
       <td><code>${_akEscHtml(r.key_prefix)}…</code></td>
       <td>${_akEscHtml(r.created_by || '—')}</td>
       <td>${_akEscHtml(_akFormatDate(r.created_at))}</td>
@@ -66,6 +67,8 @@ async function renderApiKeyList() {
 function openNewApiKeyPrompt() {
   const input = document.getElementById('apiKeyNameInput');
   if (input) input.value = '';
+  const roleSelect = document.getElementById('apiKeyRoleSelect');
+  if (roleSelect) roleSelect.value = 'user';
   const overlay = document.getElementById('apiKeyNameOverlay');
   if (overlay) overlay.classList.add('show');
   if (input) setTimeout(() => input.focus(), 0);
@@ -80,8 +83,10 @@ function submitApiKeyNamePrompt() {
   const input = document.getElementById('apiKeyNameInput');
   const name = input ? input.value.trim() : '';
   if (!name) { if (input) input.focus(); return; }
+  const roleSelect = document.getElementById('apiKeyRoleSelect');
+  const role = roleSelect ? roleSelect.value : 'user';
   closeApiKeyNamePrompt();
-  createApiKey(name);
+  createApiKey(name, role);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -133,12 +138,12 @@ function copyApiKeyReveal() {
   });
 }
 
-async function createApiKey(name) {
+async function createApiKey(name, role) {
   try {
     const res = await fetch('/api/api-keys', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, role: role || 'user' }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));

@@ -285,12 +285,23 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_ts ON audit_log(ts);
 -- significa ter que revogar e criar uma nova (mesmo modelo de qualquer
 -- provedor de API key). `revoked_at` é soft-delete (mantém histórico/rastro
 -- em vez de apagar a linha) — uma key revogada nunca mais autentica.
+--
+-- `role` (admin|user) — mesmo modelo de permissões de users.role (ver
+-- getCurrentRole/requireAdmin em server/index.js): uma key 'user' passa pelos
+-- mesmos gates que um usuário comum (sem acesso a excluir comandos, backup &
+-- restore, audit log, gerenciar chaves/usuários). DEFAULT 'admin' aqui é só
+-- para preservar, sem quebrar nada, o comportamento das keys já existentes
+-- antes deste campo existir (acesso total) — toda key NOVA criada pela UI
+-- escolhe o role explicitamente (padrão 'user', ver #apiKeyRoleSelect em
+-- index.html), seguindo o mesmo princípio de menor privilégio dos usuários
+-- locais/NTLM.
 -- ════════════════════════════════════════════════
 CREATE TABLE IF NOT EXISTS api_keys (
   id            SERIAL PRIMARY KEY,
   name          TEXT NOT NULL,
   key_prefix    TEXT NOT NULL,        -- primeiros caracteres da key, só para identificação visual na lista
   key_hash      TEXT NOT NULL UNIQUE, -- SHA-256 (hex) da key completa
+  role          TEXT NOT NULL DEFAULT 'admin',
   created_by    TEXT,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_used_at  TIMESTAMPTZ,
