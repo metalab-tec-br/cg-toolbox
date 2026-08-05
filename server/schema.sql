@@ -64,10 +64,13 @@ CREATE TABLE IF NOT EXISTS commands (
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
   -- Autoria/auditoria. `created_by = 'System'` marca um comando de referência
-  -- (rebuild a partir dos Admin Guides oficiais). PUT/DELETE não têm mais
-  -- restrição de dono (task #291) — qualquer usuário autenticado pode
-  -- editar/excluir qualquer comando; `modified_by` registra quem fez a
-  -- última alteração (cai em created_by antes da 1ª edição).
+  -- (rebuild a partir dos Admin Guides oficiais). PUT (editar) só é permitido
+  -- para o próprio dono (created_by = usuário autenticado) ou para um admin
+  -- (task #455/#456) — um usuário comum que queira alterar o comando de
+  -- outro (ou um comando System) precisa duplicá-lo primeiro (POST normal).
+  -- DELETE continua exigindo role='admin' independente de quem seja o dono
+  -- (requireAdmin, sem checagem de created_by). `modified_by` registra quem
+  -- fez a última alteração (cai em created_by antes da 1ª edição).
   created_by          TEXT,
   modified_by         TEXT
 );
@@ -258,9 +261,12 @@ CREATE INDEX IF NOT EXISTS idx_user_favorites_command ON user_favorites(command_
 -- Folders — substitui "Favorites": cada usuário organiza comandos em pastas
 -- próprias (nome livre, ex.: "Favorites", "VPN troubleshooting"), e um mesmo
 -- comando pode estar em várias pastas ao mesmo tempo (tabela de junção
--- folder_commands, N:N). Pastas são privadas — não há noção de pasta
--- compartilhada/pública nem de "quem mais tem este comando na pasta dele"
--- (diferente do antigo favorite_count/favorited_by cross-user).
+-- folder_commands, N:N). Renomear/excluir uma pasta e adicionar/remover
+-- comandos dela continua sendo só do dono; a ORGANIZAÇÃO das pastas (não o
+-- conteúdo dos comandos, que já era cross-user) hoje é visível entre todos os
+-- usuários (GET /api/folders/all, Group by "User folders") e pode ser
+-- copiada por qualquer um para a própria lista (POST /api/folders/:id/copy —
+-- task #459), mesmo espírito do "Created by".
 -- UNIQUE(username, name) evita duas pastas com o mesmo nome para o mesmo
 -- usuário (mensagem amigável no 409, ver POST /api/folders).
 CREATE TABLE IF NOT EXISTS folders (
@@ -277,9 +283,16 @@ CREATE INDEX IF NOT EXISTS idx_folders_username ON folders(username);
 -- comando limpa sozinho a sua presença em qualquer pasta. folder_id com ON
 -- DELETE CASCADE — apagar uma pasta limpa sozinha suas linhas de membership,
 -- sem precisar de um passo manual em DELETE /api/folders/:id.
+-- sort_order (task #458) ordena os comandos DENTRO de uma pasta — separado
+-- do sort_order global de `commands` (ordem curatorial geral) e do
+-- sort_order de `folders` acima (ordem das pastas entre si). Preenchido
+-- sequencialmente a cada novo membership (ver POST /api/folders/:id/commands
+-- em server/index.js) e reescrito por completo pelo endpoint de reorder
+-- (PUT /api/folders/:id/reorder).
 CREATE TABLE IF NOT EXISTS folder_commands (
   folder_id  INTEGER NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
   command_id TEXT NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (folder_id, command_id)
 );

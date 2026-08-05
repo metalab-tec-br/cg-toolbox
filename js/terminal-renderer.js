@@ -427,16 +427,16 @@ function card({ id, name, desc, about, tags = [], lines, diffs, folderIds = [], 
     ${folderMenuHtml(id, folderIds)}
     ${auditPopover({ createdBy, modifiedBy, updatedAt })}
   </span>` : '';
-  // Incluir/duplicar/editar/excluir ficam disponíveis para TODOS os usuários
-  // em comandos comuns — não existe restrição de "só o dono edita" (ver
-  // server/index.js: PUT/DELETE /api/commands não checam created_by ===
-  // usuário atual). EXCEÇÃO: comandos de referência (created_by='System') só
-  // podem ser editados/excluídos por admins (ver PUT/DELETE /api/commands em
-  // server/index.js) — um usuário comum só vê o botão Duplicate neles, que
-  // cria uma cópia própria e editável. Cada alteração fica registrada no log
-  // de auditoria do servidor (audit_log, ver botão "View audit log" em
-  // Configurações).
-  const canEdit = !isSystem || window.CG_IS_ADMIN;
+  // Um usuário comum só pode editar o PRÓPRIO comando (createdBy ===
+  // CURRENT_USER) — o de outro usuário, ou um comando de referência
+  // (created_by='System'), só mostra o botão Duplicate, que cria uma cópia
+  // própria e editável (ver PUT /api/commands/:id em server/index.js, que
+  // repete essa mesma checagem no servidor). Admins não têm essa restrição:
+  // podem editar/excluir qualquer comando, inclusive System. Cada alteração
+  // fica registrada no log de auditoria do servidor (audit_log, ver botão
+  // "View audit log" em Configurações).
+  const isOwnCommand = typeof CURRENT_USER !== 'undefined' && CURRENT_USER === createdBy;
+  const canEdit = window.CG_IS_ADMIN || (!isSystem && isOwnCommand);
   const editHtml = (id && canEdit && typeof openCommandEditor === 'function') ? `<button class="edit-btn" onclick="openCommandEditor('edit','${id}',event)" title="Edit command">
     <svg width="11" height="11" fill="none" viewBox="0 0 16 16">
       <path d="M11.3 1.7l3 3L5 14H2v-3l9.3-9.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>

@@ -455,32 +455,56 @@ function buildTopicSection(rows, topic, icon, title, values, hasIPs, key) {
   return section(icon, title, cards, key);
 }
 
+// Envolve cada card já pronto num ".folder-card-row" com uma alça de
+// arrastar (⠿, ver _fcArmDrag em js/folders.js) — só usado dentro de uma
+// pasta do PRÓPRIO usuário (reordenar a pasta de outra pessoa não é
+// permitido pelo backend, ver PUT /api/folders/:id/reorder). `data-folder-id`
+// na própria row (em vez de num wrapper comum) é o que o handler de
+// dragend usa pra saber pra qual pasta mandar a nova ordem — mais simples
+// que subir até o pai, e funciona igual estejamos numa única seção
+// "Folders" ou numa sub-seção de "User folders".
+function wrapCardsForFolderDrag(cards, folderId) {
+  return cards.map(html => `<div class="folder-card-row" data-folder-id="${folderId}">
+    <span class="folder-drag-handle" onmousedown="_fcArmDrag(this)" title="Drag to reorder">⠿</span>
+    <div class="folder-card-row-body">${html}</div>
+  </div>`).join('');
+}
+
 // Cabeçalho + corpo de uma seção de PASTA a partir de uma lista de CARDS já
 // prontos (não filtra por folder_ids — quem chama já decidiu quais cards
-// entram). Extraído de buildFolderSection() para ser reaproveitado também
-// pelo Group by "User folders" (cross-user, ver render.js), que monta os
-// cards de uma pasta de OUTRO usuário a partir de ALL_USERS_FOLDERS em vez
-// de folder_ids (que só reflete as pastas do usuário atual — ver
-// server/index.js: shapeCommand()). `folderName` é texto livre cadastrado
-// pelo usuário — passa por escAttr() antes de virar título (inserido como
-// HTML cru) para não permitir HTML injection via nome de pasta malicioso.
+// entram, e em que ORDEM). Extraído de buildFolderSection() para ser
+// reaproveitado também pelo Group by "User folders" (cross-user, ver
+// render.js), que monta os cards de uma pasta de OUTRO usuário a partir de
+// ALL_USERS_FOLDERS em vez de folder_ids (que só reflete as pastas do
+// usuário atual — ver server/index.js: shapeCommand()). `folderName` é
+// texto livre cadastrado pelo usuário — passa por escAttr() antes de virar
+// título (inserido como HTML cru) para não permitir HTML injection via nome
+// de pasta malicioso.
 // `withActions` controla se aparecem os botões de renomear/excluir
-// (.sec-folder-actions, hover-only, ver components.css) — só fazem sentido
-// numa pasta que pertence ao usuário atual (renomear/excluir a pasta de
-// outra pessoa não é permitido pelo backend, então nem mostramos o botão).
-function buildFolderSectionFromCards(cards, folderId, folderName, key, withActions) {
+// (.sec-folder-actions, hover-only, ver components.css) E se os cards ficam
+// arrastáveis para reordenar (task #458) — só fazem sentido numa pasta que
+// pertence ao usuário atual (o backend recusa ambas as operações numa pasta
+// de outra pessoa). `copyable` (task #459) mostra em vez disso um único
+// botão de copiar a pasta — usado quando é a pasta de OUTRO usuário (Group
+// by "User folders"); nunca junto com withActions.
+function buildFolderSectionFromCards(cards, folderId, folderName, key, withActions, copyable) {
   if (!cards.length) return '';
   const nameEsc = escAttr(folderName);
+  const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(folderName) : nameEsc;
   let actions = '';
   if (withActions) {
-    const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(folderName) : nameEsc;
     actions = `<span class="sec-folder-actions">
     <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="promptRenameFolder(${folderId}, '${jsEsc}', event)" title="Rename folder">✎</button>
     <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${folderId}, '${jsEsc}', event)" title="Delete folder">✕</button>
   </span>`;
+  } else if (copyable) {
+    actions = `<span class="sec-folder-actions">
+    <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="copyFolderFromUser(${folderId}, '${jsEsc}', event)" title="Copy this folder to your own Folders">⧉</button>
+  </span>`;
   }
   const headerHtml = `${folderIcon(true, 12)} ${nameEsc} <span class="sec-count">${cards.length}</span>${actions}`;
-  return collapsibleGroup(key || `folder${folderId}`, headerHtml, cards.join(''));
+  const body = withActions ? wrapCardsForFolderDrag(cards, folderId) : cards.join('');
+  return collapsibleGroup(key || `folder${folderId}`, headerHtml, body);
 }
 
 // Uma seção de PASTA do usuário ATUAL (ícone de pasta + nome + seus cards) —
@@ -491,13 +515,25 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
 // Tópicos, em vez do antigo esquema de só esconder/mostrar cards já
 // renderizados por Tópico.
 //
+// `order` (opcional, task #458): lista de command_ids na ordem própria da
+// pasta (folder.order, ver js/folders.js) — os cards saem nessa ordem, não
+// na ordem curatorial global de `rows`. Sem `order` (ou pastas antigas que
+// por algum motivo não a tenham), cai de volta na ordem de `rows`, igual ao
+// comportamento anterior a esta feature.
+//
 // A sidebar não lista mais as pastas individualmente (só o item combinado
 // "Folders" — a pedido do usuário), então renomear/excluir uma pasta só é
 // possível aqui: dois botões (✎/✕) embutidos no próprio cabeçalho da seção
 // (ver buildFolderSectionFromCards acima), visíveis só no hover.
-function buildFolderSection(rows, folderId, folderName, values, hasIPs, key) {
-  const cards = rows
-    .filter(r => (r.folder_ids || []).includes(folderId))
+function buildFolderSection(rows, folderId, folderName, values, hasIPs, key, order) {
+  const byId = new Map(rows.map(r => [r.id, r]));
+  const idsInFolder = rows.filter(r => (r.folder_ids || []).includes(folderId)).map(r => r.id);
+  const orderedIds = (order && order.length)
+    ? order.filter(id => idsInFolder.includes(id)).concat(idsInFolder.filter(id => !order.includes(id))) // comandos sem posição salva (ex.: pasta criada antes da migração) vão pro fim, nunca desaparecem
+    : idsInFolder;
+  const cards = orderedIds
+    .map(id => byId.get(id))
+    .filter(Boolean)
     .map(r => buildCardHtmlForRow(r, values, hasIPs))
     .filter(Boolean);
   return buildFolderSectionFromCards(cards, folderId, folderName, key, true);

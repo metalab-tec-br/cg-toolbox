@@ -486,6 +486,22 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 }
 .sec-folder-btn:hover { background: var(--surf3); color: var(--text); }
 
+/* Drag-to-reorder dos comandos DENTRO de uma pasta (task #458, ver
+   wrapCardsForFolderDrag em db-render-engine.js e _fcArmDrag em
+   js/folders.js) — mesmo espírito visual do .ln-drag-handle usado no editor
+   de comandos para reordenar linhas, só que aqui embrulhando um .card
+   inteiro em vez de uma linha de texto. */
+.folder-card-row { display: flex; align-items: flex-start; gap: 4px; }
+.folder-card-row-body { flex: 1; min-width: 0; }
+.folder-drag-handle {
+  display: flex; align-items: center; color: var(--muted); flex-shrink: 0;
+  cursor: grab; padding: 2px; border-radius: 4px; margin-top: 10px;
+  font-size: 12px; line-height: 1; user-select: none;
+}
+.folder-drag-handle:hover { color: var(--text); background: var(--surf); }
+.folder-drag-handle:active { cursor: grabbing; }
+.folder-card-row.dragging { opacity: .45; }
+
 /* Bloco recolhível por Versão/Ambiente (modo "Agrupar por Versão") — mesma mecânica de
    .section, com um destaque visual próprio (borda + fundo) para se diferenciar das
    seções de Tópico aninhadas dentro dele. */

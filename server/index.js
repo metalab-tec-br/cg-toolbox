@@ -550,7 +550,7 @@ app.get('/api/folders', async (req, res) => {
     const username = getCurrentUsername(req);
     const { rows } = await pool.query(
       `SELECT f.id, f.name, f.sort_order,
-              COALESCE(array_agg(fc.command_id) FILTER (WHERE fc.command_id IS NOT NULL), '{}') AS command_ids
+              COALESCE(array_agg(fc.command_id ORDER BY fc.sort_order, fc.created_at) FILTER (WHERE fc.command_id IS NOT NULL), '{}') AS command_ids
        FROM folders f
        LEFT JOIN folder_commands fc ON fc.folder_id = f.id
        WHERE f.username = $1
@@ -577,7 +577,7 @@ app.get('/api/folders/all', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT f.id, f.username, f.name, f.sort_order,
-              COALESCE(array_agg(fc.command_id) FILTER (WHERE fc.command_id IS NOT NULL), '{}') AS command_ids
+              COALESCE(array_agg(fc.command_id ORDER BY fc.sort_order, fc.created_at) FILTER (WHERE fc.command_id IS NOT NULL), '{}') AS command_ids
        FROM folders f
        LEFT JOIN folder_commands fc ON fc.folder_id = f.id
        GROUP BY f.id
@@ -656,7 +656,15 @@ app.post('/api/folders/:id/commands/:commandId', async (req, res) => {
     const folder = await pool.query('SELECT id FROM folders WHERE id = $1 AND username = $2', [id, username]);
     if (!folder.rows.length) return res.status(404).json({ error: 'not_found', message: `Folder '${id}' not found` });
     if (!(await getCommandRow(commandId))) return res.status(404).json({ error: 'not_found', message: `Command '${commandId}' not found` });
-    await pool.query('INSERT INTO folder_commands (folder_id, command_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, commandId]);
+    // Comando novo entra no FIM da ordem da pasta (task #458) — MAX(sort_order)+1
+    // em vez de 0 fixo, senão toda inclusão nova empataria na primeira posição.
+    // COALESCE cobre a pasta ainda vazia (MAX de zero linhas é NULL).
+    await pool.query(
+      `INSERT INTO folder_commands (folder_id, command_id, sort_order)
+       VALUES ($1, $2, (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM folder_commands WHERE folder_id = $1))
+       ON CONFLICT DO NOTHING`,
+      [id, commandId]
+    );
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -674,6 +682,89 @@ app.delete('/api/folders/:id/commands/:commandId', async (req, res) => {
     if (!folder.rows.length) return res.status(404).json({ error: 'not_found', message: `Folder '${id}' not found` });
     await pool.query('DELETE FROM folder_commands WHERE folder_id = $1 AND command_id = $2', [id, commandId]);
     res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// Reordena os comandos DENTRO de uma pasta do usuário atual (task #458) —
+// body { command_ids: [...] } é a lista COMPLETA na nova ordem desejada;
+// sort_order de cada linha é reescrito para a posição correspondente no
+// array. 404 se a pasta não existir/não for do usuário (mesmo tratamento
+// das outras rotas de folder). IDs que não pertencerem de fato à pasta são
+// ignorados silenciosamente (rowCount da query composta simplesmente não
+// bate com nada para eles) — o front-end sempre manda a lista completa e
+// correta (deriva da ordem atual do DOM), então isso só protege contra uma
+// chamada manual malformada.
+app.put('/api/folders/:id/reorder', async (req, res) => {
+  try {
+    const username = getCurrentUsername(req);
+    const { id } = req.params;
+    const commandIds = Array.isArray(req.body && req.body.command_ids) ? req.body.command_ids : null;
+    if (!commandIds || !commandIds.length) {
+      return res.status(400).json({ error: 'validation_error', message: '"command_ids" must be a non-empty array' });
+    }
+    const folder = await pool.query('SELECT id FROM folders WHERE id = $1 AND username = $2', [id, username]);
+    if (!folder.rows.length) return res.status(404).json({ error: 'not_found', message: `Folder '${id}' not found` });
+
+    await withTransaction(async client => {
+      for (let i = 0; i < commandIds.length; i++) {
+        await client.query(
+          'UPDATE folder_commands SET sort_order = $1 WHERE folder_id = $2 AND command_id = $3',
+          [i, id, commandIds[i]]
+        );
+      }
+    });
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// Copia uma pasta de QUALQUER usuário (inclusive a própria) para uma pasta
+// NOVA do usuário atual, com a mesma lista de comandos na mesma ordem (task
+// #459) — os comandos em si não são duplicados (já são cross-user-visíveis,
+// ver "Created by"), só a membership em folder_commands é recriada. Só a
+// ORGANIZAÇÃO (pastas) era privada; copiar uma pasta é o mecanismo pelo qual
+// alguém "importa" a curadoria de outra pessoa para a própria lista, sem tirar
+// a pasta original de ninguém. Resolve automaticamente conflito de nome
+// (UNIQUE(username, name)) acrescentando "(copy)", "(copy 2)", etc.
+app.post('/api/folders/:id/copy', async (req, res) => {
+  try {
+    const username = getCurrentUsername(req);
+    const src = await pool.query('SELECT id, name FROM folders WHERE id = $1', [req.params.id]);
+    if (!src.rows.length) return res.status(404).json({ error: 'not_found', message: `Folder '${req.params.id}' not found` });
+    const baseName = src.rows[0].name;
+
+    let name = baseName;
+    let suffix = 1;
+    for (;;) {
+      const exists = await pool.query('SELECT 1 FROM folders WHERE username = $1 AND name = $2', [username, name]);
+      if (!exists.rows.length) break;
+      suffix++;
+      name = suffix === 2 ? `${baseName} (copy)` : `${baseName} (copy ${suffix - 1})`;
+    }
+
+    const result = await withTransaction(async client => {
+      const { rows: newFolderRows } = await client.query(
+        'INSERT INTO folders (username, name) VALUES ($1, $2) RETURNING id, name, sort_order',
+        [username, name]
+      );
+      const newFolder = newFolderRows[0];
+      await client.query(
+        `INSERT INTO folder_commands (folder_id, command_id, sort_order)
+         SELECT $1, fc.command_id, fc.sort_order FROM folder_commands fc WHERE fc.folder_id = $2`,
+        [newFolder.id, req.params.id]
+      );
+      const { rows: cmdRows } = await client.query(
+        'SELECT command_id FROM folder_commands WHERE folder_id = $1 ORDER BY sort_order, created_at',
+        [newFolder.id]
+      );
+      return { id: newFolder.id, name: newFolder.name, sort_order: newFolder.sort_order, command_ids: cmdRows.map(r => r.command_id) };
+    });
+    res.status(201).json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
@@ -1167,15 +1258,19 @@ app.put('/api/commands/:id', async (req, res) => {
     const found = await findCommand(id);
     if (!found) return res.status(404).json({ error: 'not_found', message: `Command '${id}' not found` });
 
-    // Sem restrição de dono entre usuários comuns — qualquer um edita
-    // qualquer comando SEU ou de outro usuário. Exceção: comandos de
-    // referência (created_by='System') só podem ser editados por admins;
-    // um usuário comum pode duplicá-los (isso é um POST normal, cria um
-    // comando novo em nome dele) mas não alterar o original.
-    if (found.created_by === 'System' && (await getCurrentRole(req)) !== 'admin') {
-      return res.status(403).json({ error: 'forbidden', message: 'Only admins can edit System commands. Duplicate it to create your own editable copy.' });
-    }
     const currentUser = getCurrentUsername(req);
+    // Um usuário comum só altera o PRÓPRIO comando (created_by ===
+    // currentUser); para editar o de outro usuário — ou um comando de
+    // referência (created_by='System') — precisa duplicar primeiro (POST
+    // normal, cria um comando novo em nome dele) e editar a cópia. Admins
+    // não têm essa restrição: podem alterar qualquer comando, inclusive
+    // System.
+    if ((await getCurrentRole(req)) !== 'admin' && found.created_by !== currentUser) {
+      const message = found.created_by === 'System'
+        ? 'Only admins can edit System commands. Duplicate it to create your own editable copy.'
+        : 'You can only edit your own commands. Duplicate it to create your own editable copy.';
+      return res.status(403).json({ error: 'forbidden', message });
+    }
 
     const bodyForValidation = { ...req.body, id: req.body.id || id };
     const errors = validateBody(bodyForValidation);

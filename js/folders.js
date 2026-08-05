@@ -36,7 +36,13 @@ async function reloadFoldersFromServer() {
   try {
     const res = await fetch('/api/folders');
     const data = await res.json();
-    FOLDERS = (data || []).map(f => ({ id: f.id, name: f.name, sort_order: f.sort_order, command_ids: new Set(f.command_ids || []) }));
+    // `order` (task #458) é a MESMA lista que o servidor já devolve em
+    // command_ids — ele já vem ordenado por sort_order (ver GET /api/folders
+    // em server/index.js) — só guardamos uma cópia própria porque
+    // command_ids vira um Set (checagem de membership O(1), usada em toda
+    // parte) e Sets não preservam uma noção de "posição" utilizável pra
+    // reconstruir a ordem de renderização depois.
+    FOLDERS = (data || []).map(f => ({ id: f.id, name: f.name, sort_order: f.sort_order, command_ids: new Set(f.command_ids || []), order: (f.command_ids || []).slice() }));
     if (typeof render === 'function') render();
   } catch (e) {
     console.warn('Não foi possível carregar as pastas do servidor', e);
@@ -55,7 +61,7 @@ async function reloadAllUsersFoldersFromServer() {
   try {
     const res = await fetch('/api/folders/all');
     const data = await res.json();
-    ALL_USERS_FOLDERS = (data || []).map(f => ({ id: f.id, username: f.username, name: f.name, sort_order: f.sort_order, command_ids: new Set(f.command_ids || []) }));
+    ALL_USERS_FOLDERS = (data || []).map(f => ({ id: f.id, username: f.username, name: f.name, sort_order: f.sort_order, command_ids: new Set(f.command_ids || []), order: (f.command_ids || []).slice() }));
     if (typeof render === 'function' && GROUP_BY === 'user-folders') render();
   } catch (e) {
     console.warn('Não foi possível carregar as pastas de todos os usuários', e);
@@ -128,13 +134,32 @@ function toggleCommandInFolder(cmdId, folderId, itemEl) {
   if (!folder) return;
   const wasOn = folder.command_ids.has(cmdId);
   if (wasOn) folder.command_ids.delete(cmdId); else folder.command_ids.add(cmdId);
+  // Mantém folder.order (task #458, lista usada só pra RENDERIZAR na ordem
+  // certa — ver buildFolderSection em db-render-engine.js) sincronizado com
+  // o Set acima: remove do meio se saiu, ou entra no FIM se entrou (mesmo
+  // critério do backend — ver POST /api/folders/:id/commands/:commandId em
+  // server/index.js, que dá sort_order = MAX+1 pro novo membership).
+  if (!folder.order) folder.order = [...folder.command_ids];
+  if (wasOn) {
+    const idx = folder.order.indexOf(cmdId);
+    if (idx !== -1) folder.order.splice(idx, 1);
+  } else if (!folder.order.includes(cmdId)) {
+    folder.order.push(cmdId);
+  }
   // Mantém o snapshot cross-user (ALL_USERS_FOLDERS, ver Group by "User
   // folders") coerente com a própria pasta do usuário atual — sem isso, a
-  // seção dele em "User folders" ficaria com a contagem antiga até o
+  // seção dele em "User folders" ficaria com a contagem/ordem antiga até o
   // próximo reload (F5 ou re-escolher o Group by).
   const ownInAllUsers = ALL_USERS_FOLDERS.find(f => f.id === folderId);
   if (ownInAllUsers) {
     if (wasOn) ownInAllUsers.command_ids.delete(cmdId); else ownInAllUsers.command_ids.add(cmdId);
+    if (!ownInAllUsers.order) ownInAllUsers.order = [...ownInAllUsers.command_ids];
+    if (wasOn) {
+      const idx2 = ownInAllUsers.order.indexOf(cmdId);
+      if (idx2 !== -1) ownInAllUsers.order.splice(idx2, 1);
+    } else if (!ownInAllUsers.order.includes(cmdId)) {
+      ownInAllUsers.order.push(cmdId);
+    }
   }
 
   if (VIEW_FOLDERS_HOME || GROUP_BY === 'my-folders' || GROUP_BY === 'user-folders') {
@@ -211,13 +236,15 @@ async function promptCreateFolder(cmdIdToAddAfter) {
     }
     const folder = await res.json();
     const commandIds = new Set(folder.command_ids || []);
+    const order = (folder.command_ids || []).slice();
     if (cmdIdToAddAfter) {
       commandIds.add(cmdIdToAddAfter);
+      order.push(cmdIdToAddAfter);
       fetch(`/api/folders/${folder.id}/commands/${encodeURIComponent(cmdIdToAddAfter)}`, { method: 'POST' }).catch(e => {
         console.warn('Falha ao adicionar o comando à nova pasta no servidor (mantido localmente)', e);
       });
     }
-    FOLDERS.push({ id: folder.id, name: folder.name, sort_order: folder.sort_order, command_ids: commandIds });
+    FOLDERS.push({ id: folder.id, name: folder.name, sort_order: folder.sort_order, command_ids: commandIds, order });
     render(); // reconstrói os cards para o dropdown de pastas (e a seção da pasta, se estiver em Folders) já refletirem a pasta nova
   } catch (e) {
     alert('Failed to create folder. Please try again.');
@@ -256,6 +283,107 @@ function deleteFolderConfirm(id, name, ev) {
       console.warn('Falha ao excluir pasta no servidor (mantida localmente)', e);
     });
     render();
+  });
+}
+
+// ── Reordenar os comandos DENTRO de uma pasta (task #458) ──
+// Drag-to-reorder nos cards de uma seção de pasta — mesmo padrão de
+// _ceArmLineDrag em js/command-editor.js (linhas do editor de comandos):
+// `draggable` só é setado no mousedown do handle (⠿, ver
+// wrapCardsForFolderDrag em db-render-engine.js), não na row inteira, pra
+// não interferir com cliques nos botões/links dentro do card. Só existe
+// handle em pastas do PRÓPRIO usuário (withActions=true, ver
+// buildFolderSectionFromCards) — a pasta de outro usuário (Group by "User
+// folders") é só leitura, e o backend recusaria a requisição de qualquer
+// forma (PUT /api/folders/:id/reorder só aceita WHERE username = usuário
+// atual).
+function _fcArmDrag(handle) {
+  const row = handle.closest('.folder-card-row');
+  if (row) row.setAttribute('draggable', 'true');
+}
+document.addEventListener('mouseup', () => {
+  document.querySelectorAll('.folder-card-row[draggable="true"]').forEach(r => r.removeAttribute('draggable'));
+});
+let _fcDragRow = null;
+document.addEventListener('dragstart', ev => {
+  const row = ev.target.closest && ev.target.closest('.folder-card-row');
+  if (!row || !row.hasAttribute('draggable')) return;
+  _fcDragRow = row;
+  row.classList.add('dragging');
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('text/plain', ''); // exigido pelo Firefox para permitir o drag
+});
+document.addEventListener('dragover', ev => {
+  if (!_fcDragRow) return;
+  const overRow = ev.target.closest && ev.target.closest('.folder-card-row');
+  // Só reordena dentro da MESMA pasta (data-folder-id) — arrastar um card
+  // pra dentro da seção de outra pasta na mesma tela (ex.: um comando que
+  // está em duas pastas, cada uma com sua seção) não move nada entre elas.
+  if (!overRow || overRow === _fcDragRow || overRow.dataset.folderId !== _fcDragRow.dataset.folderId) return;
+  ev.preventDefault();
+  const rect = overRow.getBoundingClientRect();
+  const before = (ev.clientY - rect.top) < rect.height / 2;
+  overRow.parentElement.insertBefore(_fcDragRow, before ? overRow : overRow.nextSibling);
+});
+document.addEventListener('drop', ev => { if (_fcDragRow) ev.preventDefault(); });
+document.addEventListener('dragend', ev => {
+  const row = ev.target.closest && ev.target.closest('.folder-card-row');
+  if (row) {
+    row.classList.remove('dragging');
+    row.removeAttribute('draggable');
+    const folderId = Number(row.dataset.folderId);
+    const container = row.parentElement;
+    if (folderId && container) {
+      const orderedIds = [...container.querySelectorAll(`.folder-card-row[data-folder-id="${folderId}"]`)]
+        .map(r => { const card = r.querySelector('.card'); return card ? card.dataset.cmdId : null; })
+        .filter(Boolean);
+      if (orderedIds.length) reorderFolderCommands(folderId, orderedIds);
+    }
+  }
+  _fcDragRow = null;
+});
+// Persiste a nova ordem — otimista (atualiza FOLDERS/ALL_USERS_FOLDERS local
+// na hora; a UI já está com a ordem certa, já que veio de um reorder no
+// próprio DOM) + PUT em segundo plano. Não chama render() — reconstruir o
+// HTML aqui destruiria a própria row que acabou de ser soltada.
+function reorderFolderCommands(folderId, orderedIds) {
+  const folder = FOLDERS.find(f => f.id === folderId);
+  if (folder) folder.order = orderedIds.slice();
+  const ownInAllUsers = ALL_USERS_FOLDERS.find(f => f.id === folderId);
+  if (ownInAllUsers) ownInAllUsers.order = orderedIds.slice();
+  fetch(`/api/folders/${folderId}/reorder`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command_ids: orderedIds }),
+  }).catch(e => {
+    console.warn('Falha ao salvar a nova ordem da pasta no servidor (mantida localmente)', e);
+  });
+}
+
+// ── Copiar uma pasta de OUTRO usuário para a própria lista (task #459) ──
+// Só aparece no Group by "User folders" (ver render.js), na pasta de
+// alguém que não seja CURRENT_USER (ver buildFolderSectionFromCards:
+// `copyable` é passado como !isOwn). O backend (POST /api/folders/:id/copy)
+// cria uma pasta NOVA com os mesmos comandos/ordem — a pasta original de
+// quem copiamos não é alterada nem removida.
+function copyFolderFromUser(folderId, folderName, ev) {
+  if (ev) ev.stopPropagation();
+  openConfirmModal(`Copy folder "${folderName}" to your own Folders? This creates a new folder with the same commands — it won't affect the original.`).then(async ok => {
+    if (!ok) return;
+    try {
+      const res = await fetch(`/api/folders/${folderId}/copy`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(body.message || 'Failed to copy folder.');
+        return;
+      }
+      const folder = await res.json();
+      FOLDERS.push({
+        id: folder.id, name: folder.name, sort_order: folder.sort_order,
+        command_ids: new Set(folder.command_ids || []), order: (folder.command_ids || []).slice(),
+      });
+      render(); // a pasta nova precisa aparecer nos dropdowns de pasta de cada card, e em "Folders"/"My folders" se o usuário for lá depois
+    } catch (e) {
+      alert('Failed to copy folder. Please try again.');
+    }
   });
 }
 

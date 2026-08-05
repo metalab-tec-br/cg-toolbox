@@ -85,6 +85,24 @@ async function runMigrations() {
     // nunca expira), preservando o comportamento das keys criadas antes deste
     // campo existir.
     await pool.query(`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`);
+    // folder_commands.sort_order (task #458) — ordena os comandos DENTRO de
+    // uma pasta (ver comentário em schema.sql). DEFAULT 0 sozinho deixaria
+    // todo membership já existente empatado numa única posição — o UPDATE
+    // abaixo faz o backfill inicial usando a MESMA ordem que já era exibida
+    // antes desta feature existir (created_at, ou seja, a ordem em que cada
+    // comando foi adicionado à pasta), então nenhuma pasta muda de aparência
+    // ao aplicar esta migração; só passa a ser reordenável a partir daqui.
+    // row_number() é 1-based; window function particionada por pasta.
+    await pool.query(`ALTER TABLE folder_commands ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0`);
+    await pool.query(`
+      UPDATE folder_commands fc SET sort_order = ranked.rn
+      FROM (
+        SELECT folder_id, command_id,
+               row_number() OVER (PARTITION BY folder_id ORDER BY created_at, command_id) - 1 AS rn
+        FROM folder_commands
+      ) ranked
+      WHERE fc.folder_id = ranked.folder_id AND fc.command_id = ranked.command_id AND fc.sort_order = 0
+    `);
   } catch (err) {
     console.error('[db] Falha ao rodar migrações:', err.message);
   }

@@ -688,17 +688,24 @@ async function openCommandEditor(mode, id, ev) {
       alert('Failed to save the command. Please try again.');
       return;
     }
-    // Sem restrição de dono entre usuários comuns: qualquer um edita qualquer
-    // comando de qualquer outro. EXCEÇÃO: comandos de referência
-    // (created_by='System') só podem ser editados por admins — o botão Edit já
-    // fica escondido nesse caso (ver terminal-renderer.js), mas repetimos a
-    // checagem aqui como defesa em profundidade (ex.: chamada direta via
-    // console) antes de abrir o formulário de edição. O servidor também
-    // recusa com 403 (ver PUT /api/commands/:id em server/index.js) — esta
-    // checagem só evita abrir a tela para nada.
-    if (mode === 'edit' && row.is_system && !window.CG_IS_ADMIN) {
-      alert('Only admins can edit System commands. Use "Duplicate" to create your own editable copy.');
-      return;
+    // Um usuário comum só edita o PRÓPRIO comando (created_by ===
+    // CURRENT_USER); comandos de outro usuário ou de referência
+    // (created_by='System') só podem ser editados por admins — o botão Edit
+    // já fica escondido nesses casos (ver terminal-renderer.js), mas
+    // repetimos a checagem aqui como defesa em profundidade (ex.: chamada
+    // direta via console) antes de abrir o formulário de edição. O servidor
+    // também recusa com 403 (ver PUT /api/commands/:id em server/index.js) —
+    // esta checagem só evita abrir a tela para nada.
+    if (mode === 'edit' && !window.CG_IS_ADMIN) {
+      const isOwn = typeof CURRENT_USER !== 'undefined' && CURRENT_USER === row.created_by;
+      if (row.is_system) {
+        alert('Only admins can edit System commands. Use "Duplicate" to create your own editable copy.');
+        return;
+      }
+      if (!isOwn) {
+        alert('You can only edit your own commands. Use "Duplicate" to create your own editable copy.');
+        return;
+      }
     }
 
     // Edit/duplicate start with EVERY wizard step unlocked — the command

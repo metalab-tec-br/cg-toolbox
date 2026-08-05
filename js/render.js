@@ -222,12 +222,15 @@ async function render() {
   // porque "agrupar por pasta" e "agrupar por tópico" são visões alternativas
   // uma da outra, não aninhadas (a pedido do usuário).
   if (GROUP_BY === 'my-folders') {
-    const folderNameById = new Map((typeof FOLDERS !== 'undefined' ? FOLDERS : []).map(f => [f.id, f.name]));
+    const folderById = new Map((typeof FOLDERS !== 'undefined' ? FOLDERS : []).map(f => [f.id, f]));
     const folderIdsInUse = [...new Set(commands.flatMap(c => c.folder_ids || []))]
-      .filter(id => folderNameById.has(id))
-      .sort((a, b) => folderNameById.get(a).localeCompare(folderNameById.get(b), undefined, { sensitivity: 'base' }));
+      .filter(id => folderById.has(id))
+      .sort((a, b) => folderById.get(a).name.localeCompare(folderById.get(b).name, undefined, { sensitivity: 'base' }));
     const folderGroups = folderIdsInUse
-      .map(folderId => buildFolderSection(commands, folderId, folderNameById.get(folderId), values, hasIPs, `${kp}folder${folderId}`))
+      .map(folderId => {
+        const folder = folderById.get(folderId);
+        return buildFolderSection(commands, folderId, folder.name, values, hasIPs, `${kp}folder${folderId}`, folder.order);
+      })
       .join('');
     if (!folderGroups) return '';
     const comboHeader = combos.length > 1
@@ -267,8 +270,15 @@ async function render() {
       // "DOMÍNIO\usuario" (NTLM), mesmo cuidado do "Created by" acima.
       const userKey = username.replace(/[^a-zA-Z0-9_-]/g, '_');
       const folderSections = userFolders.map(f => {
-        const cards = commands.filter(c => f.command_ids.has(c.id)).map(r => buildCardHtmlForRow(r, values, hasIPs)).filter(Boolean);
-        return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}${userKey}__folder${f.id}`, isOwn);
+        const byId = new Map(commands.filter(c => f.command_ids.has(c.id)).map(c => [c.id, c]));
+        const orderedIds = (f.order && f.order.length)
+          ? f.order.filter(id => byId.has(id)).concat([...byId.keys()].filter(id => !f.order.includes(id)))
+          : [...byId.keys()];
+        const cards = orderedIds.map(id => buildCardHtmlForRow(byId.get(id), values, hasIPs)).filter(Boolean);
+        // withActions só pra pasta do próprio usuário (dá pra renomear/
+        // excluir/reordenar); copyable pra pasta de OUTRO usuário (só um
+        // botão de copiar — ver buildFolderSectionFromCards).
+        return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}${userKey}__folder${f.id}`, isOwn, !isOwn);
       }).join('');
       const cardCount = (folderSections.match(/<div class="card"/g) || []).length;
       if (!cardCount) return '';
