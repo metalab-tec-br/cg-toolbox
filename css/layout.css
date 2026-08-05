@@ -25,8 +25,12 @@
 .hdr-user {
   display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted);
   font-family: var(--sans); max-width: 160px;
+  background: none; border: none; padding: 4px 6px; border-radius: 6px; cursor: pointer;
+  transition: background .12s;
 }
-.hdr-user:empty, .hdr-user:has(#currentUserLabel:empty) { display: none; }
+.hdr-user:hover, .hdr-user-dd.open .hdr-user { background: var(--surf2); color: var(--text); }
+.hdr-user:has(#currentUserLabel:empty) { display: none; }
+.hdr-user-dd:has(.hdr-user:empty) { display: none; }
 .hdr-user-ico { opacity: .7; flex-shrink: 0; }
 #currentUserLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .theme-toggle {

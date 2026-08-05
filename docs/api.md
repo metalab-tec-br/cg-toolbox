@@ -8,21 +8,38 @@ de requisição em `POST`/`PUT` também devem ser JSON (`Content-Type: applicati
 ## Autenticação
 
 Toda a API usa uma identificação de "usuário atual" (`username`) para favoritos,
-auditoria (`created_by`/`modified_by`) e preferências — não existe login/senha próprio.
-Duas formas, nessa ordem de prioridade:
+auditoria (`created_by`/`modified_by`) e preferências. Três formas, nessa ordem de
+prioridade:
 
 1. **API key** (integrações externas, scripts) — header `X-API-Key: <key>`. Pula o NTLM
-   inteiramente. O usuário efetivo aparece como `api:<nome da key>` (ex.: `api:Zabbix`).
-   Chaves são criadas/revogadas em **Settings → System → API access** na própria
-   aplicação, ou via `/api/api-keys` (abaixo) — a key em texto puro só existe na
-   resposta do `POST`, nunca mais depois disso.
-2. **NTLM** (navegador) — login do Windows resolvido automaticamente pelo
+   e a sessão local inteiramente. O usuário efetivo aparece como `api:<nome da key>`
+   (ex.: `api:Zabbix`). Chaves são criadas/revogadas em **Settings → System → API
+   access** na própria aplicação, ou via `/api/api-keys` (abaixo) — a key em texto puro
+   só existe na resposta do `POST`, nunca mais depois disso. Uma API key sempre tem
+   acesso total (`role` efetivo `admin`), sem depender do sistema de usuários/roles
+   abaixo — é um canal de integração externa separado, já protegido pela posse da
+   própria key.
+2. **Sessão local** (cookie `cg_session`, `HttpOnly`) — login com usuário/senha via
+   `POST /api/auth/login` (ver **Login local e usuários** abaixo). Enquanto o cookie
+   for válido (12h), tem prioridade sobre a NTLM — é o que permite "sair" da
+   identificação automática do Windows e logar com outra credencial sem fechar o
+   navegador.
+3. **NTLM** (navegador) — login do Windows resolvido automaticamente pelo
    `express-ntlm`, sem prompt de senha (zona "Intranet local"). Se `NTLM_DISABLED=1`
    estiver definido no backend, cai no header `x-dev-user` (ou `?__user=` na query
    string), com fallback final para o usuário do sistema operacional do container.
 
-Não há autorização por papel/permissão além disso — qualquer chamada autenticada (por
-NTLM ou por qualquer API key válida) pode ler e escrever em qualquer endpoint abaixo.
+### Permissões (role)
+
+Todo `username` identificado (por NTLM ou sessão local) tem um `role` — `user` ou
+`admin` — guardado na tabela `users` e provisionado automaticamente (`role: "user"`) na
+primeira vez que é visto. `role: "admin"` é exigido para: excluir comando (`DELETE
+/api/commands/:id`), Backup & Restore (todos os endpoints `/api/backups*`), ver o audit
+log (`GET /api/audit-log`), gerenciar API keys (`/api/api-keys*`) e gerenciar usuários
+(`/api/users*`) — endpoints marcados **(admin)** abaixo. Toda outra operação (criar/
+editar comando, favoritos, preferências, catálogos) continua liberada para qualquer
+usuário identificado. Uma chamada sem `role: admin` para um endpoint **(admin)** recebe
+`403 { "error": "forbidden" }`.
 
 **Exemplo (curl, API key):**
 ```bash
@@ -39,7 +56,8 @@ Respostas de erro (4xx/5xx) sempre têm o formato:
 Códigos de `error` usados: `validation_error` (400), `not_found` (404), `conflict` (409),
 `in_use` (409 — item de catálogo em uso por comandos), `protected` (409 — tópico
 protegido), `structural_dependency` (409 — parâmetro estrutural, ver Parâmetros),
-`invalid_api_key` (401), `internal_error` (500). Alguns erros `in_use`/
+`invalid_api_key` (401), `invalid_credentials` (401 — login local), `forbidden` (403 —
+endpoint exige `role: admin`), `internal_error` (500). Alguns erros `in_use`/
 `structural_dependency` também trazem `"count": <n>`.
 
 ---
@@ -127,9 +145,9 @@ autenticado pode editar qualquer comando, inclusive os com `created_by: "System"
 `modified_by` é atualizado para o usuário atual. `404 not_found` / `400
 validation_error`.
 
-### `DELETE /api/commands/:id`
+### `DELETE /api/commands/:id` — **(admin)**
 Remove o comando e (via `ON DELETE CASCADE`) todas as suas linhas/tags/diffs/escopo/
-favoritos. `204` no sucesso, `404 not_found`.
+favoritos. `204` no sucesso, `404 not_found`, `403 forbidden` se o chamador não for admin.
 
 ### Formato do objeto **Command** (resposta)
 ```json
@@ -182,18 +200,72 @@ no **Command** já agregam todos os usuários — estes endpoints são só para 
 ---
 
 ## `GET /api/me`
-Identifica o chamador atual.
+Identifica o chamador atual, seu papel e como foi autenticado.
 ```json
-{ "username": "CG2000\\rsilva", "upn": "rsilva@empresa.com" }
+{
+  "username": "CG2000\\rsilva",
+  "upn": "rsilva@empresa.com",
+  "role": "admin",
+  "isAdmin": true,
+  "authMethod": "ntlm"
+}
 ```
 `upn` vem de uma consulta LDAP ao Active Directory (se `AD_DOMAIN_CONTROLLER`/
 `AD_BASE_DN` estiverem configurados no backend) — cai em `username` se não configurado
-ou indisponível. Para chamadas com API key, `username` é `api:<nome da key>` e `upn`
-espelha o mesmo valor (não há UPN de verdade para uma key).
+ou indisponível. `authMethod` é `"ntlm"` | `"local"` | `"api_key"`. Para chamadas com API
+key, `username` é `api:<nome da key>`, `upn` espelha o mesmo valor e `role`/`isAdmin`
+sempre vêm como admin (ver seção Permissões acima).
 
 ---
 
-## Log de auditoria (`GET /api/audit-log`)
+## Login local e usuários
+
+### `POST /api/auth/login`
+Loga com uma conta local (usuário/senha), substituindo a identificação NTLM nesta sessão
+do navegador. Corpo: `{ "username": "admin", "password": "admin" }`. Sucesso: `200`
+`{ "username": "admin", "role": "admin" }` + `Set-Cookie: cg_session=...` (`HttpOnly`,
+12h). Falha: `401 invalid_credentials` (usuário local inexistente, senha errada, ou
+conta desabilitada).
+
+### `POST /api/auth/logout`
+Encerra a sessão local ativa (limpa a linha em `sessions` e o cookie) — a identificação
+volta a ser resolvida por NTLM na próxima requisição. `204`, idempotente (funciona mesmo
+sem sessão ativa).
+
+### Usuário local padrão
+Toda instalação nova já vem com uma conta local `admin` / senha `admin`, role `admin`
+(semeada automaticamente por `server/db.js` assim que o schema é aplicado — ver
+`seedDefaultAdmin()`). **Troque essa senha assim que possível** (`PUT
+/api/users/admin`, veja abaixo, ou pela tela Settings → System → Users).
+
+### `GET /api/users` — **(admin)**
+Lista todo usuário já visto pela aplicação (contas locais e identificadas via NTLM).
+Nunca devolve `password_hash`.
+```json
+[{ "username": "admin", "role": "admin", "is_local": 1, "disabled": 0, "created_at": "...", "created_by": "system" },
+ { "username": "CG2000\\jsilva", "role": "user", "is_local": 0, "disabled": 0, "created_at": "...", "created_by": null }]
+```
+
+### `POST /api/users` — **(admin)**
+Cria uma conta **local** — corpo `{ "username", "password" (≥4 caracteres), "role"? }`
+(`role` é `"user"` por padrão) → `201`. `409 conflict` se o username já existir (inclusive
+se já existir como usuário NTLM — vira local a partir daqui).
+
+### `PUT /api/users/:username` — **(admin)**
+Corpo parcial — qualquer combinação de `{ "role": "admin"|"user", "disabled": bool,
+"password": "..." }`. `password` só é aceito para contas locais (`400
+validation_error` para conta NTLM). Recusa com `409 conflict` qualquer mudança que
+deixaria a aplicação **sem nenhum admin habilitado** (trava de segurança contra
+lockout).
+
+### `DELETE /api/users/:username` — **(admin)**
+Remove a linha de usuário (e suas sessões, via `ON DELETE CASCADE`). Um usuário NTLM
+excluído é recriado automaticamente (role `user`) na próxima vez que for identificado.
+Mesma trava contra remover o último admin habilitado (`409 conflict`).
+
+---
+
+## Log de auditoria (`GET /api/audit-log`) — **(admin)**
 Histórico de criação/edição/exclusão de comandos, últimos 30 dias (retenção automática),
 mais recente primeiro, limite de 1000 linhas.
 ```json
@@ -217,7 +289,7 @@ antes vivia só no `localStorage` do navegador).
 
 ---
 
-## API keys (`/api/api-keys`)
+## API keys (`/api/api-keys`) — **(admin)**
 Ver também a seção Autenticação acima e `api_keys` em `server/schema.sql`.
 
 - `GET /api/api-keys` → lista (sem o valor da key, só metadados):
@@ -305,7 +377,7 @@ etc.), administrados na aba Parâmetros da tela de catálogo.
 
 ---
 
-## Backup & Restore (`/api/backups`, `/api/backup-schedule`)
+## Backup & Restore (`/api/backups`, `/api/backup-schedule`) — **(admin)**
 Dumps do PostgreSQL via `pg_dump`/`pg_restore` (formato "custom"), guardados no volume
 `cg-toolbox-backups` do container backend.
 

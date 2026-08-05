@@ -14,6 +14,7 @@
 const path = require('path');
 const fs = require('fs');
 const { Pool } = require('pg');
+const { hashPassword } = require('./auth');
 
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 
@@ -56,12 +57,31 @@ async function initDb({ retries = 30, delayMs = 2000 } = {}) {
     try {
       await pool.query(schemaSql);
       console.log('[db] Conectado ao PostgreSQL e schema aplicado.');
+      await seedDefaultAdmin();
       return;
     } catch (err) {
       if (attempt === retries) throw err;
       console.warn(`[db] Falha ao conectar/aplicar schema (tentativa ${attempt}/${retries}): ${err.message} — tentando de novo em ${delayMs}ms...`);
       await new Promise(r => setTimeout(r, delayMs));
     }
+  }
+}
+
+// Garante que sempre existe pelo menos uma conta local com role='admin' —
+// sem isso, uma instalação nova ficaria sem ninguém que pudesse acessar
+// Manage users/Backup/Audit log/API keys. ON CONFLICT DO NOTHING: só roda na
+// primeira vez (se alguém já trocou a senha ou renomeou/rebaixou 'admin',
+// isto não mexe em nada depois).
+async function seedDefaultAdmin() {
+  try {
+    await pool.query(
+      `INSERT INTO users (username, password_hash, role, is_local, created_by)
+       VALUES ('admin', $1, 'admin', 1, 'system')
+       ON CONFLICT (username) DO NOTHING`,
+      [hashPassword('admin')]
+    );
+  } catch (err) {
+    console.error('[db] Falha ao semear usuário admin padrão:', err.message);
   }
 }
 

@@ -79,6 +79,7 @@ async function initUserSync() {
     const me = await meRes.json();
     CURRENT_USER = me.username;
     renderCurrentUserUI(me.upn || me.username);
+    if (typeof updateAccountUI === 'function') updateAccountUI(me);
   } catch (e) {
     console.warn('Não foi possível identificar o usuário atual', e);
     renderCurrentUserUI(null);

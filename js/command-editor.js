@@ -654,7 +654,10 @@ async function _cePopulateForm(id) {
 
   CMD_EDITOR_RESOLVER = row.placeholder_resolver || null;
   _ce('cmdEditorResolverWarning').classList.toggle('show', !!CMD_EDITOR_RESOLVER);
-  _ce('cmdEditorDeleteBtn').style.display = '';
+  // Excluir comando exige role='admin' (ver requireAdmin() no DELETE
+  // /api/commands/:id em server/index.js) — window.CG_IS_ADMIN é preenchido
+  // por updateAccountUI() em js/auth.js assim que /api/me responde.
+  _ce('cmdEditorDeleteBtn').style.display = window.CG_IS_ADMIN ? '' : 'none';
   _ce('cmdEditorDeleteBtn').dataset.name = row.name || id;
   return row;
 }

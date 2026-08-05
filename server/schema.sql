@@ -297,6 +297,47 @@ CREATE TABLE IF NOT EXISTS api_keys (
   revoked_at    TIMESTAMPTZ
 );
 
+-- ════════════════════════════════════════════════
+-- Usuários e permissões — todo `username` que a aplicação já viu (login do
+-- Windows via NTLM, ou conta local) tem uma linha aqui, com um `role`
+-- ('user' | 'admin'). Contas NTLM são provisionadas automaticamente na
+-- primeira vez que são vistas (is_local=0, role='user', sem password_hash —
+-- nunca fazem login por senha, só são "vistas" para poder ter um role
+-- atribuído). Contas locais (is_local=1) fazem login por usuário/senha (ver
+-- POST /api/auth/login em server/index.js) e são criadas/gerenciadas só por
+-- administradores em Settings → System → Manage users. A conta local
+-- 'admin'/'admin' é semeada automaticamente pelo backend (ver server/db.js)
+-- logo após este schema ser aplicado — TROQUE A SENHA em produção.
+--
+-- role='admin' é exigido para: excluir comandos, Backup & Restore, ver o
+-- audit log, gerenciar API keys e gerenciar usuários (ver requireAdmin() em
+-- server/index.js). Toda outra operação (criar/editar comando, favoritos,
+-- preferências) continua liberada para qualquer usuário identificado.
+-- ════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS users (
+  username      TEXT PRIMARY KEY,
+  password_hash TEXT,                          -- scrypt "salt:hash" (hex) — NULL para contas NTLM (is_local=0)
+  role          TEXT NOT NULL DEFAULT 'user',   -- 'user' | 'admin'
+  is_local      INTEGER NOT NULL DEFAULT 0,     -- 1 = conta local (login usuário/senha); 0 = identificada via Windows/NTLM
+  disabled      INTEGER NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by    TEXT
+);
+
+-- Sessões de login local — o cookie `cg_session` guarda só o token (chave
+-- primária desta tabela); nenhum dado sensível viaja no cookie em si. Uma
+-- sessão local tem prioridade sobre a identificação NTLM enquanto for válida
+-- (permite "logout" do usuário do Windows e login com outra credencial sem
+-- precisar fechar o navegador) — ver o middleware de sessão em
+-- server/index.js, logo depois do middleware de API key.
+CREATE TABLE IF NOT EXISTS sessions (
+  token      TEXT PRIMARY KEY,
+  username   TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
 CREATE INDEX IF NOT EXISTS idx_commands_topic ON commands(topic);
 CREATE INDEX IF NOT EXISTS idx_command_lines_command ON command_lines(command_id);
 CREATE INDEX IF NOT EXISTS idx_command_diffs_command ON command_diffs(command_id);

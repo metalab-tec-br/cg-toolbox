@@ -24,8 +24,20 @@
     <img class="hdr-logo-img for-light" src="img/logo-cg-toolbox-light.png?v=4" alt="CG Toolbox">
   </div>
   <div class="hdr-gap"></div>
-  <div class="hdr-user" id="hdrUser" title="Identified user (Windows login)">
-    <svg class="hdr-user-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18.5a6 6 0 0 1 11 0"/></svg><span id="currentUserLabel"></span>
+  <!-- Menu de conta — clicar no usuário identificado abre um dropdown com o
+       role atual e a opção de logar com uma credencial local diferente (ver
+       js/auth.js). "Log out" só aparece quando a sessão ativa é local (ver
+       hdrLogoutBtn) — sair de uma sessão local sempre volta a identificar
+       pelo login do Windows (NTLM), nunca deixa a aplicação sem usuário. -->
+  <div class="dd hdr-user-dd" id="hdrUserDD">
+    <button type="button" class="hdr-user" id="hdrUser" onclick="toggleDropdown('hdrUserDD')" title="Account">
+      <svg class="hdr-user-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18.5a6 6 0 0 1 11 0"/></svg><span id="currentUserLabel"></span>
+    </button>
+    <div class="dd-panel" id="hdrUserPanel" style="left:auto; right:0; min-width:210px;">
+      <div class="set-hint" id="hdrUserRoleLine" style="padding:4px 8px 8px;"></div>
+      <button type="button" class="seg-btn" id="hdrLogoutBtn" onclick="authLogout()" style="display:none;">Log out</button>
+      <button type="button" class="seg-btn" onclick="openLoginModal()">Log in as different user</button>
+    </div>
   </div>
   <button class="theme-toggle" id="settingsBtn" onclick="openSettingsModal()" title="Settings" style="display:inline-flex;align-items:center;justify-content:center;">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8a4 4 0 100 8 4 4 0 000-8z"/><path d="M19.4 13a7.97 7.97 0 000-2l2.1-1.6-2-3.4-2.5 1a8.1 8.1 0 00-1.7-1L14.9 3h-4l-.4 2.9a8.1 8.1 0 00-1.7 1l-2.5-1-2 3.4L6.6 11a7.97 7.97 0 000 2l-2.1 1.6 2 3.4 2.5-1c.5.4 1.1.8 1.7 1l.4 2.9h4l.4-2.9c.6-.2 1.2-.6 1.7-1l2.5 1 2-3.4L19.4 13z"/></svg>
@@ -569,7 +581,7 @@
             </button>
           </div>
         </div>
-        <div class="set-group">
+        <div class="set-group" id="sysGroupDatabase">
           <span class="set-label">Database</span>
           <div class="settings-action-row">
             <button type="button" class="btn btn-ghost" id="backupManagerBtn" onclick="openBackupManagerModal()">
@@ -586,7 +598,7 @@
              header X-API-Key (ver api_keys em server/schema.sql e o
              middleware de autenticação em server/index.js). A key em texto
              puro só aparece uma vez, na hora da criação — ver js/api-keys.js. -->
-        <div class="set-group">
+        <div class="set-group" id="sysGroupApiAccess">
           <span class="set-label">API access</span>
           <div class="settings-action-row">
             <button type="button" class="btn btn-ghost" onclick="openNewApiKeyPrompt()">
@@ -602,6 +614,28 @@
               <tbody id="apiKeyListTbody"></tbody>
             </table>
             <div class="audit-log-empty" id="apiKeyListEmpty" style="display:none;">No API keys yet — click "New API key" to create the first one.</div>
+          </div>
+        </div>
+        <!-- Manage users — role Admin/User por usuário (contas locais e
+             identificadas via Windows). Ver users em server/schema.sql e
+             js/users-admin.js. Só admin acessa (ver applyAdminGating() em
+             js/auth.js, chamada depois de /api/me responder). -->
+        <div class="set-group" id="sysGroupUsers">
+          <span class="set-label">Users</span>
+          <div class="settings-action-row">
+            <button type="button" class="btn btn-ghost" onclick="openNewUserPrompt()">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="5.5" r="2.8" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 14c0-2.6 2-4.2 4.5-4.2s4.5 1.6 4.5 4.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M12 5.5v4M10 7.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              <span>New local user</span>
+            </button>
+          </div>
+          <div class="audit-log-wrap" id="userListWrap">
+            <table class="audit-log-table">
+              <thead>
+                <tr><th>Username</th><th>Type</th><th>Role</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody id="userListTbody"></tbody>
+            </table>
+            <div class="audit-log-empty" id="userListEmpty" style="display:none;">No users yet.</div>
           </div>
         </div>
       </div><!-- /.settings-pane[system] -->
@@ -1184,6 +1218,89 @@
   </div>
 </div>
 
+<!-- ══ LOGIN LOCAL — login com uma conta local (usuário/senha), no lugar da
+     identificação automática por login do Windows (NTLM). Ver js/auth.js e
+     server/index.js: POST /api/auth/login. ══ -->
+<div class="modal-overlay" id="loginOverlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title">Log in</span>
+      <button class="modal-close" onclick="closeLoginModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <span class="set-hint">Log in with a local account instead of your Windows-identified user. This only affects this browser session — logging out reverts to your Windows login.</span>
+      <div class="set-group" style="margin-top:10px;">
+        <span class="set-label">Username</span>
+        <input class="set-input" type="text" id="loginUsernameInput" autocomplete="username" placeholder="e.g. admin">
+      </div>
+      <div class="set-group">
+        <span class="set-label">Password</span>
+        <input class="set-input" type="password" id="loginPasswordInput" autocomplete="current-password">
+      </div>
+      <div class="set-hint" id="loginErrorMsg" style="color:var(--red); display:none;"></div>
+    </div>
+    <div class="modal-foot" style="justify-content:flex-end;">
+      <button class="btn" onclick="closeLoginModal()">Cancel</button>
+      <button class="btn btn-primary" id="loginSubmitBtn" onclick="submitLogin()">Log in</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ NOVO USUÁRIO LOCAL — Settings → System → Users (ver js/users-admin.js
+     e server/index.js: POST /api/users). ══ -->
+<div class="modal-overlay" id="newUserOverlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title">New local user</span>
+      <button class="modal-close" onclick="closeNewUserPrompt()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="set-group">
+        <span class="set-label">Username</span>
+        <input class="set-input" type="text" id="newUserUsernameInput" autocomplete="off" placeholder="e.g. jsilva" maxlength="120">
+      </div>
+      <div class="set-group">
+        <span class="set-label">Password</span>
+        <input class="set-input" type="password" id="newUserPasswordInput" autocomplete="new-password">
+      </div>
+      <div class="set-group">
+        <span class="set-label">Role</span>
+        <select class="set-input" id="newUserRoleSelect">
+          <option value="user" selected>User</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="set-hint" id="newUserErrorMsg" style="color:var(--red); display:none;"></div>
+    </div>
+    <div class="modal-foot" style="justify-content:flex-end;">
+      <button class="btn" onclick="closeNewUserPrompt()">Cancel</button>
+      <button class="btn btn-primary" id="newUserSubmitBtn" onclick="submitNewUser()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ REDEFINIR SENHA — só para usuários locais (ver js/users-admin.js e
+     server/index.js: PUT /api/users/:username). ══ -->
+<div class="modal-overlay" id="resetPasswordOverlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title" id="resetPasswordTitle">Reset password</span>
+      <button class="modal-close" onclick="closeResetPasswordPrompt()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="set-group">
+        <span class="set-label">New password</span>
+        <input class="set-input" type="password" id="resetPasswordInput" autocomplete="new-password">
+      </div>
+      <div class="set-hint" id="resetPasswordErrorMsg" style="color:var(--red); display:none;"></div>
+    </div>
+    <div class="modal-foot" style="justify-content:flex-end;">
+      <button class="btn" onclick="closeResetPasswordPrompt()">Cancel</button>
+      <button class="btn btn-primary" id="resetPasswordSubmitBtn" onclick="submitResetPassword()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ SELETOR DE COLUNAS — exibido ao clicar em "Exportar comandos", antes de gerar o
      .csv (js/csv-export.js: openExportColumnsModal/confirmExportColumns). ══ -->
 <div class="modal-overlay" id="exportColumnsOverlay">
@@ -1293,5 +1410,7 @@
 <script src="js/audit-log.js"></script>
 <script src="js/backup.js"></script>
 <script src="js/api-keys.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/users-admin.js"></script>
 </body>
 </html>

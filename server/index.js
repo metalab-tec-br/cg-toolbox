@@ -27,6 +27,7 @@ const crypto = require('crypto');
 const { execFile } = require('child_process');
 const express = require('express');
 const { pool, initDb, withTransaction, getConnectionString } = require('./db');
+const { hashPassword, verifyPassword, generateSessionToken } = require('./auth');
 
 const app = express();
 
@@ -76,8 +77,61 @@ app.use(async (req, res, next) => {
 });
 
 // ════════════════════════════════════════════════
+// Login local (usuário/senha) — sessão via cookie `cg_session`, ver users/
+// sessions em schema.sql e server/auth.js. Verificado ANTES do NTLM, com a
+// MESMA prioridade que API key (se já autenticado, pula o handshake NTLM
+// inteiramente) — isso é o que permite "logout" do usuário identificado pelo
+// Windows e login com outra credencial, sem fechar o navegador: enquanto o
+// cookie de sessão local for válido, ele manda, independente do que o NTLM
+// diria sobre quem está logado no Windows.
+// ════════════════════════════════════════════════
+const SESSION_COOKIE_NAME = 'cg_session';
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h
+
+function parseCookies(req) {
+  const header = req.headers.cookie;
+  const out = {};
+  if (!header) return out;
+  header.split(';').forEach(pair => {
+    const idx = pair.indexOf('=');
+    if (idx === -1) return;
+    out[pair.slice(0, idx).trim()] = decodeURIComponent(pair.slice(idx + 1).trim());
+  });
+  return out;
+}
+function setSessionCookie(res, token) {
+  const maxAgeSec = Math.floor(SESSION_TTL_MS / 1000);
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSec}`);
+}
+function clearSessionCookie(res) {
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+}
+
+app.use(async (req, res, next) => {
+  if (req.currentUser) return next(); // já autenticado por API key acima
+  const token = parseCookies(req)[SESSION_COOKIE_NAME];
+  if (!token) return next();
+  try {
+    const { rows } = await pool.query(
+      `SELECT s.username, u.role, u.disabled FROM sessions s
+       JOIN users u ON u.username = s.username
+       WHERE s.token = $1 AND s.expires_at > NOW()`,
+      [token]
+    );
+    if (rows.length && !rows[0].disabled) {
+      req.currentUser = rows[0].username;
+      req.userRole = rows[0].role;
+      req.authMethod = 'local';
+    }
+  } catch (err) {
+    console.error('Session lookup failed:', err);
+  }
+  next();
+});
+
+// ════════════════════════════════════════════════
 // NTLM (identificação do login do Windows, navegador) — pulado inteiramente
-// quando a chamada já veio autenticada por API key (middleware acima).
+// quando a chamada já veio autenticada por API key OU sessão local (acima).
 // Definir NTLM_DISABLED=1 desliga isso (útil para desenvolvimento fora de um
 // domínio Windows) — nesse caso aceita um header/query de teste ou cai para
 // o usuário do sistema operacional rodando o processo Node.
@@ -93,7 +147,7 @@ if (!NTLM_DISABLED) {
     // preferências), não uma barreira de segurança.
   });
   app.use((req, res, next) => {
-    if (req.currentUser) return next(); // já autenticado por API key acima
+    if (req.currentUser) return next(); // já autenticado por API key ou sessão local acima
     return ntlmMiddleware(req, res, next);
   });
 }
@@ -134,6 +188,92 @@ function getCurrentSamAccountName(req) {
   if (devUser) return String(devUser).split('\\').pop();
   try { return os.userInfo().username; } catch (e) { return 'guest'; }
 }
+
+// ════════════════════════════════════════════════
+// Permissões (users.role) — ver users/sessions em schema.sql. Contas NTLM
+// são provisionadas na primeira vez que são VISTAS (não no login, já que não
+// existe "login" NTLM de verdade) — sempre com role='user'; só um admin pode
+// promover alguém depois (Settings → System → Manage users). API keys
+// continuam com acesso total (bypass deste gate) — são um canal de
+// integração externa separado, já protegido pela posse da própria key, sem
+// mudança de comportamento em relação ao que já existia antes deste recurso.
+// ════════════════════════════════════════════════
+async function getOrCreateUserRole(username) {
+  const { rows } = await pool.query('SELECT role, disabled FROM users WHERE username = $1', [username]);
+  if (rows.length) return rows[0].disabled ? null : rows[0].role;
+  await pool.query(
+    'INSERT INTO users (username, role, is_local) VALUES ($1, $2, 0) ON CONFLICT (username) DO NOTHING',
+    [username, 'user']
+  );
+  return 'user';
+}
+
+async function getCurrentRole(req) {
+  if (req.apiKey) return 'admin';
+  if (req.userRole) return req.userRole; // já resolvido pelo middleware de sessão local
+  return getOrCreateUserRole(getCurrentUsername(req));
+}
+
+async function requireAdmin(req, res, next) {
+  try {
+    const role = await getCurrentRole(req);
+    if (role !== 'admin') return res.status(403).json({ error: 'forbidden', message: 'Admin role required for this action' });
+    next();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+}
+
+// Impede que uma ação deixe a aplicação sem NENHUM admin habilitado (evita
+// lockout total — sem um admin, ninguém mais consegue acessar Manage users
+// para corrigir isso). `excludeUsername` é o usuário sendo rebaixado/
+// desabilitado/excluído — não conta ele mesmo na checagem.
+async function countEnabledAdmins(excludeUsername) {
+  const sql = "SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND disabled = 0" + (excludeUsername ? ' AND username != $1' : '');
+  const { rows } = await pool.query(sql, excludeUsername ? [excludeUsername] : []);
+  return Number(rows[0].n);
+}
+
+// ════════════════════════════════════════════════
+// Login/logout local (usuário/senha) — ver seção de cookie/sessão acima.
+// Qualquer usuário identificado (por Windows/NTLM ou já em sessão local)
+// pode fazer login com uma conta local diferente a qualquer momento — isso
+// simplesmente troca qual sessão está ativa nesta aba/navegador.
+// ════════════════════════════════════════════════
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ error: 'validation_error', message: '"username" and "password" are required' });
+  }
+  try {
+    const { rows } = await pool.query('SELECT * FROM users WHERE username = $1 AND is_local = 1', [String(username).trim()]);
+    const user = rows[0];
+    if (!user || user.disabled || !verifyPassword(password, user.password_hash)) {
+      return res.status(401).json({ error: 'invalid_credentials', message: 'Invalid username or password' });
+    }
+    const token = generateSessionToken();
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+    await pool.query('INSERT INTO sessions (token, username, expires_at) VALUES ($1, $2, $3)', [token, user.username, expiresAt]);
+    setSessionCookie(res, token);
+    res.json({ username: user.username, role: user.role });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+app.post('/api/auth/logout', async (req, res) => {
+  try {
+    const token = parseCookies(req)[SESSION_COOKIE_NAME];
+    if (token) await pool.query('DELETE FROM sessions WHERE token = $1', [token]);
+    clearSessionCookie(res);
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
 
 // ════════════════════════════════════════════════
 // UPN (User Principal Name, ex.: rsilva@empresa.com) via Active Directory
@@ -359,7 +499,15 @@ app.get('/api/me', async (req, res) => {
   const username = getCurrentUsername(req);
   let upn = null;
   try { upn = await lookupUpnFromAD(getCurrentSamAccountName(req)); } catch (e) { /* já logado em lookupUpnFromAD */ }
-  res.json({ username, upn: upn || username });
+  let role = 'admin';
+  try { role = await getCurrentRole(req); } catch (e) { console.error('getCurrentRole failed:', e); }
+  res.json({
+    username,
+    upn: upn || username,
+    role,
+    isAdmin: role === 'admin',
+    authMethod: req.apiKey ? 'api_key' : (req.authMethod === 'local' ? 'local' : 'ntlm'),
+  });
 });
 
 // ════════════════════════════════════════════════
@@ -406,7 +554,7 @@ app.delete('/api/favorites/:commandId', async (req, res) => {
 // GET /api/audit-log — lista as alterações de comando (criar/editar/excluir)
 // dos últimos 30 dias, mais recente primeiro. Teto de 1000 linhas.
 // ════════════════════════════════════════════════
-app.get('/api/audit-log', async (req, res) => {
+app.get('/api/audit-log', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, ts, username, action, command_id, command_name
@@ -515,7 +663,7 @@ app.put('/api/global-settings', async (req, res) => {
 // existe na resposta do POST — depois disso só o hash (SHA-256) fica
 // guardado; perder a key mostrada significa revogar e criar uma nova.
 // ════════════════════════════════════════════════
-app.get('/api/api-keys', async (req, res) => {
+app.get('/api/api-keys', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, name, key_prefix, created_by, created_at, last_used_at, revoked_at
@@ -528,7 +676,7 @@ app.get('/api/api-keys', async (req, res) => {
   }
 });
 
-app.post('/api/api-keys', async (req, res) => {
+app.post('/api/api-keys', requireAdmin, async (req, res) => {
   const { name } = req.body || {};
   if (!name || typeof name !== 'string' || !name.trim()) {
     return res.status(400).json({ error: 'validation_error', message: '"name" is required' });
@@ -551,13 +699,115 @@ app.post('/api/api-keys', async (req, res) => {
   }
 });
 
-app.delete('/api/api-keys/:id', async (req, res) => {
+app.delete('/api/api-keys/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'validation_error', message: 'Invalid id' });
   try {
     const { rows } = await pool.query('SELECT id FROM api_keys WHERE id = $1', [id]);
     if (!rows.length) return res.status(404).json({ error: 'not_found', message: `API key '${id}' not found` });
     await pool.query('UPDATE api_keys SET revoked_at = NOW() WHERE id = $1 AND revoked_at IS NULL', [id]);
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// ════════════════════════════════════════════════
+// Usuários e permissões (Settings → System → Manage users) — ver users em
+// schema.sql. Só admin acessa (requireAdmin abaixo). Contas NTLM aparecem
+// aqui assim que forem vistas pela primeira vez (getOrCreateUserRole) — um
+// admin pode promovê-las, mas não pode dar/trocar senha nelas (só contas
+// locais, is_local=1, têm senha). Nunca devolve password_hash.
+// ════════════════════════════════════════════════
+const USERS_PUBLIC_COLUMNS = 'username, role, is_local, disabled, created_at, created_by';
+
+app.get('/api/users', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT ${USERS_PUBLIC_COLUMNS} FROM users ORDER BY is_local DESC, username`);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+app.post('/api/users', requireAdmin, async (req, res) => {
+  const { username, password, role } = req.body || {};
+  if (!username || typeof username !== 'string' || !username.trim()) {
+    return res.status(400).json({ error: 'validation_error', message: '"username" is required' });
+  }
+  if (!password || typeof password !== 'string' || password.length < 4) {
+    return res.status(400).json({ error: 'validation_error', message: '"password" must be at least 4 characters' });
+  }
+  const roleVal = role === 'admin' ? 'admin' : 'user';
+  try {
+    const trimmed = username.trim();
+    const { rows: existing } = await pool.query('SELECT username FROM users WHERE username = $1', [trimmed]);
+    if (existing.length) return res.status(409).json({ error: 'conflict', message: `User '${trimmed}' already exists` });
+    await pool.query(
+      'INSERT INTO users (username, password_hash, role, is_local, created_by) VALUES ($1, $2, $3, 1, $4)',
+      [trimmed, hashPassword(password), roleVal, getCurrentUsername(req)]
+    );
+    const { rows } = await pool.query(`SELECT ${USERS_PUBLIC_COLUMNS} FROM users WHERE username = $1`, [trimmed]);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+app.put('/api/users/:username', requireAdmin, async (req, res) => {
+  const username = req.params.username;
+  try {
+    const { rows: existingRows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    const existing = existingRows[0];
+    if (!existing) return res.status(404).json({ error: 'not_found', message: `User '${username}' not found` });
+
+    const newRole = req.body.role != null ? (req.body.role === 'admin' ? 'admin' : 'user') : existing.role;
+    const newDisabled = req.body.disabled != null ? !!req.body.disabled : !!existing.disabled;
+
+    // Guarda contra lockout total: se esta mudança tiraria o role admin ou
+    // desabilitaria a última conta admin habilitada, recusa.
+    const wasEnabledAdmin = existing.role === 'admin' && !existing.disabled;
+    const willStillBeEnabledAdmin = newRole === 'admin' && !newDisabled;
+    if (wasEnabledAdmin && !willStillBeEnabledAdmin) {
+      const remaining = await countEnabledAdmins(username);
+      if (remaining < 1) return res.status(409).json({ error: 'conflict', message: 'At least one enabled admin must remain' });
+    }
+
+    let passwordHash = existing.password_hash;
+    if (req.body.password) {
+      if (!existing.is_local) return res.status(400).json({ error: 'validation_error', message: 'Only local users have a password' });
+      if (typeof req.body.password !== 'string' || req.body.password.length < 4) {
+        return res.status(400).json({ error: 'validation_error', message: '"password" must be at least 4 characters' });
+      }
+      passwordHash = hashPassword(req.body.password);
+    }
+
+    await pool.query(
+      'UPDATE users SET role = $1, disabled = $2, password_hash = $3 WHERE username = $4',
+      [newRole, newDisabled ? 1 : 0, passwordHash, username]
+    );
+    const { rows } = await pool.query(`SELECT ${USERS_PUBLIC_COLUMNS} FROM users WHERE username = $1`, [username]);
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+app.delete('/api/users/:username', requireAdmin, async (req, res) => {
+  const username = req.params.username;
+  try {
+    const { rows: existingRows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    const existing = existingRows[0];
+    if (!existing) return res.status(404).json({ error: 'not_found', message: `User '${username}' not found` });
+    if (existing.role === 'admin' && !existing.disabled) {
+      const remaining = await countEnabledAdmins(username);
+      if (remaining < 1) return res.status(409).json({ error: 'conflict', message: 'At least one enabled admin must remain' });
+    }
+    await pool.query('DELETE FROM users WHERE username = $1', [username]); // cascades sessions (ON DELETE CASCADE)
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -803,12 +1053,12 @@ app.put('/api/commands/:id', async (req, res) => {
 // ════════════════════════════════════════════════
 // DELETE /api/commands/:id
 // ════════════════════════════════════════════════
-app.delete('/api/commands/:id', async (req, res) => {
+app.delete('/api/commands/:id', requireAdmin, async (req, res) => {
   const id = req.params.id;
   try {
     const found = await findCommand(id);
     if (!found) return res.status(404).json({ error: 'not_found', message: `Command '${id}' not found` });
-    // Sem restrição de dono (mesma decisão do PUT acima).
+    // Sem restrição de dono (mesma decisão do PUT acima) — mas exige role='admin' (requireAdmin acima).
     const currentUser = getCurrentUsername(req);
     // command_id em user_favorites tem FK ON DELETE CASCADE (ver schema.sql)
     // — apagar o comando já limpa os favoritos sozinho.
@@ -1372,7 +1622,7 @@ async function writeGlobalSetting(key, value) {
   );
 }
 
-app.get('/api/backups', (req, res) => {
+app.get('/api/backups', requireAdmin, (req, res) => {
   try {
     res.json(listBackupFiles());
   } catch (err) {
@@ -1381,7 +1631,7 @@ app.get('/api/backups', (req, res) => {
   }
 });
 
-app.post('/api/backups', async (req, res) => {
+app.post('/api/backups', requireAdmin, async (req, res) => {
   try {
     const filename = await performBackup('backup');
     res.status(201).json({ filename });
@@ -1391,13 +1641,13 @@ app.post('/api/backups', async (req, res) => {
   }
 });
 
-app.get('/api/backups/:filename/download', (req, res) => {
+app.get('/api/backups/:filename/download', requireAdmin, (req, res) => {
   const full = resolveBackupPath(req.params.filename);
   if (!full) return res.status(404).json({ error: 'not_found' });
   res.download(full, req.params.filename);
 });
 
-app.delete('/api/backups/:filename', (req, res) => {
+app.delete('/api/backups/:filename', requireAdmin, (req, res) => {
   const full = resolveBackupPath(req.params.filename);
   if (!full) return res.status(404).json({ error: 'not_found' });
   try {
@@ -1411,7 +1661,7 @@ app.delete('/api/backups/:filename', (req, res) => {
 
 // Restaura um backup existente. Por segurança, tira uma foto do banco ATUAL
 // antes de sobrescrever (prefixo "pre-restore-"), para permitir desfazer.
-app.post('/api/backups/:filename/restore', async (req, res) => {
+app.post('/api/backups/:filename/restore', requireAdmin, async (req, res) => {
   const full = resolveBackupPath(req.params.filename);
   if (!full) return res.status(404).json({ error: 'not_found' });
   try {
@@ -1424,7 +1674,7 @@ app.post('/api/backups/:filename/restore', async (req, res) => {
   }
 });
 
-app.get('/api/backup-schedule', async (req, res) => {
+app.get('/api/backup-schedule', requireAdmin, async (req, res) => {
   try {
     res.json({
       enabled: (await readGlobalSetting('backupScheduleEnabled', '0')) === '1',
@@ -1439,7 +1689,7 @@ app.get('/api/backup-schedule', async (req, res) => {
   }
 });
 
-app.put('/api/backup-schedule', async (req, res) => {
+app.put('/api/backup-schedule', requireAdmin, async (req, res) => {
   try {
     const body = req.body || {};
     const frequency = ['daily', 'weekly', 'monthly'].includes(body.frequency) ? body.frequency : 'daily';
