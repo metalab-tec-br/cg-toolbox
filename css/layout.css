@@ -19,9 +19,14 @@
 [data-theme="light"] .hdr-logo-img.for-dark { display: none; }
 [data-theme="light"] .hdr-logo-img.for-light { display: block; }
 .hdr-gap { flex: 1; }
-/* Usuário identificado (login do Windows, via NTLM no servidor) — mostrado à
-   esquerda do botão de Configurações. Vazio (sem preencher) até /api/me responder;
-   fica oculto nesse meio-tempo para não mostrar um espaço vazio piscando. */
+/* Usuário identificado (login do Windows via NTLM, ou sessão local — ver
+   js/auth.js) — mostrado à esquerda do botão de Configurações. É também o
+   botão que abre o menu de conta (login local/logout), então NUNCA fica
+   oculto (mesmo com o nome ainda vazio, antes de /api/me responder, ou se
+   /api/me falhar) — esconder o botão deixaria o usuário sem nenhuma forma de
+   acessar o login. Antes desse botão existir (era só um rótulo passivo),
+   este elemento realmente ficava oculto quando vazio — não faz mais sentido
+   agora que é interativo. */
 .hdr-user {
   display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted);
   font-family: var(--sans); max-width: 160px;
@@ -29,8 +34,6 @@
   transition: background .12s;
 }
 .hdr-user:hover, .hdr-user-dd.open .hdr-user { background: var(--surf2); color: var(--text); }
-.hdr-user:has(#currentUserLabel:empty) { display: none; }
-.hdr-user-dd:has(.hdr-user:empty) { display: none; }
 .hdr-user-ico { opacity: .7; flex-shrink: 0; }
 #currentUserLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .theme-toggle {
