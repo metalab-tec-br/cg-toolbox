@@ -805,39 +805,21 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .note-delete-btn:hover { border-color: var(--red); color: var(--red); }
 
 /* ─── NOTES (título + descrição livre dentro de uma pasta) ─── */
-/* Aparência de post-it (pedido do usuário: "as cores no estilo postit, um
-   amarelo clarinho na descrição, e um amarelo pouquinho mais escuro no
-   título") — sobrescreve o fundo cinza padrão de .card/.card-head (ver
-   acima) só quando é uma NOTA (seletor por data-note-id, ver
-   buildNoteCardHtml em js/db-render-engine.js); cards de comando não são
-   afetados. --postit-* (theme.css) são cores fixas, iguais nos temas claro/
-   escuro, porque um post-it é reconhecido pela cor amarela em si. */
-.card[data-note-id] {
-  background: var(--postit-bg); border-color: var(--postit-border);
-}
-.card[data-note-id] .card-head {
-  background: var(--postit-head-bg); border-bottom-color: var(--postit-border);
-}
-.card[data-note-id] .card-name { color: var(--postit-text); }
+/* Fundo do card/card-head da nota volta a ser o mesmo cinza/branco padrão
+   de .card/.card-head (pedido do usuário: "deixe a anotação com o fundo
+   branco igual do comando") — a versão anterior pintava o card inteiro de
+   amarelo (post-it); agora só o badge "NOTE" abaixo carrega a cor, como
+   único identificador visual de que é uma nota (mesmo peso de qualquer
+   outra badge/tag do app). --postit-* (theme.css) seguem existindo só
+   para esse badge. */
 /* "Note" na frente do título — único jeito de diferenciar visualmente de um
    card de comando dentro da mesma seção de pasta (mesma aparência de
-   .card/.card-head/.card-actions, ver card() em terminal-renderer.js). Antes
-   usava a cor de destaque (--teal); agora acompanha a paleta do post-it. */
+   .card/.card-head/.card-actions, ver card() em terminal-renderer.js). */
 .note-badge {
   font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px;
   color: var(--postit-text); background: rgba(138,109,30,.12); border-radius: 3px;
   padding: 1px 5px; margin-right: 4px; vertical-align: middle;
 }
-/* Botões de ação da nota (clonar/editar/excluir) — mesmo componente
-   .edit-btn dos comandos, mas o fundo/borda neutros (var(--surf)/var(--bdr))
-   destoavam em cima do amarelo do post-it; aqui usam um tom translúcido da
-   própria cor de texto do post-it. Excluir mantém o destaque vermelho no
-   hover (ação destrutiva), só o fundo/borda de repouso mudam. */
-.card[data-note-id] .edit-btn {
-  background: rgba(138,109,30,.06); border-color: var(--postit-border); color: var(--postit-text);
-}
-.card[data-note-id] .edit-btn:hover { background: rgba(138,109,30,.16); border-color: var(--postit-text); color: var(--postit-text); }
-.card[data-note-id] .note-delete-btn:hover { background: var(--red-bg); border-color: var(--red); color: var(--red); }
 /* Corpo da nota — HTML livre (sanitizado no servidor, ver sanitizeNoteHtml
    em server/index.js), pode ter texto formatado + imagens coladas. Imagens
    sempre limitadas à largura do card (max-width:100%) mesmo que o atributo
@@ -845,11 +827,9 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    _neArmImageResize em js/folders.js) seja maior que o card — evita
    overflow horizontal em telas estreitas. */
 .note-body { padding: 10px 12px; font-size: 12px; color: var(--text); line-height: 1.5; word-wrap: break-word; }
-.card[data-note-id] .note-body { color: var(--postit-text); }
 .note-body img { max-width: 100%; height: auto; border-radius: 4px; margin: 4px 0; display: block; }
 .note-body p, .note-body div { margin: 0 0 4px; }
 .note-body:empty::before { content: '(empty note)'; color: var(--muted); font-style: italic; }
-.card[data-note-id] .note-body:empty::before { color: var(--postit-text); opacity: .65; }
 
 /* Editor de nota (#noteBodyEditor, ver openNoteEditor()/js/folders.js) — um
    <div contenteditable> em vez de <textarea> pra suportar <img> coladas
