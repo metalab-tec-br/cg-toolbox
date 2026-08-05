@@ -40,8 +40,10 @@ function updateAccountUI(me) {
 // API já recusa essas chamadas com 403 de qualquer forma (ver requireAdmin()
 // em server/index.js), isto é só para não mostrar controles que vão falhar.
 // "Export/Import commands" fica de fora de propósito — não é admin-only (ver
-// escopo do pedido original).
-const ADMIN_ONLY_SETTINGS_GROUP_IDS = ['sysGroupDatabase', 'sysGroupApiAccess', 'usersNavBtn'];
+// escopo do pedido original). Exceção dentro do próprio Import: o checkbox
+// "Import as System commands" (importAsSystemRow) — ver js/csv-import.js —
+// que aparece só para admins.
+const ADMIN_ONLY_SETTINGS_GROUP_IDS = ['sysGroupDatabase', 'sysGroupApiAccess', 'usersNavBtn', 'importAsSystemRow'];
 function applyAdminGating() {
   ADMIN_ONLY_SETTINGS_GROUP_IDS.forEach(id => {
     const el = document.getElementById(id);

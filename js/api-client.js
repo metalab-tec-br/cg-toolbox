@@ -28,14 +28,18 @@ async function fetchCommands() {
 }
 
 // Cria um comando novo (inclusive via "Duplicate command", que também passa
-// por aqui — ver js/command-editor.js). Sempre atribuído ao usuário atual
-// (created_by, ver server/index.js) — não existe mais opção de gravar como
-// 'System' por esta API (gesto Ctrl+Alt/Admin mode removido).
-async function createCommand(payload) {
+// por aqui — ver js/command-editor.js). Atribuído ao usuário atual
+// (created_by, ver server/index.js) por padrão. `asSystem` (opcional) manda o
+// header X-Save-As-System — só é honrado pelo servidor se o chamador for
+// admin (ver POST /api/commands em server/index.js); usado hoje só pelo
+// checkbox admin-only "Import as System commands" em js/csv-import.js.
+async function createCommand(payload, asSystem) {
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (asSystem) headers['X-Save-As-System'] = '1';
     const res = await fetch('/api/commands', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
@@ -48,10 +52,12 @@ async function createCommand(payload) {
   }
 }
 
-// Edita um comando existente. Qualquer usuário pode editar qualquer comando,
-// inclusive os de referência (created_by='System') — não há mais checagem de
-// dono no servidor (ver PUT /api/commands/:id em server/index.js). Cada
-// alteração é registrada no log de auditoria (audit_log, GET /api/audit-log).
+// Edita um comando existente. Qualquer usuário pode editar comandos de
+// qualquer OUTRO usuário, mas comandos de referência (created_by='System')
+// só podem ser editados por admins — usuário comum recebe 403 forbidden
+// (ver PUT /api/commands/:id em server/index.js; a UI já esconde o botão
+// Edit nesse caso, ver js/terminal-renderer.js). Cada alteração é registrada
+// no log de auditoria (audit_log, GET /api/audit-log).
 async function updateCommand(id, payload) {
   try {
     const res = await fetch(`/api/commands/${encodeURIComponent(id)}`, {

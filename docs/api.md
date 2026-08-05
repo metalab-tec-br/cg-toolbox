@@ -132,7 +132,12 @@ comando pertence a um único vendor), **`systems`** (≥1), **`versions`** (≥1
 **`environments`** (≥1), **`topics`** (≥1 — ou o campo legado `topic`, string única).
 
 `created_by`/`modified_by` são preenchidos automaticamente com o usuário atual —
-não são aceitos no corpo.
+não são aceitos no corpo. **Exceção**: se o header `X-Save-As-System: 1` for enviado
+E o chamador for admin (checado no servidor via role efetiva, não confia no header
+sozinho), o comando é gravado como `created_by`/`modified_by = "System"` em vez do
+usuário atual — usado hoje só pelo checkbox admin-only "Import as System commands"
+no import de CSV. O header é ignorado silenciosamente (sem erro) para não-admins;
+o comando é criado normalmente como próprio do usuário.
 
 **Guarda importante**: `requires_ips`/`requires_ip_port` só são persistidos como `true`
 se `lines` contiver pelo menos uma linha com `"variant": "empty"` e `content` não vazio
@@ -146,10 +151,12 @@ obrigatório. `409 conflict` se `id` já existir.
 
 ### `PUT /api/commands/:id`
 Mesmo corpo do `POST` (substitui TODOS os filhos — tags/linhas/diffs/escopo). Se `id`
-vier no corpo, precisa bater com o da URL. Sem restrição de dono — qualquer usuário
-autenticado pode editar qualquer comando, inclusive os com `created_by: "System"`.
-`modified_by` é atualizado para o usuário atual. `404 not_found` / `400
-validation_error`.
+vier no corpo, precisa bater com o da URL. Sem restrição de dono entre usuários comuns
+— qualquer um edita qualquer comando de qualquer outro usuário. **Exceção**: comandos
+de referência (`created_by: "System"`) só podem ser editados por admins — usuário
+comum recebe `403 forbidden` (a UI já esconde o botão Edit nesse caso e oferece
+"Duplicate" para criar uma cópia própria editável). `modified_by` é atualizado para o
+usuário atual. `404 not_found` / `400 validation_error` / `403 forbidden`.
 
 ### `DELETE /api/commands/:id` — **(admin)**
 Remove o comando e (via `ON DELETE CASCADE`) todas as suas linhas/tags/diffs/escopo/

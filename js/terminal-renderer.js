@@ -403,14 +403,17 @@ function card({ id, name, desc, about, tags = [], lines, diffs, favoriteCount = 
     <button class="fav-btn${favOn ? ' on' : ''}" onclick="toggleFavorite('${id}', '${jsAttrEscape(name || '')}')" title="${favOn ? 'Remove from favorites' : 'Add to favorites'}">${starIcon(favOn)}</button>
     ${favAuditPopover({ createdBy, modifiedBy, updatedAt, favoriteCount, favoritedBy })}
   </span>` : '';
-  // Incluir/duplicar/editar/excluir ficam disponíveis para TODOS os usuários,
-  // em qualquer comando (inclusive os de referência created_by='System') —
-  // não existe mais restrição de "só o dono edita" nem necessidade de ligar
-  // "Admin mode" em Configurações para isso (ver server/index.js: PUT/DELETE
-  // /api/commands não checam mais created_by === usuário atual). Cada
-  // alteração fica registrada no log de auditoria do servidor (audit_log,
-  // ver botão "View audit log" em Configurações).
-  const editHtml = (id && typeof openCommandEditor === 'function') ? `<button class="edit-btn" onclick="openCommandEditor('edit','${id}',event)" title="Edit command">
+  // Incluir/duplicar/editar/excluir ficam disponíveis para TODOS os usuários
+  // em comandos comuns — não existe restrição de "só o dono edita" (ver
+  // server/index.js: PUT/DELETE /api/commands não checam created_by ===
+  // usuário atual). EXCEÇÃO: comandos de referência (created_by='System') só
+  // podem ser editados/excluídos por admins (ver PUT/DELETE /api/commands em
+  // server/index.js) — um usuário comum só vê o botão Duplicate neles, que
+  // cria uma cópia própria e editável. Cada alteração fica registrada no log
+  // de auditoria do servidor (audit_log, ver botão "View audit log" em
+  // Configurações).
+  const canEdit = !isSystem || window.CG_IS_ADMIN;
+  const editHtml = (id && canEdit && typeof openCommandEditor === 'function') ? `<button class="edit-btn" onclick="openCommandEditor('edit','${id}',event)" title="Edit command">
     <svg width="11" height="11" fill="none" viewBox="0 0 16 16">
       <path d="M11.3 1.7l3 3L5 14H2v-3l9.3-9.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
     </svg>

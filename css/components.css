@@ -272,6 +272,13 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 }
 .ln-export-label input[type="checkbox"] { accent-color: var(--teal); cursor: pointer; }
 .row-remove-btn { margin-left: auto; }
+/* Checkbox admin-only "Import as System commands" (Import commands modal) —
+   mesmo padrão visual do .ln-export-label acima. */
+.set-check-row {
+  display: flex; align-items: center; gap: 6px; margin-top: 10px;
+  font-size: 11px; color: var(--muted); cursor: pointer;
+}
+.set-check-row input[type="checkbox"] { accent-color: var(--teal); cursor: pointer; }
 /* Alça de arrastar (reordenar linhas do comando, ver command-editor.js) —
    drag só é ativado a partir dela (mousedown), nunca da linha inteira, para não
    atrapalhar a seleção/edição de texto dentro do textarea de conteúdo. */

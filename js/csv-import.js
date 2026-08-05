@@ -7,10 +7,13 @@
 // Fluxo: usuário baixa um template .csv (downloadImportTemplate — mesmas
 // colunas usadas por Export, ver csv-export.js), preenche uma linha por
 // comando, escolhe o arquivo (handleImportFileSelected) e confirma
-// (runImportCommands). Cada linha vira um POST /api/commands, sempre como
-// comando do usuário atual — exatamente como o editor manual e "Duplicate
-// command". Não existe mais opção de importar "como System" (gesto Ctrl+Alt
-// + Admin mode removido).
+// (runImportCommands). Cada linha vira um POST /api/commands — por padrão
+// como comando do usuário atual, exatamente como o editor manual e
+// "Duplicate command". Exceção: admins podem marcar o checkbox
+// "Import as System commands" (importAsSystemRow, admin-only — ver
+// js/auth.js) para importar o lote inteiro como comandos de referência
+// (created_by='System'), via header X-Save-As-System — ver createCommand()
+// em js/api-client.js e POST /api/commands em server/index.js.
 //
 // Escopo intencionalmente simplificado: cobre o caso comum (comando "plain",
 // sem placeholder_resolver nem diffs por versão) — múltiplas linhas de
@@ -683,9 +686,13 @@ function openImportCommandsModal(ev) {
   if (results) results.innerHTML = '';
   const btn = _impBox('importConfirmBtn');
   if (btn) btn.disabled = true;
+  // Sempre reabre desmarcado — visibilidade em si (admin-only) é tratada por
+  // applyAdminGating() em js/auth.js (ver ADMIN_ONLY_SETTINGS_GROUP_IDS).
+  const asSystemChk = _impBox('importAsSystemCheckbox');
+  if (asSystemChk) asSystemChk.checked = false;
   const hint = _impBox('importHint');
   if (hint) {
-    hint.textContent = 'Bulk-create commands from a .csv file. Not sure how to fill it in? Download the template below — it has the exact columns expected, with a filled-in example row. If Vendor/System/Version/Environment/Topics don\'t match anything registered yet, you\'ll be able to create them or map them to an existing item right here before importing. Imported commands are always created as your own and can be edited/deleted normally afterwards.';
+    hint.textContent = 'Bulk-create commands from a .csv file. Not sure how to fill it in? Download the template below — it has the exact columns expected, with a filled-in example row. If Vendor/System/Version/Environment/Topics don\'t match anything registered yet, you\'ll be able to create them or map them to an existing item right here before importing. Imported commands are created as your own by default and can be edited/deleted normally afterwards.';
   }
   const overlay = _impBox('importCommandsOverlay');
   if (overlay) overlay.classList.add('show');
@@ -745,6 +752,14 @@ async function runImportCommands() {
   const btn = _impBox('importConfirmBtn');
   const results = _impBox('importResultsBox');
   if (btn) btn.disabled = true;
+  // Lido uma vez para o lote inteiro — o checkbox só existe/é marcável por
+  // admins (ver importAsSystemRow em index.html + ADMIN_ONLY_SETTINGS_GROUP_IDS
+  // em js/auth.js); createCommand() manda o header X-Save-As-System, mas o
+  // servidor confere a role de novo antes de honrar (ver POST /api/commands
+  // em server/index.js) — um usuário comum marcando isso via DOM não elevaria
+  // privilégio de verdade.
+  const asSystemChk = _impBox('importAsSystemCheckbox');
+  const asSystem = !!(asSystemChk && asSystemChk.checked);
   const existingIdsInBatch = new Set();
   const report = [];
   for (let i = 0; i < _importParsedRows.length; i++) {
@@ -757,7 +772,7 @@ async function runImportCommands() {
     }
     existingIdsInBatch.add(built.payload.id);
     try {
-      await createCommand(built.payload);
+      await createCommand(built.payload, asSystem);
       report.push({
         rowNum, name: built.payload.name, ok: true,
         message: built.warnings.length ? `Imported — ${built.warnings.join('; ')}` : 'Imported',

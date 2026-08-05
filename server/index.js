@@ -996,10 +996,19 @@ app.post('/api/commands', async (req, res) => {
 
     const cols = buildCommandColumns(req.body);
     // Todo comando criado por esta API é atribuído ao usuário atual
-    // (created_by = modified_by = quem está autenticado).
+    // (created_by = modified_by = quem está autenticado) — EXCETO quando o
+    // chamador é admin e envia o header X-Save-As-System (ver "Import as
+    // System commands" em js/csv-import.js): nesse caso o comando é gravado
+    // como created_by=modified_by='System', igual aos comandos de referência
+    // trazidos de fábrica. Ignorado silenciosamente para não-admins — não é
+    // um erro, o comando simplesmente é criado como próprio (comportamento
+    // padrão), já que confiar num header vindo do cliente para elevar
+    // privilégio seria inseguro sem essa checagem de role no servidor.
     const username = getCurrentUsername(req);
-    cols.created_by = username;
-    cols.modified_by = username;
+    const wantsSystem = req.headers['x-save-as-system'] === '1' || req.headers['x-save-as-system'] === 'true';
+    const isAdmin = wantsSystem && (await getCurrentRole(req)) === 'admin';
+    cols.created_by = isAdmin ? 'System' : username;
+    cols.modified_by = isAdmin ? 'System' : username;
 
     await withTransaction(async client => {
       await client.query(
@@ -1038,8 +1047,14 @@ app.put('/api/commands/:id', async (req, res) => {
     const found = await findCommand(id);
     if (!found) return res.status(404).json({ error: 'not_found', message: `Command '${id}' not found` });
 
-    // Sem restrição de dono: qualquer usuário autenticado pode editar qualquer
-    // comando (inclusive os de referência created_by='System').
+    // Sem restrição de dono entre usuários comuns — qualquer um edita
+    // qualquer comando SEU ou de outro usuário. Exceção: comandos de
+    // referência (created_by='System') só podem ser editados por admins;
+    // um usuário comum pode duplicá-los (isso é um POST normal, cria um
+    // comando novo em nome dele) mas não alterar o original.
+    if (found.created_by === 'System' && (await getCurrentRole(req)) !== 'admin') {
+      return res.status(403).json({ error: 'forbidden', message: 'Only admins can edit System commands. Duplicate it to create your own editable copy.' });
+    }
     const currentUser = getCurrentUsername(req);
 
     const bodyForValidation = { ...req.body, id: req.body.id || id };

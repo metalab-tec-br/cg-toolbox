@@ -688,10 +688,18 @@ async function openCommandEditor(mode, id, ev) {
       alert('Failed to save the command. Please try again.');
       return;
     }
-    // Sem restrição de dono: qualquer usuário pode editar qualquer comando
-    // (inclusive os de referência created_by='System') — ver terminal-
-    // renderer.js (botão "Edit" agora sempre visível) e server/index.js (PUT
-    // /api/commands/:id não bloqueia mais por created_by).
+    // Sem restrição de dono entre usuários comuns: qualquer um edita qualquer
+    // comando de qualquer outro. EXCEÇÃO: comandos de referência
+    // (created_by='System') só podem ser editados por admins — o botão Edit já
+    // fica escondido nesse caso (ver terminal-renderer.js), mas repetimos a
+    // checagem aqui como defesa em profundidade (ex.: chamada direta via
+    // console) antes de abrir o formulário de edição. O servidor também
+    // recusa com 403 (ver PUT /api/commands/:id em server/index.js) — esta
+    // checagem só evita abrir a tela para nada.
+    if (mode === 'edit' && row.is_system && !window.CG_IS_ADMIN) {
+      alert('Only admins can edit System commands. Use "Duplicate" to create your own editable copy.');
+      return;
+    }
 
     // Edit/duplicate start with EVERY wizard step unlocked — the command
     // being loaded already has valid data in every step, so forcing the
@@ -821,6 +829,11 @@ async function cmdEditorSave() {
     const serverMsg = msg.split(' — ').slice(1).join(' — ');
     if (msg.indexOf('409') !== -1) _ceShowError('A command with this name already exists — try a slightly different name and save again.');
     else if (msg.indexOf('400') !== -1) _ceShowError(serverMsg || 'Fill in the required fields: Vendor, System, Version, Environment, Topic, Name.');
+    // 403: só acontece tentando editar um comando System sem ser admin — a UI já
+    // bloqueia isso antes (botão Edit escondido + guarda em openCommandEditor),
+    // mas mantemos a mensagem específica do servidor aqui como último resort
+    // (ver PUT /api/commands/:id em server/index.js).
+    else if (msg.indexOf('403') !== -1) _ceShowError(serverMsg || 'Only admins can edit System commands. Duplicate it to create your own editable copy.');
     else _ceShowError('Failed to save the command. Please try again.');
   }
 }
