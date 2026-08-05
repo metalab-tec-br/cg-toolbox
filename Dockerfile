@@ -22,7 +22,7 @@ RUN apt-get update \
 COPY server/package.json server/package-lock.json ./
 RUN npm ci --omit=dev
 
-COPY server/schema.sql server/db.js server/index.js server/seed.js ./
+COPY server/schema.sql server/db.js server/index.js server/seed.js server/auth.js ./
 
 # Dedicated non-root user + a /app/backups folder for the Backup & Restore
 # feature (mounted as a named volume in docker-compose.yml, so dumps survive
