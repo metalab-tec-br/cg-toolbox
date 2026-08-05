@@ -81,6 +81,10 @@ async function runMigrations() {
     // 'admin' preserva o acesso total das keys criadas antes deste campo
     // existir.
     await pool.query(`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'admin'`);
+    // api_keys.expires_at — ver comentário em schema.sql. Sem DEFAULT (NULL =
+    // nunca expira), preservando o comportamento das keys criadas antes deste
+    // campo existir.
+    await pool.query(`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`);
   } catch (err) {
     console.error('[db] Falha ao rodar migrações:', err.message);
   }

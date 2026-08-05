@@ -618,7 +618,7 @@
           <div class="audit-log-wrap" id="apiKeyListWrap">
             <table class="audit-log-table">
               <thead>
-                <tr><th>Name</th><th>Role</th><th>Key</th><th>Created by</th><th>Created</th><th>Last used</th><th></th></tr>
+                <tr><th>Name</th><th>Role</th><th>Key</th><th>Created by</th><th>Created</th><th>Expires</th><th>Last used</th><th></th></tr>
               </thead>
               <tbody id="apiKeyListTbody"></tbody>
             </table>
@@ -1191,6 +1191,19 @@
         <select class="set-input" id="apiKeyRoleSelect">
           <option value="user" selected>User</option>
           <option value="admin">Admin</option>
+        </select>
+      </div>
+      <!-- Validade da key (ver api_keys.expires_at em server/schema.sql e
+           computeApiKeyExpiresAt em server/index.js) — "Never" preserva o
+           comportamento de antes deste campo existir (nunca expira). -->
+      <div class="set-group">
+        <span class="set-label">Validity</span>
+        <select class="set-input" id="apiKeyValiditySelect">
+          <option value="1d">1 day</option>
+          <option value="1w">1 week</option>
+          <option value="1m">1 month</option>
+          <option value="1y">1 year</option>
+          <option value="never" selected>Never</option>
         </select>
       </div>
     </div>

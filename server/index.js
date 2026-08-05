@@ -54,7 +54,14 @@ function generateApiKey() {
 }
 async function authenticateApiKey(rawKey) {
   const hash = hashApiKey(rawKey);
-  const { rows } = await pool.query('SELECT * FROM api_keys WHERE key_hash = $1 AND revoked_at IS NULL', [hash]);
+  // expires_at IS NULL => "Never" (nunca expira); do contrário só autentica
+  // enquanto expires_at ainda estiver no futuro (ver api_keys.expires_at em
+  // schema.sql e a validade escolhida em POST /api/api-keys abaixo).
+  const { rows } = await pool.query(
+    `SELECT * FROM api_keys
+     WHERE key_hash = $1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())`,
+    [hash]
+  );
   if (!rows.length) return null;
   // Best-effort — não bloqueia a resposta por causa disso.
   pool.query('UPDATE api_keys SET last_used_at = NOW() WHERE id = $1', [rows[0].id]).catch(() => {});
@@ -66,7 +73,7 @@ app.use(async (req, res, next) => {
   if (!provided) return next();
   try {
     const keyRow = await authenticateApiKey(String(provided));
-    if (!keyRow) return res.status(401).json({ error: 'invalid_api_key', message: 'Invalid or revoked API key' });
+    if (!keyRow) return res.status(401).json({ error: 'invalid_api_key', message: 'Invalid, revoked, or expired API key' });
     req.apiKey = keyRow;
     req.currentUser = `api:${keyRow.name}`;
     next();
@@ -669,7 +676,7 @@ app.put('/api/global-settings', async (req, res) => {
 app.get('/api/api-keys', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, name, key_prefix, role, created_by, created_at, last_used_at, revoked_at
+      `SELECT id, name, key_prefix, role, created_by, created_at, expires_at, last_used_at, revoked_at
        FROM api_keys ORDER BY (revoked_at IS NULL) DESC, created_at DESC`
     );
     res.json(rows);
@@ -683,8 +690,29 @@ app.get('/api/api-keys', requireAdmin, async (req, res) => {
 // users.role em schema.sql e ADMIN_ROLES abaixo. Padrão 'user' (menor
 // privilégio) quando o campo não é enviado.
 const API_KEY_ROLES = ['admin', 'user'];
+
+// Validade escolhida na criação (ver seletor "Validity" em js/api-keys.js) —
+// convertida para uma data absoluta em expires_at. 'never' => null (nunca
+// expira, preserva o comportamento anterior a este campo existir). Usa
+// aritmética de calendário (setMonth/setFullYear) em vez de somar ms fixos,
+// para "1 month"/"1 year" caírem no mesmo dia do mês/ano seguinte mesmo
+// atravessando meses de tamanho diferente ou anos bissextos.
+const API_KEY_VALIDITIES = ['1d', '1w', '1m', '1y', 'never'];
+function computeApiKeyExpiresAt(validity) {
+  if (validity === 'never') return null;
+  const d = new Date();
+  switch (validity) {
+    case '1d': d.setDate(d.getDate() + 1); break;
+    case '1w': d.setDate(d.getDate() + 7); break;
+    case '1m': d.setMonth(d.getMonth() + 1); break;
+    case '1y': d.setFullYear(d.getFullYear() + 1); break;
+    default: return undefined; // valor inválido — ver checagem em POST abaixo
+  }
+  return d;
+}
+
 app.post('/api/api-keys', requireAdmin, async (req, res) => {
-  const { name, role } = req.body || {};
+  const { name, role, validity } = req.body || {};
   if (!name || typeof name !== 'string' || !name.trim()) {
     return res.status(400).json({ error: 'validation_error', message: '"name" is required' });
   }
@@ -692,16 +720,21 @@ app.post('/api/api-keys', requireAdmin, async (req, res) => {
   if (!API_KEY_ROLES.includes(finalRole)) {
     return res.status(400).json({ error: 'validation_error', message: `"role" must be one of: ${API_KEY_ROLES.join(', ')}` });
   }
+  const finalValidity = validity || 'never';
+  if (!API_KEY_VALIDITIES.includes(finalValidity)) {
+    return res.status(400).json({ error: 'validation_error', message: `"validity" must be one of: ${API_KEY_VALIDITIES.join(', ')}` });
+  }
+  const expiresAt = computeApiKeyExpiresAt(finalValidity);
   try {
     const rawKey = generateApiKey();
     const keyHash = hashApiKey(rawKey);
     const keyPrefix = rawKey.slice(0, 12);
     const createdBy = getCurrentUsername(req);
     const { rows } = await pool.query(
-      `INSERT INTO api_keys (name, key_prefix, key_hash, role, created_by)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, name, key_prefix, role, created_by, created_at, last_used_at, revoked_at`,
-      [name.trim(), keyPrefix, keyHash, finalRole, createdBy]
+      `INSERT INTO api_keys (name, key_prefix, key_hash, role, created_by, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, name, key_prefix, role, created_by, created_at, expires_at, last_used_at, revoked_at`,
+      [name.trim(), keyPrefix, keyHash, finalRole, createdBy, expiresAt]
     );
     res.status(201).json({ ...rows[0], key: rawKey });
   } catch (err) {
@@ -710,13 +743,15 @@ app.post('/api/api-keys', requireAdmin, async (req, res) => {
   }
 });
 
+// Exclusão permanente (antes era um soft-delete — ver revoked_at legado em
+// schema.sql). A ação "Delete" na UI agora remove a linha de fato: uma key
+// apagada não pode mais ser recuperada nem reaparece na lista.
 app.delete('/api/api-keys/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'validation_error', message: 'Invalid id' });
   try {
-    const { rows } = await pool.query('SELECT id FROM api_keys WHERE id = $1', [id]);
+    const { rows } = await pool.query('DELETE FROM api_keys WHERE id = $1 RETURNING id', [id]);
     if (!rows.length) return res.status(404).json({ error: 'not_found', message: `API key '${id}' not found` });
-    await pool.query('UPDATE api_keys SET revoked_at = NOW() WHERE id = $1 AND revoked_at IS NULL', [id]);
     res.status(204).end();
   } catch (err) {
     console.error(err);

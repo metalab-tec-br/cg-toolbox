@@ -13,13 +13,18 @@ prioridade:
 
 1. **API key** (integrações externas, scripts) — header `X-API-Key: <key>`. Pula o NTLM
    e a sessão local inteiramente. O usuário efetivo aparece como `api:<nome da key>`
-   (ex.: `api:Zabbix`). Chaves são criadas/revogadas em **Settings → System → API
+   (ex.: `api:Zabbix`). Chaves são criadas/excluídas em **Settings → System → API
    access** na própria aplicação, ou via `/api/api-keys` (abaixo) — a key em texto puro
    só existe na resposta do `POST`, nunca mais depois disso. Assim como usuários, toda
    API key tem um `role` (`admin` ou `user`), escolhido na criação e usado como o `role`
    efetivo de qualquer requisição autenticada com aquela key — segue exatamente as
    mesmas regras de **Permissões (role)** abaixo. Keys criadas antes deste campo existir
-   mantêm `role: "admin"` (acesso total, comportamento anterior preservado).
+   mantêm `role: "admin"` (acesso total, comportamento anterior preservado). Toda key
+   também tem uma validade escolhida na criação — 1 day / 1 week / 1 month / 1 year /
+   Never — gravada como `expires_at` (`null` = nunca expira); passado esse prazo a key
+   para de autenticar (`401 invalid_api_key`) mas continua listada até ser excluída
+   manualmente. Excluir uma key (`DELETE /api/api-keys/:id`) é permanente — não existe
+   mais "revogar" (soft-delete): a linha é removida da tabela e não pode ser recuperada.
 2. **Sessão local** (cookie `cg_session`, `HttpOnly`) — login com usuário/senha via
    `POST /api/auth/login` (ver **Login local e usuários** abaixo). Enquanto o cookie
    for válido (12h), tem prioridade sobre a NTLM — é o que permite "sair" da
@@ -295,17 +300,20 @@ Ver também a seção Autenticação acima e `api_keys` em `server/schema.sql`.
 
 - `GET /api/api-keys` → lista (sem o valor da key, só metadados):
   ```json
-  [{ "id": 3, "name": "Zabbix", "role": "user", "key_prefix": "cgtb_a1b2c3d4", "created_by": "rsilva", "created_at": "...", "last_used_at": "...", "revoked_at": null }]
+  [{ "id": 3, "name": "Zabbix", "role": "user", "key_prefix": "cgtb_a1b2c3d4", "created_by": "rsilva", "created_at": "...", "expires_at": null, "last_used_at": "...", "revoked_at": null }]
   ```
-- `POST /api/api-keys` — corpo `{ "name": "Zabbix", "role": "user" }` → `201`, **a única
-  vez** que a key completa aparece. `role` é opcional (`admin` ou `user`, default
-  `"user"`) — define o `role` efetivo de todas as requisições autenticadas com essa key,
-  igual ao `role` de um usuário (ver **Permissões (role)** acima):
+- `POST /api/api-keys` — corpo `{ "name": "Zabbix", "role": "user", "validity": "1m" }` →
+  `201`, **a única vez** que a key completa aparece. `role` é opcional (`admin` ou
+  `user`, default `"user"`) — define o `role` efetivo de todas as requisições
+  autenticadas com essa key, igual ao `role` de um usuário (ver **Permissões (role)**
+  acima). `validity` é opcional (`"1d"` | `"1w"` | `"1m"` | `"1y"` | `"never"`, default
+  `"never"`) e é convertida em `expires_at` (data absoluta, `null` quando `"never"`):
   ```json
-  { "id": 3, "name": "Zabbix", "role": "user", "key_prefix": "cgtb_a1b2c3d4", "created_by": "rsilva", "created_at": "...", "key": "cgtb_a1b2c3d4e5f6...(64 hex)" }
+  { "id": 3, "name": "Zabbix", "role": "user", "key_prefix": "cgtb_a1b2c3d4", "created_by": "rsilva", "created_at": "...", "expires_at": "2026-09-05T00:00:00.000Z", "key": "cgtb_a1b2c3d4e5f6...(64 hex)" }
   ```
-- `DELETE /api/api-keys/:id` → revoga (soft-delete — `revoked_at = NOW()`, não apaga a
-  linha). Uma key revogada nunca mais autentica. `204`, `404 not_found`.
+- `DELETE /api/api-keys/:id` → exclusão permanente (remove a linha da tabela — não é
+  mais um soft-delete). Uma key excluída nunca mais autentica e não pode ser
+  recuperada. `204`, `404 not_found`.
 
 ---
 

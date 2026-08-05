@@ -16,6 +16,22 @@ function _akEscHtml(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Escapa um valor para uso dentro de um literal JS de string embutido num
+// atributo onclick="...('${v}')" — backslash PRIMEIRO (senão um backslash já
+// escapado vira alvo da regra seguinte), depois aspas simples, depois só então
+// os caracteres de atributo HTML. Mesma ordem/lógica de _uaEscJsAttr em
+// js/users-admin.js (bug de nomes com backslash corrigido lá) — nomes de API
+// key são digitados livremente, então aplicamos a mesma proteção aqui.
+function _akEscJsAttr(s) {
+  return String(s == null ? '' : s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function _akFormatDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -24,11 +40,22 @@ function _akFormatDate(iso) {
   return `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 }
 
+// expires_at null => "Never". Do contrário mostra a data e, se já passou,
+// marca como expirada (a key já parou de autenticar no backend — ver
+// authenticateApiKey em server/index.js — isto é só feedback visual).
+function _akFormatExpiry(iso) {
+  if (!iso) return 'Never';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const label = _akFormatDate(iso);
+  return d.getTime() <= Date.now() ? `${label} (expired)` : label;
+}
+
 async function renderApiKeyList() {
   const tbody = document.getElementById('apiKeyListTbody');
   const empty = document.getElementById('apiKeyListEmpty');
   if (!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="7" class="audit-log-loading">Loading…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="8" class="audit-log-loading">Loading…</td></tr>`;
   if (empty) empty.style.display = 'none';
   let rows = [];
   try {
@@ -36,7 +63,7 @@ async function renderApiKeyList() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     rows = await res.json();
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="7" class="audit-log-loading">Failed to load API keys. Please try again.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="audit-log-loading">Failed to load API keys. Please try again.</td></tr>`;
     return;
   }
   if (!rows.length) {
@@ -44,21 +71,26 @@ async function renderApiKeyList() {
     if (empty) empty.style.display = '';
     return;
   }
-  tbody.innerHTML = rows.map(r => `
-    <tr style="${r.revoked_at ? 'opacity:.5;' : ''}">
+  tbody.innerHTML = rows.map(r => {
+    const isExpired = !!r.expires_at && new Date(r.expires_at).getTime() <= Date.now();
+    const dimmed = r.revoked_at || isExpired;
+    return `
+    <tr style="${dimmed ? 'opacity:.5;' : ''}">
       <td>${_akEscHtml(r.name)}</td>
       <td>${r.role === 'admin' ? 'Admin' : 'User'}</td>
       <td><code>${_akEscHtml(r.key_prefix)}…</code></td>
       <td>${_akEscHtml(r.created_by || '—')}</td>
       <td>${_akEscHtml(_akFormatDate(r.created_at))}</td>
+      <td>${_akEscHtml(_akFormatExpiry(r.expires_at))}</td>
       <td>${_akEscHtml(_akFormatDate(r.last_used_at))}</td>
       <td>
         ${r.revoked_at
           ? '<span class="set-hint">Revoked</span>'
-          : `<button type="button" class="btn btn-sm" onclick="revokeApiKey(${r.id}, '${String(r.name).replace(/'/g, "\\'")}')">Revoke</button>`}
+          : `<button type="button" class="btn btn-sm" onclick="deleteApiKey(${r.id}, '${_akEscJsAttr(r.name)}')">Delete</button>`}
       </td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 }
 
 // ── "New API key" (nome) — modal próprio no lugar do prompt() nativo do
@@ -69,6 +101,8 @@ function openNewApiKeyPrompt() {
   if (input) input.value = '';
   const roleSelect = document.getElementById('apiKeyRoleSelect');
   if (roleSelect) roleSelect.value = 'user';
+  const validitySelect = document.getElementById('apiKeyValiditySelect');
+  if (validitySelect) validitySelect.value = 'never';
   const overlay = document.getElementById('apiKeyNameOverlay');
   if (overlay) overlay.classList.add('show');
   if (input) setTimeout(() => input.focus(), 0);
@@ -85,8 +119,10 @@ function submitApiKeyNamePrompt() {
   if (!name) { if (input) input.focus(); return; }
   const roleSelect = document.getElementById('apiKeyRoleSelect');
   const role = roleSelect ? roleSelect.value : 'user';
+  const validitySelect = document.getElementById('apiKeyValiditySelect');
+  const validity = validitySelect ? validitySelect.value : 'never';
   closeApiKeyNamePrompt();
-  createApiKey(name, role);
+  createApiKey(name, role, validity);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -138,12 +174,12 @@ function copyApiKeyReveal() {
   });
 }
 
-async function createApiKey(name, role) {
+async function createApiKey(name, role, validity) {
   try {
     const res = await fetch('/api/api-keys', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, role: role || 'user' }),
+      body: JSON.stringify({ name, role: role || 'user', validity: validity || 'never' }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -159,8 +195,11 @@ async function createApiKey(name, role) {
   }
 }
 
-function revokeApiKey(id, name) {
-  openConfirmModal(`Revoke the API key "${name}"? Any integration still using it will stop working immediately. This cannot be undone.`, { danger: true })
+// Exclusão permanente (antes era "Revoke", um soft-delete — ver revoked_at
+// legado em server/schema.sql). DELETE /api/api-keys/:id agora remove a
+// linha de fato, então não há mais como recuperar a key depois disso.
+function deleteApiKey(id, name) {
+  openConfirmModal(`Delete the API key "${name}"? Any integration still using it will stop working immediately, and this cannot be undone.`, { danger: true })
     .then(async ok => {
       if (!ok) return;
       try {
@@ -168,8 +207,8 @@ function revokeApiKey(id, name) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         renderApiKeyList();
       } catch (err) {
-        alert('Failed to revoke API key. Please try again.');
-        console.error('Revoke API key failed', err);
+        alert('Failed to delete API key. Please try again.');
+        console.error('Delete API key failed', err);
       }
     });
 }

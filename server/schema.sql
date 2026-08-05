@@ -304,8 +304,17 @@ CREATE TABLE IF NOT EXISTS api_keys (
   role          TEXT NOT NULL DEFAULT 'admin',
   created_by    TEXT,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at    TIMESTAMPTZ,          -- NULL = nunca expira ("Never" na criação); calculado a
+                                      -- partir da validade escolhida (1 day/1 week/1 month/1
+                                      -- year/Never) — ver POST /api/api-keys em server/index.js.
+                                      -- Uma key com expires_at no passado para de autenticar
+                                      -- (ver authenticateApiKey), mas a linha continua existindo
+                                      -- até ser excluída manualmente.
   last_used_at  TIMESTAMPTZ,
-  revoked_at    TIMESTAMPTZ
+  revoked_at    TIMESTAMPTZ           -- legado: soft-delete usado antes da ação "Delete" virar
+                                      -- exclusão real (DELETE FROM). Mantido só para não quebrar
+                                      -- linhas antigas já revogadas antes desta mudança — chaves
+                                      -- excluídas a partir de agora são removidas da tabela.
 );
 
 -- ════════════════════════════════════════════════
