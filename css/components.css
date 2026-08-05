@@ -545,6 +545,25 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
   display: inline-flex; vertical-align: middle; margin-left: 8px;
   padding: 2px 5px;
 }
+/* Modo de seleção múltipla de cópia (duplo clique num botão copiar — ver
+   MULTI_COPY_MODE em js/terminal-renderer.js). .multi-on marca uma linha
+   como escolhida para a cópia em lote — cor de destaque cheia (diferente do
+   verde/--teal do feedback ".ok" de "Copied", pra não confundir os dois
+   estados) e continua marcada até a barra flutuante copiar/cancelar. */
+.copy-btn.multi-on { background: var(--teal); border-color: var(--teal); color: #fff; }
+/* Enquanto o modo está ativo, o resto dos botões de copiar ganha um leve
+   contorno tracejado pra deixar claro que qualquer um deles também pode ser
+   clicado agora pra entrar na seleção (sem precisar de outro duplo clique). */
+body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-color: var(--teal); }
+.multi-copy-bar {
+  position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 12px);
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: 10px;
+  padding: 8px 10px 8px 14px; box-shadow: 0 6px 24px rgba(0,0,0,.25);
+  z-index: 400; opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s;
+}
+.multi-copy-bar.show { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+.multi-copy-count { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .fav-btn {
   background: var(--surf); border: 1px solid var(--bdr); border-radius: 5px;
   color: var(--muted); cursor: pointer; line-height: 1;

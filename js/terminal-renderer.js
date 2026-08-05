@@ -113,46 +113,143 @@ function _copyToClipboard(text) {
 }
 
 // Botão de copiar compacto, posicionado no final de cada linha de comando.
-// Ao clicar: troca o ícone pelo "check" e mostra o texto "Copied" por
-// COPY_BTN_FEEDBACK_MS, depois volta ao estado normal — mesma mecânica de
-// timeout que já existia para a classe .ok (só a coloração), agora também
-// trocando o conteúdo do botão para dar um feedback bem mais visível. Em
-// caso de falha (raríssimo — nenhum dos dois métodos de cópia funcionou),
-// mostra um "X" vermelho no lugar, para não falhar em silêncio.
+// Ao clicar (uma vez só): troca o ícone pelo "check" e mostra o texto
+// "Copied" por COPY_BTN_FEEDBACK_MS, depois volta ao estado normal. Em caso
+// de falha (raríssimo — nenhum dos dois métodos de cópia funcionou), mostra
+// um "X" vermelho no lugar, para não falhar em silêncio. Extraído para
+// _doSingleCopy() porque agora é só UM dos dois caminhos possíveis a partir
+// de um clique — ver o modo de seleção múltipla logo abaixo.
+function _doSingleCopy(el) {
+  _copyToClipboard(el._copyText || '').then(() => {
+    clearTimeout(el._copyRevertTimer); // clique repetido não deixa dois timers concorrendo
+    el.classList.remove('err');
+    el.classList.add('ok');
+    el.innerHTML = `${COPY_BTN_ICON_OK}<span>Copied</span>`;
+    el.title = 'Copied!';
+    el._copyRevertTimer = setTimeout(() => {
+      el.classList.remove('ok');
+      el.innerHTML = COPY_BTN_ICON;
+      el.title = 'Copy';
+    }, COPY_BTN_FEEDBACK_MS);
+  }).catch(err => {
+    console.error('Copy failed', err);
+    clearTimeout(el._copyRevertTimer);
+    el.classList.remove('ok');
+    el.classList.add('err');
+    el.innerHTML = `${COPY_BTN_ICON_ERR}<span>Failed</span>`;
+    el.title = 'Copy failed — select and copy manually';
+    el._copyRevertTimer = setTimeout(() => {
+      el.classList.remove('err');
+      el.innerHTML = COPY_BTN_ICON;
+      el.title = 'Copy';
+    }, COPY_BTN_FEEDBACK_MS);
+  });
+}
+
+// ════════════════════════════════════════════════
+// MULTI-COPY SELECTION MODE — duplo clique em QUALQUER botão de copiar entra
+// num modo em que um clique simples em qualquer linha (do mesmo comando ou de
+// outro, em qualquer lugar da lista) apenas marca/desmarca aquela linha para
+// uma cópia em lote, em vez de copiar na hora. Uma barra flutuante mostra
+// quantas linhas estão marcadas e deixa copiar tudo junto (uma por linha, na
+// ordem em que aparecem na página) ou cancelar. Pensado pra juntar vários
+// comandos espalhados pela lista numa única colagem no terminal.
+// Sair do modo: Escape, clicar fora (fora de botões copiar e da barra), ou o
+// próprio botão "Copy"/"Cancel" da barra.
+// ════════════════════════════════════════════════
+let MULTI_COPY_MODE = false;
+const MULTI_COPY_DBLCLICK_MS = 300; // janela pra distinguir clique único de duplo clique
+
+function _mcBar() {
+  let bar = document.getElementById('multiCopyBar');
+  if (bar) return bar;
+  bar = document.createElement('div');
+  bar.id = 'multiCopyBar';
+  bar.className = 'multi-copy-bar';
+  bar.innerHTML = `
+    <span class="multi-copy-count" id="multiCopyCount">0 selected</span>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="_mcCancel()">Cancel</button>
+    <button type="button" class="btn btn-primary btn-sm" onclick="_mcFinish()">Copy</button>
+  `;
+  document.body.appendChild(bar);
+  return bar;
+}
+function _mcSelectedButtons() {
+  return Array.from(document.querySelectorAll('.copy-btn.multi-on')); // ordem do DOM = ordem na página
+}
+function _mcUpdateBar() {
+  const bar = _mcBar();
+  const n = _mcSelectedButtons().length;
+  const countEl = document.getElementById('multiCopyCount');
+  if (countEl) countEl.textContent = n === 1 ? '1 selected' : `${n} selected`;
+  bar.classList.toggle('show', MULTI_COPY_MODE);
+}
+function _mcToggle(el) {
+  el.classList.toggle('multi-on');
+  _mcUpdateBar();
+}
+// Chamado pelo 2º clique de um duplo clique — entra no modo já marcando a
+// linha em que o usuário clicou (não é preciso marcá-la de novo depois).
+function _mcEnter(el) {
+  MULTI_COPY_MODE = true;
+  document.body.classList.add('multi-copy-active');
+  _mcToggle(el);
+}
+function _mcCancel() {
+  MULTI_COPY_MODE = false;
+  document.body.classList.remove('multi-copy-active');
+  _mcSelectedButtons().forEach(b => b.classList.remove('multi-on'));
+  _mcUpdateBar();
+}
+function _mcFinish() {
+  const btns = _mcSelectedButtons();
+  if (!btns.length) { _mcCancel(); return; }
+  const text = btns.map(b => b._copyText || '').join('\n');
+  _copyToClipboard(text).then(() => {
+    _mcCancel();
+  }).catch(err => {
+    console.error('Multi-copy failed', err);
+    alert('Failed to copy — please try again.');
+  });
+}
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape' && MULTI_COPY_MODE) _mcCancel();
+});
+// Clicar em qualquer lugar que NÃO seja um botão de copiar nem a barra
+// flutuante cancela o modo (sem copiar) — os cliques nos próprios botões de
+// copiar/na barra são tratados pelos handlers deles, não chegam a cancelar
+// aqui por causa do closest() abaixo.
+document.addEventListener('click', ev => {
+  if (!MULTI_COPY_MODE) return;
+  if (ev.target.closest('.copy-btn') || ev.target.closest('.multi-copy-bar')) return;
+  _mcCancel();
+});
+
 function copyBtn(text) {
   const id = 'c' + (++_uid);
-  const btn = `<button class="copy-btn copy-btn-inline" id="${id}" title="Copy">${COPY_BTN_ICON}</button>`;
+  const btn = `<button class="copy-btn copy-btn-inline" id="${id}" title="Copy (double-click to select multiple commands)">${COPY_BTN_ICON}</button>`;
   // store text via JS after insert
   setTimeout(() => {
     const el = document.getElementById(id);
     if (!el) return;
     el._copyText = text;
+    let clickTimer = null;
     el.addEventListener('click', () => {
-      _copyToClipboard(el._copyText || '').then(() => {
-        clearTimeout(el._copyRevertTimer); // clique repetido não deixa dois timers concorrendo
-        el.classList.remove('err');
-        el.classList.add('ok');
-        el.innerHTML = `${COPY_BTN_ICON_OK}<span>Copied</span>`;
-        el.title = 'Copied!';
-        el._copyRevertTimer = setTimeout(() => {
-          el.classList.remove('ok');
-          el.innerHTML = COPY_BTN_ICON;
-          el.title = 'Copy';
-        }, COPY_BTN_FEEDBACK_MS);
-      }).catch(err => {
-        console.error('Copy failed', err);
-        clearTimeout(el._copyRevertTimer);
-        el.classList.remove('ok');
-        el.classList.add('err');
-        el.innerHTML = `${COPY_BTN_ICON_ERR}<span>Failed</span>`;
-        el.title = 'Copy failed — select and copy manually';
-        el._copyRevertTimer = setTimeout(() => {
-          el.classList.remove('err');
-          el.innerHTML = COPY_BTN_ICON;
-          el.title = 'Copy';
-        }, COPY_BTN_FEEDBACK_MS);
-      });
+      if (MULTI_COPY_MODE) { _mcToggle(el); return; }
+      if (clickTimer) {
+        // 2º clique dentro da janela = era um duplo clique, não dois cliques
+        // simples — cancela a cópia individual pendente do 1º clique.
+        clearTimeout(clickTimer);
+        clickTimer = null;
+        _mcEnter(el);
+        return;
+      }
+      clickTimer = setTimeout(() => {
+        clickTimer = null;
+        _doSingleCopy(el);
+      }, MULTI_COPY_DBLCLICK_MS);
     });
+    el.addEventListener('dblclick', ev => ev.preventDefault());
   }, 0);
   return btn;
 }
