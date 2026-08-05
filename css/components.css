@@ -495,6 +495,20 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
    desligar o modo de novo sem passar o mouse por cima. */
 .sec-folder-btn.on { background: var(--teal-bg); color: var(--teal); }
 
+/* Nome da pasta editável inline no cabeçalho, dentro do modo de edição (ver
+   nameHtml em buildFolderSectionFromCards, db-render-engine.js) — antes era
+   preciso clicar num botão "✎ Rename" separado que abria um modal; agora o
+   próprio texto do título vira um campo. Mantém a mesma tipografia de
+   .sec-title (herda font-size/weight/letter-spacing/color, texto em
+   uppercase) só trocando o cursor de texto padrão e um contorno sutil pra
+   indicar que é editável — sem preencher o fundo, pra não parecer um botão. */
+.sec-folder-name-input {
+  font: inherit; text-transform: inherit; letter-spacing: inherit; color: var(--text);
+  background: transparent; border: none; border-bottom: 1px dashed var(--teal);
+  padding: 0 1px; min-width: 60px; max-width: 260px; flex-shrink: 0;
+}
+.sec-folder-name-input:focus { outline: none; border-bottom-style: solid; }
+
 /* Seção de pasta em modo de edição (task #461/#463, ver
    toggleFolderEditMode em js/folders.js) — destaque de borda tracejada pra
    ficar claro que os cards ali dentro estão arrastáveis (e só ali, só

@@ -579,8 +579,10 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
   if (withActions) {
     const addNoteBtn = `<button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="openNoteEditor('create', ${folderId}, null, event)" title="Add note">+</button>`;
     const editBtn = `<button type="button" class="sec-folder-btn${editMode ? ' on' : ''}" onmousedown="event.preventDefault()" onclick="toggleFolderEditMode(${folderId}, event)" title="${editMode ? 'Done editing' : 'Edit folder'}">⚙</button>`;
+    // Renomear (✎) foi removido de aqui — dentro do modo de edição o nome
+    // já é editável direto no cabeçalho (ver nameHtml abaixo), sem precisar
+    // de um botão/modal separado.
     const editOnlyBtns = editMode ? `
-    <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="promptRenameFolder(${folderId}, '${jsEsc}', event)" title="Rename folder">✎</button>
     <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${folderId}, '${jsEsc}', event)" title="Delete folder">✕</button>` : '';
     actions = `<span class="sec-folder-actions">${addNoteBtn}${editBtn}${editOnlyBtns}</span>`;
   } else if (copyable) {
@@ -588,7 +590,18 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
     <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="copyFolderFromUser(${folderId}, '${jsEsc}', event)" title="Copy this folder to your own Folders">⧉</button>
   </span>`;
   }
-  const headerHtml = `${folderIcon(true, 12)} ${nameEsc} <span class="sec-count">${cards.length}</span>${actions}`;
+  // Dentro do modo de edição, o nome deixa de ser texto estático e passa a
+  // ser um <input> editável direto no cabeçalho (em vez de precisar clicar
+  // num botão "✎ Rename" que abria um modal — ver _folderNameInputBlur/
+  // _folderNameInputKeydown em js/folders.js). onclick/onmousedown
+  // stopPropagation() evita que o clique pra focar o campo dispare o
+  // toggle de recolher/expandir da seção (.sec-title tem
+  // onclick="toggleSection(...)" — ver collapsibleGroup em
+  // terminal-renderer.js). Enter salva (blur), Escape cancela e reverte.
+  const nameHtml = (withActions && editMode)
+    ? `<input type="text" class="sec-folder-name-input" value="${nameEsc}" data-folder-id="${folderId}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onkeydown="_folderNameInputKeydown(event)" onblur="_folderNameInputBlur(event)">`
+    : nameEsc;
+  const headerHtml = `${folderIcon(true, 12)} ${nameHtml} <span class="sec-count">${cards.length}</span>${actions}`;
   const active = withActions && editMode;
   const body = active ? wrapCardsForFolderDrag(cards, folderId) : cards.join('');
   return collapsibleGroup(key || `folder${folderId}`, headerHtml, body, active ? 'section-editing' : undefined);

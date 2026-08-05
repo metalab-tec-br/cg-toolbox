@@ -296,7 +296,18 @@
     <input type="hidden" id="ip"><input type="hidden" id="port">
   </div>
   <div class="content-toolbar">
-    <span class="ctb-label">Group by</span>
+    <!-- Rótulo único e sempre visível pros dois dropdowns abaixo (Group by
+         fora de Folders / seletor de escopo dentro de Folders) — "Filter by"
+         em vez de "Group by" (nome mais genérico, já que dentro de Folders
+         o dropdown não agrupa nada, só filtra de quem são as pastas
+         exibidas). Fica FORA dos dois .dd (não dentro de nenhum deles) de
+         propósito: um <span> dentro de um .dd (que não é flex) empurraria o
+         botão pra linha de baixo, deixando essa barra mais alta que a da
+         tela de Comandos — por isso o antigo rótulo "Folders" dentro de
+         #folderScopeDD foi removido (era redundante com a seção "Folders" já
+         selecionada na sidebar, e causava exatamente esse problema de
+         altura). -->
+    <span class="ctb-label">Filter by</span>
     <div class="dd ctb-groupby-dd" id="groupByDD">
       <button type="button" class="dd-btn" id="groupByDDBtn" onclick="toggleDropdown('groupByDD')">
         <span class="dd-label">Topic</span><span class="dd-arrow">▾</span>
@@ -315,9 +326,9 @@
          em js/folders.js). "My folders" (padrão) / um usuário escolhido
          (lista dinâmica, montada de ALL_USERS_FOLDERS — ver
          renderFolderScopeOptions()) / "All". Mesmo componente .dd/.dd-panel
-         seg dos outros dropdowns da toolbar. -->
+         seg dos outros dropdowns da toolbar; usa o rótulo "Filter by"
+         compartilhado acima, sem rótulo próprio. -->
     <div class="dd ctb-groupby-dd" id="folderScopeDD" style="display:none;">
-      <span class="ctb-label" style="margin-right:0;">Folders</span>
       <button type="button" class="dd-btn" id="folderScopeDDBtn" onclick="toggleDropdown('folderScopeDD')">
         <span class="dd-label">My folders</span><span class="dd-arrow">▾</span>
       </button>

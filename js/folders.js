@@ -341,28 +341,51 @@ async function promptCreateFolder(cmdIdToAddAfter) {
     alert('Failed to create folder. Please try again.');
   }
 }
-// `ev` (opcional): quando chamado a partir do cabeçalho de uma seção de
-// pasta (.sec-folder-actions, ver buildFolderSection em
-// db-render-engine.js), stopPropagation() evita que o clique também
-// recolha/expanda a seção (o cabeçalho inteiro tem onclick="toggleSection(...)")
-async function promptRenameFolder(id, currentName, ev) {
-  if (ev) ev.stopPropagation();
-  const name = await openFolderPromptModal('rename', currentName);
-  if (!name || name === currentName) return;
+// ── Renomear pasta: nome editável inline no cabeçalho (dentro do modo de
+// edição) ──
+// Antes exigia clicar num botão "✎ Rename" separado, que abria um modal
+// (openFolderPromptModal('rename', ...)) por cima da tela. Agora, dentro do
+// modo de edição, o próprio nome no cabeçalho é um <input> (ver
+// buildFolderSectionFromCards em db-render-engine.js) — o usuário clica
+// direto nele e digita, sem etapa extra. Salva no blur ou Enter; Escape
+// cancela sem salvar.
+// `ev` (opcional em outras funções deste bloco): quando chamadas a partir do
+// cabeçalho de uma seção de pasta (.sec-folder-actions, ver
+// buildFolderSectionFromCards em db-render-engine.js), stopPropagation()
+// evita que o clique também recolha/expanda a seção (o cabeçalho inteiro tem
+// onclick="toggleSection(...)").
+function _folderNameInputKeydown(ev) {
+  if (ev.key === 'Enter') {
+    ev.preventDefault();
+    ev.target.blur(); // dispara _folderNameInputBlur, que salva
+  } else if (ev.key === 'Escape') {
+    ev.preventDefault();
+    ev.target.value = ev.target.defaultValue; // reverte sem salvar
+    ev.target.blur();
+  }
+}
+async function _folderNameInputBlur(ev) {
+  const input = ev.target;
+  const id = Number(input.dataset.folderId);
+  const oldName = input.defaultValue;
+  const newName = input.value.trim();
+  if (!newName || newName === oldName) { input.value = oldName; return; } // vazio ou sem mudança: não chama a API
   try {
     const res = await fetch(`/api/folders/${id}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName }),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       alert(body.message || 'Failed to rename folder.');
+      input.value = oldName;
       return;
     }
     const folder = FOLDERS.find(f => f.id === id);
-    if (folder) folder.name = name;
+    if (folder) folder.name = newName;
     render(); // o nome da pasta aparece no título da sua seção — precisa reconstruir
   } catch (e) {
     alert('Failed to rename folder. Please try again.');
+    input.value = oldName;
   }
 }
 function deleteFolderConfirm(id, name, ev) {
@@ -501,15 +524,18 @@ function copyFolderFromUser(folderId, folderName, ev) {
         return;
       }
       const folder = await res.json();
-      // /copy não traz notas (task Notes) — só os comandos (ver comentário
-      // em POST /api/folders/:id/copy, server/index.js): notas são
-      // anotações pessoais de quem escreveu, não fazem parte da "curadoria"
-      // que se importa ao copiar a pasta de alguém. `notes: []`/`order`
-      // derivado só de command_ids, então.
+      // /copy agora também duplica as notas da pasta original (a pedido do
+      // usuário — antes só trazia os comandos) e já devolve `notes`/`order`
+      // prontos (ver POST /api/folders/:id/copy, server/index.js), então
+      // basta usar o que veio da resposta em vez de derivar. As notas
+      // copiadas já chegam com username = quem copiou (nunca o autor
+      // original), então já são totalmente editáveis/clonáveis/excluíveis
+      // por este usuário como qualquer outra nota própria.
       FOLDERS.push({
         id: folder.id, name: folder.name, sort_order: folder.sort_order,
-        command_ids: new Set(folder.command_ids || []), notes: [],
-        order: (folder.command_ids || []).map(id => ({ type: 'command', id })),
+        command_ids: new Set(folder.command_ids || []),
+        notes: folder.notes || [],
+        order: folder.order || [],
       });
       render(); // a pasta nova precisa aparecer nos dropdowns de pasta de cada card, e em "Folders"/"My folders" se o usuário for lá depois
     } catch (e) {

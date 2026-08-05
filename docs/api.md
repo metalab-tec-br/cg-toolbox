@@ -249,9 +249,13 @@ usuário que está fazendo a requisição.
   for do usuário atual.
 - `POST /api/folders/:id/copy` — clona a pasta de outro usuário (corpo
   `{ "name"?: "..." }`, opcional, senão reusa o nome original) para dentro das pastas do
-  usuário atual, copiando os `command_ids`. **Não copia as notes** — notes são anotações
-  pessoais do dono original, não fazem parte do "conjunto de comandos" que a cópia visa
-  replicar. `404 not_found` se a pasta de origem não existir.
+  usuário atual, copiando os `command_ids` **e duplicando as notes** (linhas novas em
+  `notes`, preservando título/descrição/posição relativa) — as notas copiadas passam a
+  pertencer a quem copiou (`username` = usuário atual, nunca o autor original), então já
+  são totalmente editáveis/clonáveis/excluíveis por essa pessoa como qualquer outra nota
+  própria. Resposta já vem no mesmo formato de `GET /api/folders` (`notes`/`order`
+  incluídos, sem precisar de uma segunda chamada). `404 not_found` se a pasta de origem
+  não existir.
 - `PUT /api/folders/:id/reorder` — corpo `{ "order": [{ "type": "command"|"note", "id": ... }, ...] }`
   com a nova ordem completa (mistura comandos e notes livremente). `204`. Aceita também
   o formato antigo `{ "command_ids": [...] }` por compatibilidade (equivalente a

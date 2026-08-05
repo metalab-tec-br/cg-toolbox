@@ -804,13 +804,22 @@ app.put('/api/folders/:id/reorder', async (req, res) => {
 });
 
 // Copia uma pasta de QUALQUER usuário (inclusive a própria) para uma pasta
-// NOVA do usuário atual, com a mesma lista de comandos na mesma ordem (task
-// #459) — os comandos em si não são duplicados (já são cross-user-visíveis,
-// ver "Created by"), só a membership em folder_commands é recriada. Só a
-// ORGANIZAÇÃO (pastas) era privada; copiar uma pasta é o mecanismo pelo qual
-// alguém "importa" a curadoria de outra pessoa para a própria lista, sem tirar
-// a pasta original de ninguém. Resolve automaticamente conflito de nome
-// (UNIQUE(username, name)) acrescentando "(copy)", "(copy 2)", etc.
+// NOVA do usuário atual, com a mesma lista de comandos E notas, na mesma
+// ordem combinada (task #459, estendida pela task Notes a pedido do
+// usuário) — os comandos em si não são duplicados (já são
+// cross-user-visíveis, ver "Created by"), só a membership em
+// folder_commands é recriada; as notas SÃO duplicadas de verdade (linhas
+// novas em `notes`), porque são texto/imagem que só existe dentro da pasta
+// original — copiar a pasta sem elas deixaria a curadoria incompleta. As
+// notas copiadas passam a pertencer a QUEM COPIOU (username = usuário
+// atual, nunca o autor original) — mantém o invariante "dona da nota ==
+// dona da pasta" (ver Notes abaixo) e o direito de editar/clonar/excluir só
+// da própria cópia, nunca da nota de outra pessoa. Como `notes.sort_order`
+// e `folder_commands.sort_order` compartilham a mesma escala DENTRO de uma
+// pasta (ver schema.sql), basta copiar os valores de sort_order tal como
+// estão — a ordem combinada (order, ver loadFolderOrderAndNotes) sai
+// correta na pasta nova sem precisar remapear nada. Resolve automaticamente
+// conflito de nome (UNIQUE(username, name)) acrescentando "(copy)", "(copy 2)", etc.
 app.post('/api/folders/:id/copy', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
@@ -827,34 +836,40 @@ app.post('/api/folders/:id/copy', async (req, res) => {
       name = suffix === 2 ? `${baseName} (copy)` : `${baseName} (copy ${suffix - 1})`;
     }
 
-    const result = await withTransaction(async client => {
+    const newFolder = await withTransaction(async client => {
       const { rows: newFolderRows } = await client.query(
         'INSERT INTO folders (username, name) VALUES ($1, $2) RETURNING id, name, sort_order',
         [username, name]
       );
-      const newFolder = newFolderRows[0];
+      const folder = newFolderRows[0];
       await client.query(
         `INSERT INTO folder_commands (folder_id, command_id, sort_order)
          SELECT $1, fc.command_id, fc.sort_order FROM folder_commands fc WHERE fc.folder_id = $2`,
-        [newFolder.id, req.params.id]
+        [folder.id, req.params.id]
       );
-      const { rows: cmdRows } = await client.query(
-        'SELECT command_id FROM folder_commands WHERE folder_id = $1 ORDER BY sort_order, created_at',
-        [newFolder.id]
+      await client.query(
+        `INSERT INTO notes (folder_id, username, title, description, sort_order)
+         SELECT $1, $2, n.title, n.description, n.sort_order FROM notes n WHERE n.folder_id = $3`,
+        [folder.id, username, req.params.id]
       );
-      return { id: newFolder.id, name: newFolder.name, sort_order: newFolder.sort_order, command_ids: cmdRows.map(r => r.command_id) };
+      return folder;
     });
-    res.status(201).json(result);
+    const { rows: cmdRows } = await pool.query(
+      'SELECT command_id FROM folder_commands WHERE folder_id = $1 ORDER BY sort_order, created_at',
+      [newFolder.id]
+    );
+    const { orderByFolder, notesByFolder } = await loadFolderOrderAndNotes([newFolder.id]);
+    res.status(201).json({
+      id: newFolder.id, name: newFolder.name, sort_order: newFolder.sort_order,
+      command_ids: cmdRows.map(r => r.command_id),
+      notes: notesByFolder.get(newFolder.id) || [],
+      order: orderByFolder.get(newFolder.id) || [],
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
 });
-// Nota: /copy acima NÃO leva as notas da pasta original — só os comandos
-// (folder_commands). Notas são anotações pessoais de quem as escreveu (só o
-// autor pode editar/clonar/excluir, ver seção Notes abaixo); "importar" a
-// curadoria de outra pessoa não deveria de repente marcar você como autor
-// de notas que não escreveu. Quem copiar a pasta pode escrever as próprias.
 
 // ════════════════════════════════════════════════
 // Notes — anotações livres (título + descrição em HTML) que só existem
