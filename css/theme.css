@@ -36,8 +36,8 @@
      tom de marca-texto), agora no mesmo peso visual sutil de --surf/--surf2
      (cinza quase branco dos cards de comando), só com uma leve tintura
      amarela por cima. */
-  --postit-bg: #FFFDF2; --postit-head-bg: #FFF9E0;
-  --postit-border: #F0E0A8; --postit-text: #8A6D1E;
+  --postit-bg: #FFFDF2; --postit-head-bg: #FFFAEB;
+  --postit-border: #F3E4B8; --postit-text: #8A6D1E;
   --mono: 'JetBrains Mono', monospace;
   --sans: 'Inter', sans-serif;
   --sidebar-w: 210px;
