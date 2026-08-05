@@ -644,7 +644,11 @@
               <span>New local user</span>
             </button>
           </div>
-          <div class="audit-log-wrap" id="userListWrap" style="max-height:62vh;">
+          <!-- Busca por username — filtra client-side em cima da última lista
+               carregada (ver filterUserList()/_uaAllUsers em
+               js/users-admin.js), sem nova chamada à API a cada tecla. -->
+          <input type="text" class="set-input" id="userSearchInput" placeholder="Search by username…" oninput="filterUserList()" style="margin-bottom:2px;">
+          <div class="audit-log-wrap" id="userListWrap" style="max-height:58vh;">
             <table class="audit-log-table">
               <thead>
                 <tr><th>Username</th><th>Type</th><th>Role</th><th>Status</th><th></th></tr>
@@ -664,7 +668,6 @@
       </div>
       <div style="display:flex;gap:8px;">
         <button class="btn" id="settingsCancelBtn" onclick="closeSettingsModal()">Cancel</button>
-        <button class="btn" id="settingsCloseBtn" onclick="closeSettingsModal()" style="display:none;">Close</button>
         <button class="btn btn-primary" id="settingsSaveBtn" onclick="saveSettingsModal()">Save</button>
       </div>
     </div>

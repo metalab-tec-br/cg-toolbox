@@ -9,6 +9,24 @@
 function _uaEscHtml(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+// Escapa um valor para ser embutido como argumento de string dentro de um
+// onclick="...('VALOR')" — ou seja, precisa sobreviver a DUAS camadas:
+// 1) sintaxe de string JS (delimitada por aspas simples) e 2) atributo HTML
+// (delimitado por aspas duplas). Usernames Windows/NTLM vêm no formato
+// "DOMINIO\usuario" — sem escapar a barra invertida, '\r' dentro da string JS
+// é interpretado como o caractere de carriage-return (\r), corrompendo o
+// valor enviado ao backend ("metalab\rsilva" virava "metalab" + CR + "silva",
+// daí o erro "User not found"). Por isso a barra invertida tem que ser
+// duplicada ANTES de qualquer outra coisa.
+function _uaEscJsAttr(s) {
+  return String(s == null ? '' : s)
+    .replace(/\\/g, '\\\\')   // escapa \ para a string JS (deve vir primeiro)
+    .replace(/'/g, "\\'")     // escapa ' (delimitador da string JS)
+    .replace(/&/g, '&amp;')   // e então HTML-escape para o atributo
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 function _uaFormatDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -17,28 +35,26 @@ function _uaFormatDate(iso) {
   return `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 }
 
-async function renderUserList() {
+// Cache da última lista carregada — a busca (#userSearchInput) filtra em cima
+// dela sem precisar rebater na API a cada tecla (ver filterUserList()).
+let _uaAllUsers = [];
+
+function _uaRenderRows(rows) {
   const tbody = document.getElementById('userListTbody');
   const empty = document.getElementById('userListEmpty');
   if (!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="5" class="audit-log-loading">Loading…</td></tr>`;
-  if (empty) empty.style.display = 'none';
-  let rows = [];
-  try {
-    const res = await fetch('/api/users');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    rows = await res.json();
-  } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="5" class="audit-log-loading">Failed to load users. Please try again.</td></tr>`;
-    return;
-  }
   if (!rows.length) {
     tbody.innerHTML = '';
-    if (empty) empty.style.display = '';
+    if (empty) {
+      const term = (document.getElementById('userSearchInput') || {}).value || '';
+      empty.textContent = term.trim() ? 'No users match your search.' : 'No users yet.';
+      empty.style.display = '';
+    }
     return;
   }
+  if (empty) empty.style.display = 'none';
   tbody.innerHTML = rows.map(u => {
-    const uname = _uaEscHtml(u.username).replace(/'/g, "&#39;");
+    const uname = _uaEscJsAttr(u.username);
     const isAdmin = u.role === 'admin';
     const isDisabled = !!u.disabled;
     return `
@@ -55,6 +71,31 @@ async function renderUserList() {
       </td>
     </tr>`;
   }).join('');
+}
+
+// Filtra a lista já carregada (_uaAllUsers) por username — chamado pelo
+// oninput do #userSearchInput (ver index.html). Case-insensitive, substring.
+function filterUserList() {
+  const term = ((document.getElementById('userSearchInput') || {}).value || '').trim().toLowerCase();
+  const filtered = term ? _uaAllUsers.filter(u => String(u.username).toLowerCase().includes(term)) : _uaAllUsers;
+  _uaRenderRows(filtered);
+}
+
+async function renderUserList() {
+  const tbody = document.getElementById('userListTbody');
+  const empty = document.getElementById('userListEmpty');
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="5" class="audit-log-loading">Loading…</td></tr>`;
+  if (empty) empty.style.display = 'none';
+  try {
+    const res = await fetch('/api/users');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    _uaAllUsers = await res.json();
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" class="audit-log-loading">Failed to load users. Please try again.</td></tr>`;
+    return;
+  }
+  filterUserList();
 }
 
 async function toggleUserRole(username, isCurrentlyAdmin) {
@@ -217,6 +258,13 @@ if (typeof switchSettingsPane === 'function') {
   const _uaOrigSwitchSettingsPane = switchSettingsPane;
   switchSettingsPane = function (pane) {
     _uaOrigSwitchSettingsPane(pane);
-    if (pane === 'users') renderUserList();
+    if (pane === 'users') {
+      // Limpa a busca só ao abrir a aba (não a cada refresh pós-ação — ver
+      // renderUserList() chamado depois de toggleUserRole/Disabled/delete/
+      // submitNewUser, onde faz sentido manter o filtro atual do usuário).
+      const searchInput = document.getElementById('userSearchInput');
+      if (searchInput) searchInput.value = '';
+      renderUserList();
+    }
   };
 }
