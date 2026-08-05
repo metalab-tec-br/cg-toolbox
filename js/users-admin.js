@@ -209,13 +209,14 @@ document.addEventListener('keydown', ev => {
   if (resetOverlay && resetOverlay.classList.contains('show')) closeResetPasswordPrompt();
 });
 
-// Carrega a lista quando a aba "System" do modal de Configurações é aberta —
-// mesmo padrão de wrap de switchSettingsPane usado em js/api-keys.js (os dois
-// wraps se empilham sem conflito, cada um chamando o anterior).
+// Carrega a lista quando a aba própria "Users" do modal de Configurações é
+// aberta (antes era um grupo dentro de "System") — mesmo padrão de wrap de
+// switchSettingsPane usado em js/api-keys.js (os wraps se empilham sem
+// conflito, cada um chamando o anterior).
 if (typeof switchSettingsPane === 'function') {
   const _uaOrigSwitchSettingsPane = switchSettingsPane;
   switchSettingsPane = function (pane) {
     _uaOrigSwitchSettingsPane(pane);
-    if (pane === 'system') renderUserList();
+    if (pane === 'users') renderUserList();
   };
 }

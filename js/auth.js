@@ -34,13 +34,14 @@ function updateAccountUI(me) {
   if (typeof applyAdminGating === 'function') applyAdminGating();
 }
 
-// Esconde por completo os grupos admin-only de Settings → System (Database:
-// Backup & Restore/View audit log; API access; Users) para quem não é admin
-// — a API já recusa essas chamadas com 403 de qualquer forma (ver
-// requireAdmin() em server/index.js), isto é só para não mostrar controles
-// que vão falhar. "Export/Import commands" fica de fora de propósito — não é
-// admin-only (ver escopo do pedido original).
-const ADMIN_ONLY_SETTINGS_GROUP_IDS = ['sysGroupDatabase', 'sysGroupApiAccess', 'sysGroupUsers'];
+// Esconde por completo os grupos/abas admin-only de Settings (Database:
+// Backup & Restore/View audit log; API access — dentro de System; e a aba
+// própria "Users", ver #usersNavBtn em index.html) para quem não é admin — a
+// API já recusa essas chamadas com 403 de qualquer forma (ver requireAdmin()
+// em server/index.js), isto é só para não mostrar controles que vão falhar.
+// "Export/Import commands" fica de fora de propósito — não é admin-only (ver
+// escopo do pedido original).
+const ADMIN_ONLY_SETTINGS_GROUP_IDS = ['sysGroupDatabase', 'sysGroupApiAccess', 'usersNavBtn'];
 function applyAdminGating() {
   ADMIN_ONLY_SETTINGS_GROUP_IDS.forEach(id => {
     const el = document.getElementById(id);
