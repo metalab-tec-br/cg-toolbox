@@ -566,30 +566,44 @@ function buildFolderItemsCards(cmdById, notesById, orderTagged, values, hasIPs, 
 // `cards`), só que sem NENHUM botão de ação — ver buildNoteCardHtml.
 // `editMode` (task #461/#463) — só dentro desse modo (toggle "✎ Edit
 // folder" no cabeçalho) é que: (a) os cards ficam arrastáveis (embrulhados
-// em .folder-card-row, ver wrapCardsForFolderDrag), e (b) aparecem
-// Renomear/Excluir. Fora desse modo, mesmo numa pasta própria, a seção
-// mostra só os cards + os dois botões sempre visíveis (+ Note / ✎ Edit) —
-// arrastar/renomear/excluir por acidente não deveria ser possível sem o
-// usuário ter entrado deliberadamente no modo de edição.
+// em .folder-card-row, ver wrapCardsForFolderDrag), e (b) aparece Excluir.
+// Fora desse modo, mesmo numa pasta própria, a seção mostra só os cards +
+// os botões sempre visíveis (✎ Edit / + Note) — arrastar/excluir por
+// acidente não deveria ser possível sem o usuário ter entrado
+// deliberadamente no modo de edição.
+//
+// Layout do cabeçalho (a pedido do usuário, ver mockup/print anexado): o
+// botão de editar é um lápis (✎, antes uma engrenagem ⚙) um pouco maior que
+// os demais (.sec-folder-edit-btn); Excluir usa o mesmo componente visual
+// "tag" vermelha dos badges dos comandos (.tag.t-red) em vez de um ícone
+// discreto, pra deixar a ação destrutiva mais chamativa; e o botão do canto
+// direito (+ Add note na pasta própria, ⧉ Copy na de outro usuário) fica
+// encostado na borda direita do cabeçalho — igual ao botão sólido "Add" da
+// toolbar principal — separado dos botões da esquerda por um divisor
+// explícito (`.sec-title-divider`, substitui o ::after padrão de
+// `.sec-title` só nas seções de pasta, ver `.section-folder` em
+// components.css) em vez de ficar espremido do lado do nome/contagem.
 function buildFolderSectionFromCards(cards, folderId, folderName, key, withActions, copyable, editMode) {
   if (!cards.length) return '';
   const nameEsc = escAttr(folderName);
   const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(folderName) : nameEsc;
-  let actions = '';
+
+  const editBtn = withActions
+    ? `<button type="button" class="sec-folder-btn sec-folder-edit-btn${editMode ? ' on' : ''}" onmousedown="event.preventDefault()" onclick="toggleFolderEditMode(${folderId}, event)" title="${editMode ? 'Done editing' : 'Edit folder'}">✎</button>`
+    : '';
+  const deleteTag = (withActions && editMode)
+    ? `<button type="button" class="tag t-red sec-folder-delete-tag" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${folderId}, '${jsEsc}', event)" title="Delete folder">✕ Delete</button>`
+    : '';
+  const leftActions = (editBtn || deleteTag) ? `<span class="sec-folder-actions">${editBtn}${deleteTag}</span>` : '';
+
+  let rightAction = '';
   if (withActions) {
-    const addNoteBtn = `<button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="openNoteEditor('create', ${folderId}, null, event)" title="Add note">+</button>`;
-    const editBtn = `<button type="button" class="sec-folder-btn${editMode ? ' on' : ''}" onmousedown="event.preventDefault()" onclick="toggleFolderEditMode(${folderId}, event)" title="${editMode ? 'Done editing' : 'Edit folder'}">⚙</button>`;
-    // Renomear (✎) foi removido de aqui — dentro do modo de edição o nome
-    // já é editável direto no cabeçalho (ver nameHtml abaixo), sem precisar
-    // de um botão/modal separado.
-    const editOnlyBtns = editMode ? `
-    <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${folderId}, '${jsEsc}', event)" title="Delete folder">✕</button>` : '';
-    actions = `<span class="sec-folder-actions">${addNoteBtn}${editBtn}${editOnlyBtns}</span>`;
+    rightAction = `<button type="button" class="sec-folder-add-btn" onmousedown="event.preventDefault()" onclick="openNoteEditor('create', ${folderId}, null, event)" title="Add note">+</button>`;
   } else if (copyable) {
-    actions = `<span class="sec-folder-actions">
-    <button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="copyFolderFromUser(${folderId}, '${jsEsc}', event)" title="Copy this folder to your own Folders">⧉</button>
-  </span>`;
+    rightAction = `<button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="copyFolderFromUser(${folderId}, '${jsEsc}', event)" title="Copy this folder to your own Folders">⧉</button>`;
   }
+  const divider = (leftActions || rightAction) ? '<span class="sec-title-divider"></span>' : '';
+
   // Dentro do modo de edição, o nome deixa de ser texto estático e passa a
   // ser um <input> editável direto no cabeçalho (em vez de precisar clicar
   // num botão "✎ Rename" que abria um modal — ver _folderNameInputBlur/
@@ -601,10 +615,10 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
   const nameHtml = (withActions && editMode)
     ? `<input type="text" class="sec-folder-name-input" value="${nameEsc}" data-folder-id="${folderId}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onkeydown="_folderNameInputKeydown(event)" onblur="_folderNameInputBlur(event)">`
     : nameEsc;
-  const headerHtml = `${folderIcon(true, 12)} ${nameHtml} <span class="sec-count">${cards.length}</span>${actions}`;
+  const headerHtml = `${folderIcon(true, 12)} ${nameHtml} <span class="sec-count">${cards.length}</span>${leftActions}${divider}${rightAction}`;
   const active = withActions && editMode;
   const body = active ? wrapCardsForFolderDrag(cards, folderId) : cards.join('');
-  return collapsibleGroup(key || `folder${folderId}`, headerHtml, body, active ? 'section-editing' : undefined);
+  return collapsibleGroup(key || `folder${folderId}`, headerHtml, body, active ? 'section-folder section-editing' : 'section-folder');
 }
 
 // Uma seção de PASTA do usuário ATUAL (ícone de pasta + nome + seus

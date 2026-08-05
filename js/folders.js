@@ -57,12 +57,12 @@ async function reloadFoldersFromServer() {
 }
 
 // ALL_USERS_FOLDERS = pastas de TODOS os usuários (cross-user, ver
-// GET /api/folders/all em server/index.js) — usada só pelo Group by "User
-// folders" (valor interno 'user-folders', ver js/render.js). Diferente de
-// FOLDERS acima (privado, só as pastas do usuário atual), aqui cada item já
-// vem com `username` do dono. Carregada sob demanda (quando o usuário
-// escolhe "User folders" no dropdown, ver setGroupBy() em js/settings.js) em
-// vez de sempre no boot, já que a maioria nunca vai usar essa visão.
+// GET /api/folders/all em server/index.js) — usada pelo seletor de escopo de
+// pastas dentro de Folders (#folderScopeDD: "All"/um usuário escolhido, ver
+// FOLDER_SCOPE abaixo). Diferente de FOLDERS acima (privado, só as pastas do
+// usuário atual), aqui cada item já vem com `username` do dono. Carregada
+// sob demanda (ao entrar em Folders, ver updateGroupByOptionsForFoldersScope())
+// em vez de sempre no boot, já que a maioria fica em "My folders" (padrão).
 let ALL_USERS_FOLDERS = [];
 async function reloadAllUsersFoldersFromServer() {
   try {
@@ -74,13 +74,12 @@ async function reloadAllUsersFoldersFromServer() {
       notes: f.notes || [],
       order: (f.order || []).slice(),
     }));
-    // Re-renderiza se algo na tela agora depende desses dados: o Group by
-    // "User folders" de fora de Folders, OU o novo seletor de escopo de
-    // pastas dentro de Folders quando não está em "My folders" (ver
-    // FOLDER_SCOPE abaixo) — os dois só carregam ALL_USERS_FOLDERS sob
-    // demanda, então precisam de um render() depois que a resposta chega.
-    const needsRender = GROUP_BY === 'user-folders'
-      || (typeof VIEW_FOLDERS_HOME !== 'undefined' && VIEW_FOLDERS_HOME && typeof FOLDER_SCOPE !== 'undefined' && FOLDER_SCOPE !== 'mine');
+    // Re-renderiza se o seletor de escopo de pastas dentro de Folders
+    // depende desses dados (qualquer escopo diferente de "My folders", ver
+    // FOLDER_SCOPE abaixo) — só carrega ALL_USERS_FOLDERS sob demanda,
+    // então precisa de um render() depois que a resposta chega.
+    const needsRender = typeof VIEW_FOLDERS_HOME !== 'undefined' && VIEW_FOLDERS_HOME
+      && typeof FOLDER_SCOPE !== 'undefined' && FOLDER_SCOPE !== 'mine';
     if (typeof render === 'function' && needsRender) render();
     if (typeof renderFolderScopeOptions === 'function') renderFolderScopeOptions();
   } catch (e) {
@@ -97,13 +96,23 @@ async function reloadAllUsersFoldersFromServer() {
 // vez). Se a opção escondida estava ativa, volta pra Topic. Chamada sempre
 // que VIEW_FOLDERS_HOME muda (viewAllFolders/goHome) e uma vez no boot,
 // logo depois de VIEW_FOLDERS_HOME ser inicializado acima.
-const GROUP_BY_HIDDEN_IN_FOLDERS = ['creator', 'user-folders'];
+// "Folders" e "User folders" (agrupar por pasta própria / cross-user) foram
+// REMOVIDOS do Group by — essas duas visões já são cobertas por inteiro
+// pela seção "Folders" da sidebar + o seletor de escopo (#folderScopeDD:
+// My folders/usuário escolhido/All), então mantê-las como opções
+// duplicadas no Group by só confundia. 'creator' ("Created by") continua
+// existindo, só escondido enquanto o usuário está em Folders (ali o
+// dropdown inteiro já é substituído pelo seletor de escopo, ver abaixo).
+const GROUP_BY_HIDDEN_IN_FOLDERS = ['creator'];
 // Dentro de Folders, o controle "Group by" da toolbar (#groupByDD) é
 // substituído por inteiro pelo seletor de ESCOPO de pastas (#folderScopeDD
 // — ver renderFolderScopeOptions()/setFolderScope() mais abaixo): "My
 // folders" (padrão) / um usuário escolhido / "All". Os dois dropdowns
 // nunca ficam visíveis ao mesmo tempo — só um "style.display" complementar,
-// mesmo padrão já usado pelos seg-btns escondidos abaixo.
+// mesmo padrão já usado pelos seg-btns escondidos abaixo. O rótulo
+// compartilhado (#ctbGroupByLabel, ver index.html) troca de texto junto:
+// "Group by" fora de Folders, "Filter by" dentro (ali o dropdown não
+// agrupa nada, só filtra de quem são as pastas exibidas).
 function updateGroupByOptionsForFoldersScope() {
   document.querySelectorAll('.seg-btn[data-val]').forEach(b => {
     if (GROUP_BY_HIDDEN_IN_FOLDERS.includes(b.dataset.val)) {
@@ -117,12 +126,12 @@ function updateGroupByOptionsForFoldersScope() {
   const folderScopeDD = document.getElementById('folderScopeDD');
   if (groupByDD) groupByDD.style.display = VIEW_FOLDERS_HOME ? 'none' : '';
   if (folderScopeDD) folderScopeDD.style.display = VIEW_FOLDERS_HOME ? '' : 'none';
+  const groupByLabelEl = document.getElementById('ctbGroupByLabel');
+  if (groupByLabelEl) groupByLabelEl.textContent = VIEW_FOLDERS_HOME ? 'Filter by' : 'Group by';
   if (VIEW_FOLDERS_HOME) {
     // O seletor de usuário precisa da lista cross-user (ALL_USERS_FOLDERS)
     // pronta — carrega (ou refresca) sob demanda ao entrar em Folders, em
-    // vez de manter isso sempre quente no boot pra todo mundo (mesmo
-    // espírito de reloadAllUsersFoldersFromServer() já usado pelo Group by
-    // "User folders").
+    // vez de manter isso sempre quente no boot pra todo mundo.
     if (typeof reloadAllUsersFoldersFromServer === 'function') reloadAllUsersFoldersFromServer();
     if (typeof renderFolderScopeOptions === 'function') renderFolderScopeOptions();
   }
@@ -236,11 +245,10 @@ function toggleCommandInFolder(cmdId, folderId, itemEl) {
   } else if (!folder.order.some(o => o.type === 'command' && o.id === cmdId)) {
     folder.order.push({ type: 'command', id: cmdId });
   }
-  // Mantém o snapshot cross-user (ALL_USERS_FOLDERS, ver Group by "User
-  // folders" / seletor de escopo dentro de Folders) coerente com a própria
-  // pasta do usuário atual — sem isso, a seção dele em "User folders"
-  // ficaria com a contagem/ordem antiga até o próximo reload (F5 ou
-  // re-escolher o Group by/escopo).
+  // Mantém o snapshot cross-user (ALL_USERS_FOLDERS, ver seletor de escopo
+  // dentro de Folders) coerente com a própria pasta do usuário atual — sem
+  // isso, a seção dele no escopo "All"/outro usuário ficaria com a
+  // contagem/ordem antiga até o próximo reload (F5 ou re-escolher o escopo).
   const ownInAllUsers = ALL_USERS_FOLDERS.find(f => f.id === folderId);
   if (ownInAllUsers) {
     if (wasOn) ownInAllUsers.command_ids.delete(cmdId); else ownInAllUsers.command_ids.add(cmdId);
@@ -253,7 +261,7 @@ function toggleCommandInFolder(cmdId, folderId, itemEl) {
     }
   }
 
-  if (VIEW_FOLDERS_HOME || GROUP_BY === 'my-folders' || GROUP_BY === 'user-folders') {
+  if (VIEW_FOLDERS_HOME) {
     render();
   } else if (itemEl) {
     itemEl.classList.toggle('on', !wasOn);

@@ -218,11 +218,10 @@ async function render() {
       const targetUsername = scope.startsWith('user:') ? scope.slice('user:'.length) : null;
       const relevant = targetUsername ? allFolders.filter(f => f.username === targetUsername) : allFolders;
       if (scope === 'all') {
-        // Mesmo agrupamento por usuário do Group by "User folders" de fora
-        // de Folders (ver ramo GROUP_BY === 'user-folders' abaixo) — feito
-        // aqui de novo (em vez de reaproveitar aquele bloco) porque este
-        // roda fora do laço de GROUP_BY e não tem acesso aos `return`
-        // antecipados de lá.
+        // Agrupamento por usuário (dono da pasta) — esta é a única forma de
+        // ver pastas de todos os usuários agrupadas por dono; o antigo Group
+        // by "User folders" (fora de Folders) foi removido, então este bloco
+        // não reaproveita nada de fora — monta o agrupamento por conta própria.
         const byUser = new Map();
         relevant.forEach(f => { if (!byUser.has(f.username)) byUser.set(f.username, []); byUser.get(f.username).push(f); });
         const usernames = [...byUser.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
@@ -291,94 +290,14 @@ async function render() {
     return comboHeader + envNote + creatorGroups;
   }
 
-  // "My folders": agrupa pelas PASTAS do próprio usuário (command.folder_ids,
-  // ver server/index.js: shapeCommand()) em vez de por Tópico/quem criou.
-  // Substituiu o antigo "User favorites" (agrupamento cross-user por quem
-  // favoritou) — pastas são privadas, então aqui só existe a perspectiva de
-  // quem está olhando a tela. Um comando guardado em várias pastas aparece em
-  // mais de uma seção (uma por pasta); comandos fora de qualquer pasta não
-  // aparecem em nenhum grupo (não existe seção "sem pasta" — diferente do
-  // "—" do Created by). Cada pasta usa buildFolderSection() (mesma função da
-  // visão "Folders" da sidebar) — cards diretos, SEM sub-seções de Tópico,
-  // porque "agrupar por pasta" e "agrupar por tópico" são visões alternativas
-  // uma da outra, não aninhadas (a pedido do usuário).
-  if (GROUP_BY === 'my-folders') {
-    const folderById = new Map((typeof FOLDERS !== 'undefined' ? FOLDERS : []).map(f => [f.id, f]));
-    // Pastas vazias de comando MAS com alguma nota (task Notes) também
-    // entram — antes só `commands.flatMap(folder_ids)` decidia quais pastas
-    // apareciam, o que escondia por completo uma pasta que só tivesse notas.
-    const folderIdsWithNotes = (typeof FOLDERS !== 'undefined' ? FOLDERS : []).filter(f => (f.notes || []).length).map(f => f.id);
-    const folderIdsInUse = [...new Set([...commands.flatMap(c => c.folder_ids || []), ...folderIdsWithNotes])]
-      .filter(id => folderById.has(id))
-      .sort((a, b) => folderById.get(a).name.localeCompare(folderById.get(b).name, undefined, { sensitivity: 'base' }));
-    const folderGroups = folderIdsInUse
-      .map(folderId => {
-        const folder = folderById.get(folderId);
-        const editMode = typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(folderId);
-        return buildFolderSection(commands, folderId, folder.name, values, hasIPs, `${kp}folder${folderId}`, folder.notes, folder.order, editMode);
-      })
-      .join('');
-    if (!folderGroups) return '';
-    const comboHeader = combos.length > 1
-      ? `<div class="combo-header">🔀 <strong>${cvLabel}</strong> / <strong>${ceLabel}</strong></div>`
-      : '';
-    return comboHeader + envNote + folderGroups;
-  }
-
-  // "User folders": mesma ideia de "Folders" acima, mas CROSS-USER — um
-  // bloco recolhível por usuário (mesmo padrão visual do "Created by"), com
-  // as pastas DELE aninhadas dentro (cards direto, sem sub-seção de Tópico,
-  // igual "Folders"). Só aparece no dropdown fora de Folders
-  // (VIEW_FOLDERS_HOME — ver updateGroupByOptionsForFoldersScope() em
-  // js/folders.js, que esconde essa opção enquanto o usuário está lá).
-  // Usa ALL_USERS_FOLDERS (cross-user, carregado sob demanda quando este
-  // Group by é escolhido — ver reloadAllUsersFoldersFromServer() em
-  // js/folders.js) em vez de command.folder_ids (que só reflete as pastas do
-  // usuário ATUAL — ver shapeCommand() em server/index.js). Renomear/excluir
-  // só aparece nas pastas que são do próprio usuário logado (CURRENT_USER,
-  // ver js/user-sync.js); as de outras pessoas aparecem só para consulta —
-  // o backend nem aceita a requisição de qualquer forma (ver
-  // PUT/DELETE /api/folders/:id, com WHERE username = usuário atual).
-  if (GROUP_BY === 'user-folders') {
-    const allFolders = typeof ALL_USERS_FOLDERS !== 'undefined' ? ALL_USERS_FOLDERS : [];
-    const byUser = new Map();
-    allFolders.forEach(f => {
-      if (!byUser.has(f.username)) byUser.set(f.username, []);
-      byUser.get(f.username).push(f);
-    });
-    const usernames = [...byUser.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-    const userGroups = usernames.map(username => {
-      const isOwn = typeof CURRENT_USER !== 'undefined' && CURRENT_USER === username;
-      const userFolders = byUser.get(username).slice().sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-      );
-      // Chave segura pro onclick="toggleSection(...)" — usernames vêm como
-      // "DOMÍNIO\usuario" (NTLM), mesmo cuidado do "Created by" acima.
-      const userKey = username.replace(/[^a-zA-Z0-9_-]/g, '_');
-      const folderSections = userFolders.map(f => {
-        const cmdById = new Map(commands.filter(c => f.command_ids.has(c.id)).map(c => [c.id, c]));
-        const notesById = new Map((f.notes || []).map(n => [n.id, n]));
-        // withActions só pra pasta do próprio usuário (dá pra renomear/
-        // excluir/reordenar/adicionar nota); copyable pra pasta de OUTRO
-        // usuário (só um botão de copiar — ver buildFolderSectionFromCards).
-        // editMode só é relevante quando isOwn (a pasta de outro usuário
-        // nunca é arrastável, ver `active` em buildFolderSectionFromCards).
-        // `ownFolder` (5º arg de buildFolderItemsCards) = isOwn: notas de
-        // outro usuário aparecem, mas sem clonar/editar/excluir.
-        const editMode = isOwn && typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(f.id);
-        const cards = buildFolderItemsCards(cmdById, notesById, f.order, values, hasIPs, isOwn);
-        return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}${userKey}__folder${f.id}`, isOwn, !isOwn, editMode);
-      }).join('');
-      const cardCount = (folderSections.match(/<div class="card"/g) || []).length;
-      if (!cardCount) return '';
-      return collapsibleGroup(`${cv}__${ce}__user${userKey}`, `👤 <strong>${escAttr(username)}</strong> <span class="sec-count">${cardCount}</span>`, folderSections, 'section-creator');
-    }).join('');
-    if (!userGroups) return '';
-    const comboHeader = combos.length > 1
-      ? `<div class="combo-header">🔀 <strong>${cvLabel}</strong> / <strong>${ceLabel}</strong></div>`
-      : '';
-    return comboHeader + envNote + userGroups;
-  }
+  // "Folders"/"User folders" existiram aqui como opções de Group by — foram
+  // REMOVIDAS (a pedido do usuário): a mesma visão (pastas do próprio
+  // usuário / cross-user por dono) já é coberta por inteiro pela seção
+  // "Folders" da sidebar (VIEW_FOLDERS_HOME, ver ramo acima) + o seletor de
+  // escopo (My folders/usuário escolhido/All), então mantê-las como opções
+  // duplicadas no Group by só confundia. `buildFolderSection`/
+  // `buildFolderItemsCards`/`buildFolderSectionFromCards` continuam em uso
+  // — agora só pelo ramo VIEW_FOLDERS_HOME acima.
 
   const bodyHtml = envNote + buildSections(commands, kp);
 

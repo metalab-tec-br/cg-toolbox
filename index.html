@@ -296,18 +296,20 @@
     <input type="hidden" id="ip"><input type="hidden" id="port">
   </div>
   <div class="content-toolbar">
-    <!-- Rótulo único e sempre visível pros dois dropdowns abaixo (Group by
-         fora de Folders / seletor de escopo dentro de Folders) — "Filter by"
-         em vez de "Group by" (nome mais genérico, já que dentro de Folders
-         o dropdown não agrupa nada, só filtra de quem são as pastas
-         exibidas). Fica FORA dos dois .dd (não dentro de nenhum deles) de
-         propósito: um <span> dentro de um .dd (que não é flex) empurraria o
-         botão pra linha de baixo, deixando essa barra mais alta que a da
-         tela de Comandos — por isso o antigo rótulo "Folders" dentro de
-         #folderScopeDD foi removido (era redundante com a seção "Folders" já
-         selecionada na sidebar, e causava exatamente esse problema de
-         altura). -->
-    <span class="ctb-label">Filter by</span>
+    <!-- Rótulo único pros dois dropdowns abaixo (Group by fora de Folders /
+         seletor de escopo dentro de Folders) — texto DINÂMICO: "Group by"
+         fora de Folders (rótulo de sempre), "Filter by" dentro de Folders
+         (nome mais genérico, já que ali o dropdown não agrupa nada, só
+         filtra de quem são as pastas exibidas) — ver
+         updateGroupByOptionsForFoldersScope() em js/folders.js, que troca o
+         textContent junto com o resto da troca de dropdown. Fica FORA dos
+         dois .dd (não dentro de nenhum deles) de propósito: um <span>
+         dentro de um .dd (que não é flex) empurraria o botão pra linha de
+         baixo, deixando essa barra mais alta que a da tela de Comandos —
+         por isso o antigo rótulo "Folders" dentro de #folderScopeDD foi
+         removido (era redundante com a seção "Folders" já selecionada na
+         sidebar, e causava exatamente esse problema de altura). -->
+    <span class="ctb-label" id="ctbGroupByLabel">Group by</span>
     <div class="dd ctb-groupby-dd" id="groupByDD">
       <button type="button" class="dd-btn" id="groupByDDBtn" onclick="toggleDropdown('groupByDD')">
         <span class="dd-label">Topic</span><span class="dd-arrow">▾</span>
@@ -315,8 +317,6 @@
       <div class="dd-panel seg" id="groupByToggle">
         <button type="button" class="seg-btn" data-val="creator" onclick="setGroupBy('creator')">Created by</button>
         <button type="button" class="seg-btn" data-val="topic" onclick="setGroupBy('topic')">Topic</button>
-        <button type="button" class="seg-btn" data-val="my-folders" onclick="setGroupBy('my-folders')">Folders</button>
-        <button type="button" class="seg-btn" data-val="user-folders" onclick="setGroupBy('user-folders')">User folders</button>
         <button type="button" class="seg-btn" data-val="version" onclick="setGroupBy('version')">Version</button>
       </div>
     </div>
@@ -326,8 +326,8 @@
          em js/folders.js). "My folders" (padrão) / um usuário escolhido
          (lista dinâmica, montada de ALL_USERS_FOLDERS — ver
          renderFolderScopeOptions()) / "All". Mesmo componente .dd/.dd-panel
-         seg dos outros dropdowns da toolbar; usa o rótulo "Filter by"
-         compartilhado acima, sem rótulo próprio. -->
+         seg dos outros dropdowns da toolbar; usa o rótulo compartilhado
+         acima ("Filter by" quando visível), sem rótulo próprio. -->
     <div class="dd ctb-groupby-dd" id="folderScopeDD" style="display:none;">
       <button type="button" class="dd-btn" id="folderScopeDDBtn" onclick="toggleDropdown('folderScopeDD')">
         <span class="dd-label">My folders</span><span class="dd-arrow">▾</span>
@@ -490,8 +490,6 @@
           <div class="dd-panel seg" id="mGroupBy">
             <button type="button" class="seg-btn" data-val="creator">Created by</button>
             <button type="button" class="seg-btn" data-val="topic">Topic</button>
-            <button type="button" class="seg-btn" data-val="my-folders">Folders</button>
-            <button type="button" class="seg-btn" data-val="user-folders">User folders</button>
             <button type="button" class="seg-btn" data-val="version">Version</button>
           </div>
         </div>

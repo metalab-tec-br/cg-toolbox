@@ -494,6 +494,41 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
    .section-editing abaixo) — sem isso não haveria um jeito óbvio de
    desligar o modo de novo sem passar o mouse por cima. */
 .sec-folder-btn.on { background: var(--teal-bg); color: var(--teal); }
+/* Botão de editar a pasta é um lápis (era uma engrenagem ⚙) um pouco maior
+   que os outros ícones do cabeçalho (16px/10px base), a pedido do usuário —
+   mais fácil de notar/acertar sendo a única ação sempre visível ali. */
+.sec-folder-edit-btn { width: 19px; height: 19px; font-size: 13px; }
+
+/* Excluir pasta: estilo "tag" vermelha (mesmo componente .tag/.t-red dos
+   badges dos comandos, ver mais abaixo) em vez de um botão-ícone discreto —
+   deixa a ação destrutiva mais chamativa/inconfundível. Só aparece dentro
+   do modo de edição (ver deleteTag em buildFolderSectionFromCards,
+   db-render-engine.js); .tag/.t-red já definem toda a aparência (cor/fundo/
+   borda/tamanho de fonte), só precisa virar clicável aqui. */
+.sec-folder-delete-tag { cursor: pointer; }
+.sec-folder-delete-tag:hover { filter: brightness(1.15); }
+
+/* Divisor explícito entre os botões da esquerda (✎ Edit / ✕ Delete) e o
+   botão do canto direito (+ Add note / ⧉ Copy) — substitui o ::after padrão
+   de .sec-title (que ficaria ENTRE eles, sem sobrar espaço pro botão do
+   canto direito ficar de fato na borda). `.section-folder` desliga esse
+   ::after padrão só nas seções de pasta (buildFolderSectionFromCards sempre
+   passa essa classe), porque elas montam o próprio divisor manualmente. */
+.section.section-folder > .sec-title::after { display: none; }
+.sec-title-divider { flex: 1; height: 1px; background: var(--bdr); }
+
+/* Botão "+ Add note", no canto direito do cabeçalho da pasta — mesmo estilo
+   sólido/pill do botão "Add" da toolbar principal (fundo na cor de
+   destaque, texto branco — ver .ctb-cmd-btn.admin-highlight em layout.css),
+   só numa versão compacta (círculo pequeno) pra caber numa linha de
+   cabeçalho de seção em vez de na toolbar. Continua sempre visível (não
+   precisa entrar no modo de edição pra anotar algo). */
+.sec-folder-add-btn {
+  width: 18px; height: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  border-radius: 999px; background: var(--teal); border: 1px solid var(--teal); color: #fff;
+  font-size: 12px; font-weight: 800; line-height: 1; cursor: pointer;
+}
+.sec-folder-add-btn:hover { filter: brightness(1.08); }
 
 /* Nome da pasta editável inline no cabeçalho, dentro do modo de edição (ver
    nameHtml em buildFolderSectionFromCards, db-render-engine.js) — antes era
