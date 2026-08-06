@@ -610,18 +610,75 @@ function closeNoteEditorModal() {
   _noteEditorFolderId = null;
   _noteEditorNoteId = null;
 }
-// Botões da barra de formatação (negrito/itálico/sublinhado) do editor —
-// document.execCommand está deprecated mas continua funcionando em todos os
-// navegadores relevantes pra formatar um <div contenteditable> local; é a
-// mesma abordagem simples já usada pra colar/redimensionar imagem aqui
-// (sem editor de terceiros). O onmousedown="event.preventDefault()" no
-// botão (ver index.html) evita que o clique tire o foco/seleção de texto do
-// editor antes do comando rodar — sem isso, a seleção seria perdida e nada
-// seria formatado.
+// Botões da barra de formatação (negrito/itálico/sublinhado/alinhamento) do
+// editor — document.execCommand está deprecated mas continua funcionando em
+// todos os navegadores relevantes pra formatar um <div contenteditable>
+// local; é a mesma abordagem simples já usada pra colar/redimensionar
+// imagem aqui (sem editor de terceiros). O onmousedown="event.preventDefault()"
+// no botão (ver index.html) evita que o clique tire o foco/seleção de texto
+// do editor antes do comando rodar — sem isso, a seleção seria perdida e
+// nada seria formatado.
 function neExec(cmd) {
   const body = document.getElementById('noteBodyEditor');
   if (body) body.focus();
   document.execCommand(cmd, false, null);
+}
+
+// Tamanho de fonte e cor (pedido: "permita o usuário alterar o tamanho da
+// fonte, a cor e alinha para esquerda, centro e direita") usam um <select>
+// e um <input type="color"> (ver index.html) — diferente dos botões acima,
+// esses dois elementos PRECISAM ganhar foco pra funcionar (senão o
+// navegador não abre o dropdown/seletor de cor nativo), então
+// onmousedown="event.preventDefault()" não é uma opção aqui: o foco (e,
+// nos navegadores mais rigorosos, a seleção de texto dentro do editor)
+// pode se perder ao clicar neles. Por isso guardamos a última seleção real
+// feita dentro de #noteBodyEditor (_neSaveSelection, disparado em
+// mouseup/keyup lá dentro) e a restauramos (_neRestoreSelection) antes de
+// aplicar o comando — sem isso, escolher um tamanho/cor formataria uma
+// seleção vazia/errada (ou nenhuma).
+let _neLastRange = null;
+function _neSaveSelection() {
+  const body = document.getElementById('noteBodyEditor');
+  const sel = window.getSelection();
+  if (body && sel && sel.rangeCount && body.contains(sel.anchorNode)) {
+    _neLastRange = sel.getRangeAt(0).cloneRange();
+  }
+}
+function _neRestoreSelection() {
+  const body = document.getElementById('noteBodyEditor');
+  if (!body) return;
+  body.focus();
+  if (_neLastRange) {
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(_neLastRange);
+  }
+}
+document.getElementById('noteBodyEditor') && document.getElementById('noteBodyEditor').addEventListener('mouseup', _neSaveSelection);
+document.getElementById('noteBodyEditor') && document.getElementById('noteBodyEditor').addEventListener('keyup', _neSaveSelection);
+
+// document.execCommand('fontSize', ...) só aceita a escala legada de 1 a 7
+// (sem controle em pixels) — o truque padrão (sem precisar de nenhuma lib)
+// é aplicar o tamanho 7 (usado só como marcador único, fácil de achar
+// depois) e então trocar cada <font size="7"> resultante por um `style`
+// inline com o tamanho em px de verdade, removendo o atributo `size`. O
+// próprio <select> volta pro placeholder ("Size") depois de aplicar (ver
+// onchange em index.html), pra poder escolher o MESMO tamanho de novo em
+// seguida sem precisar trocar de opção primeiro.
+function neSetFontSize(px) {
+  if (!px) return;
+  _neRestoreSelection();
+  document.execCommand('fontSize', false, '7');
+  const body = document.getElementById('noteBodyEditor');
+  if (!body) return;
+  body.querySelectorAll('font[size="7"]').forEach(el => {
+    el.removeAttribute('size');
+    el.style.fontSize = px + 'px';
+  });
+}
+function neSetColor(color) {
+  _neRestoreSelection();
+  document.execCommand('foreColor', false, color);
 }
 async function saveNoteEditor() {
   const bodyEl = document.getElementById('noteBodyEditor');

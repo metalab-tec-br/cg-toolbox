@@ -804,27 +804,26 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .note-delete-btn { font-size: 10px; }
 .note-delete-btn:hover { border-color: var(--red); color: var(--red); }
 
-/* ─── NOTES (campo único, fundo transparente dentro de uma pasta) ─── */
-/* Redesign (pedido: "achei confusa a tela de notas com comandos ... ajustar
-   as notas para que fiquem em um só campo ... deixar o fundo transparente").
-   Antes a nota reusava a MESMA estrutura de um card de comando — .card-head
-   (faixa de título, que já passou por várias iterações de cor "post-it"
-   amarela/cinza) + .note-body separado — o que fazia a nota parecer "mais
-   um card de comando" na mesma lista, só que amarela. Agora é um bloco
-   ÚNICO (.note-flat-body), sem cabeçalho próprio e sem o fundo/borda que
-   .card dá normalmente (zerados abaixo só para notas via
-   `.card[data-note-id]`) — só o badge "Note" (span inline, ver
-   .note-badge) na frente do texto ainda
-   distingue visualmente de um comando. As ações (clonar/editar/excluir)
-   saem da faixa de título (que não existe mais) e viram um mini-toolbar
-   flutuante no canto superior direito, visível só no hover — texto/imagem
-   da nota ocupam 100% do espaço quando não se está interagindo com ela.
+/* ─── NOTES (campo único dentro de uma pasta) ─── */
+/* 2º redesign (pedido mais recente: "remova a palavra NOTE, permita o
+   usuário alterar o tamanho da fonte, a cor e alinha para esquerda, centro
+   e direita; deixa a nota em uma caixa branca sem borda do mesmo tamanho
+   da caixa do comando" — reverte o "fundo transparente" do redesign
+   ANTERIOR, ver histórico do git). Continua um bloco ÚNICO — sem cabeçalho/
+   título separado (.note-flat-body abaixo) — mas agora com fundo
+   branco/cinza igual ao comando (var(--surf), mesmo padding) e SEM borda
+   visível (border-color: transparent) em vez de fundo transparente. O
+   badge "Note" foi REMOVIDO (pedido) — a única distinção visual de um
+   comando na mesma seção de pasta passou a ser a ausência de cabeçalho/
+   título, o que é intencional. As ações (clonar/editar/excluir) continuam
+   como mini-toolbar flutuante no canto superior direito, visível só no
+   hover — sem faixa de cabeçalho pra "morarem".
    Seletor por atributo (`.card[data-note-id]`), NÃO por classe extra — ver
    comentário em buildNoteCardHtml (js/db-render-engine.js) sobre por que um
    classname a mais no `.card` quebraria a contagem `cardCount` de
    render.js (regex casa `<div class="card"` letra por letra). */
 .card[data-note-id] {
-  position: relative; background: transparent; border-color: transparent;
+  position: relative; background: var(--surf); border-color: transparent;
 }
 .card[data-note-id]:hover { border-color: transparent; }
 .note-flat-actions {
@@ -836,39 +835,54 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .card[data-note-id]:focus-within .note-flat-actions {
   opacity: 1; pointer-events: auto;
 }
-.note-flat-actions .edit-btn { background: var(--surf); }
-/* "Note" na frente do texto — único jeito de diferenciar visualmente de um
-   card de comando dentro da mesma seção de pasta, já que o fundo/cabeçalho
-   deixou de existir. Continua usando --yellow/--yellow-bg (já theme-scoped
-   em theme.css), igual antes do redesign. */
-.note-badge {
-  font-size: 8.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px;
-  color: var(--yellow); background: var(--yellow-bg); border-radius: 3px;
-  padding: 1px 5px; margin-right: 5px; vertical-align: middle;
-}
+.note-flat-actions .edit-btn { background: var(--surf2); }
 /* Corpo único da nota — HTML livre (sanitizado no servidor, ver
    sanitizeNoteHtml em server/index.js), pode ter texto formatado (negrito/
-   itálico/sublinhado, ver toolbar do editor abaixo) + imagens coladas.
-   Padding-right maior reserva espaço pro mini-toolbar de ações não cobrir
-   o texto quando aparece no hover. Imagens sempre limitadas à largura do
-   bloco (max-width:100%) mesmo que o atributo width (definido ao
-   redimensionar no editor, ver _neArmImageResize em js/folders.js) seja
-   maior — evita overflow horizontal em telas estreitas. */
-.note-flat-body { padding: 6px 84px 6px 4px; font-size: 12px; color: var(--text); line-height: 1.5; word-wrap: break-word; }
+   itálico/sublinhado/tamanho de fonte/cor/alinhamento, ver toolbar do
+   editor abaixo) + imagens coladas. Mesmo padding vertical/horizontal de
+   um .card-head + corpo de comando somados (10px 12px), "do mesmo tamanho
+   da caixa do comando" — só o lado direito ganha espaço extra reservado
+   pro mini-toolbar de ações não cobrir o texto quando aparece no hover.
+   Imagens sempre limitadas à largura do bloco (max-width:100%) mesmo que o
+   atributo width (definido ao redimensionar no editor, ver
+   _neArmImageResize em js/folders.js) seja maior — evita overflow
+   horizontal em telas estreitas. */
+.note-flat-body { padding: 10px 84px 10px 12px; font-size: 12px; color: var(--text); line-height: 1.5; word-wrap: break-word; }
 .note-flat-body img { max-width: 100%; height: auto; border-radius: 4px; margin: 4px 0; display: block; }
 .note-flat-body p, .note-flat-body div { margin: 0 0 4px; }
 .note-flat-empty { color: var(--muted); font-style: italic; }
 
-/* Barra de formatação do editor (negrito/itálico/sublinhado, ver neExec()
-   em js/folders.js) — botões simples, mesmo visual de .edit-btn (borda +
-   fundo --surf), ficam logo acima do #noteBodyEditor. */
-.note-editor-toolbar { display: flex; gap: 4px; margin-bottom: 6px; }
+/* Barra de formatação do editor (negrito/itálico/sublinhado/alinhamento,
+   ver neExec() em js/folders.js; tamanho de fonte/cor, ver
+   neSetFontSize()/neSetColor()) — botões simples, mesmo visual de
+   .edit-btn (borda + fundo --surf), ficam logo acima do #noteBodyEditor. */
+.note-editor-toolbar { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; flex-wrap: wrap; }
 .ne-fmt-btn {
   background: var(--surf); border: 1px solid var(--bdr); border-radius: 5px;
   color: var(--text); cursor: pointer; font-size: 11px; line-height: 1;
   padding: 4px 10px; min-width: 28px; transition: all .12s;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .ne-fmt-btn:hover { border-color: var(--teal); color: var(--teal); }
+/* Divisor visual entre grupos da toolbar (negrito/itálico/sublinhado |
+   tamanho+cor | alinhamento) — só uma linha vertical fininha. */
+.ne-fmt-sep { width: 1px; height: 18px; background: var(--bdr); margin: 0 2px; }
+/* Select de tamanho de fonte — mesmo visual de .ne-fmt-btn, mas precisa de
+   padding lateral menor (o próprio <select> já tem a seta nativa) e altura
+   igual aos outros botões da barra. */
+.ne-fmt-size {
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: 5px;
+  color: var(--text); cursor: pointer; font-size: 11px; line-height: 1;
+  padding: 4px 4px; height: 25px;
+}
+.ne-fmt-size:hover { border-color: var(--teal); }
+/* Input de cor nativo (<input type="color">) — o próprio navegador desenha
+   o swatch; só padroniza tamanho/borda pra combinar com os outros botões. */
+.ne-fmt-color {
+  width: 25px; height: 25px; padding: 1px; border: 1px solid var(--bdr); border-radius: 5px;
+  background: var(--surf); cursor: pointer;
+}
+.ne-fmt-color:hover { border-color: var(--teal); }
 
 /* Editor de nota (#noteBodyEditor, ver openNoteEditor()/js/folders.js) — um
    <div contenteditable> em vez de <textarea> pra suportar <img> coladas

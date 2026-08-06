@@ -473,22 +473,28 @@ function wrapCardsForFolderDrag(cards, folderId) {
   </div>`).join('');
 }
 
-// Card de uma NOTE (task Notes) — redesign (pedido: "achei confusa a tela
-// de notas com comandos ... ajustar as notas para que fiquem em um só
-// campo ... deixar o fundo transparente"): antes tinha a MESMA estrutura de
-// um card de comando (.card-head/título separado + .note-body), o que
-// parecia "mais um card de comando" na lista, só de outra cor. Agora é um
-// bloco ÚNICO e transparente (.note-flat, ver CSS em components.css) — sem
-// faixa de título própria; a "descrição" É o próprio conteúdo (HTML já
-// sanitizado no servidor — ver sanitizeNoteHtml em server/index.js —
-// então pode ser inserido cru aqui, inclusive <img> coladas/redimensionadas
-// no editor), com o badge "Note" embutido no início do texto em vez de numa
-// faixa própria — único jeito de diferenciar visualmente de um card de
-// comando dentro da mesma seção de pasta.
-// `note.title` (campo do banco, ver schema.sql) não é mais mostrado na
-// tela — é só um resumo em texto puro derivado automaticamente do
-// conteúdo (ver _deriveNoteTitle em js/folders.js), mantido só pra
-// mensagens internas (confirmação de exclusão, sufixo " (copy)" ao clonar).
+// Card de uma NOTE (task Notes) — 2º redesign (pedido mais recente: "em
+// notes, remova a palavra NOTE, permita o usuário alterar o tamanho da
+// fonte, a cor e alinha para esquerda, centro e direita; deixa a nota em
+// uma caixa branca sem borda do mesmo tamanho da caixa do comando" —
+// reverte parcialmente o pedido ANTERIOR de fundo transparente, ver
+// comentário em components.css). Continua um bloco ÚNICO (sem cabeçalho/
+// título separado, ver .note-flat-body abaixo) — só que agora com fundo
+// branco/cinza igual ao comando (var(--surf), sem borda visível) em vez de
+// transparente, e SEM o badge "Note" na frente do texto (removido a
+// pedido) — a única forma de diferenciar nota de comando na tela passou a
+// ser o próprio fundo (visualmente idêntico ao comando, sem cabeçalho)
+// dentro da MESMA seção de pasta, o que é intencional (pedido do usuário).
+// A "descrição" É o próprio conteúdo (HTML já sanitizado no servidor — ver
+// sanitizeNoteHtml em server/index.js — então pode ser inserido cru aqui,
+// inclusive <img> coladas/redimensionadas, e agora também <span
+// style="..."> de tamanho de fonte/cor e blocos com text-align, todos
+// aplicados pela barra de formatação do editor — ver neExec/neSetFontSize/
+// neSetColor em js/folders.js).
+// `note.title` (campo do banco, ver schema.sql) não é mostrado na tela —
+// é só um resumo em texto puro derivado automaticamente do conteúdo (ver
+// _deriveNoteTitle em js/folders.js), mantido só pra mensagens internas
+// (confirmação de exclusão, sufixo " (copy)" ao clonar).
 // `ownFolder` (= withActions da seção que contém a nota, sempre verdadeiro
 // quando é uma pasta do usuário atual e falso quando é de outro usuário)
 // decide se aparecem os botões de clonar/editar/excluir — uma nota só pode
@@ -520,15 +526,15 @@ function buildNoteCardHtml(note, ownFolder) {
   // "card note-flat") quebraria esse match (a regex não acha a aspa de
   // fechamento logo depois de "card"), fazendo notas sumirem da contagem e,
   // em casos de pasta só com notas, a seção inteira sumir (cardCount==0).
-  // O visual "campo único, fundo transparente" (ver .card[data-note-id] em
-  // components.css) é aplicado via atributo `[data-note-id]`, não via
-  // classe extra — já dá seletor específico o bastante sem mexer na classe.
+  // O visual (ver .card[data-note-id] em components.css) é aplicado via
+  // atributo `[data-note-id]`, não via classe extra — já dá seletor
+  // específico o bastante sem mexer na classe.
   // `data-note-id` (em vez de data-cmd-id) também já é suficiente pra
   // distinguir nota de comando em qualquer seletor/handler que precise (ver
   // wrapCardsForFolderDrag/_fcArmDrag em js/folders.js).
   return `<div class="card" data-note-id="${note.id}">
     ${actions}
-    <div class="note-flat-body"><span class="note-badge">Note</span>${content}</div>
+    <div class="note-flat-body">${content}</div>
   </div>`;
 }
 

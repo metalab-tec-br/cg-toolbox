@@ -1250,13 +1250,12 @@
 
 <!-- ══ NOTE EDITOR — create/edit de uma nota dentro de uma pasta própria
      (task Notes, ver openNoteEditor()/saveNoteEditor() em js/folders.js).
-     Redesign (pedido: "achei confusa a tela de notas com comandos, ajustar
-     para que fiquem em um só campo e o usuário possa colocar negrito,
-     itálico etc, deixar o fundo transparente"): campo ÚNICO — sem input de
-     Título separado, só o corpo "rico" num <div contenteditable> com uma
-     barra de formatação (negrito/itálico/sublinhado, via
-     document.execCommand — ver _neExec em js/folders.js) logo acima. Além
-     de texto formatado, aceita colar imagens (convertidas pra data URI, ver
+     Campo ÚNICO — sem input de Título separado, só o corpo "rico" num
+     <div contenteditable> com uma barra de formatação acima: negrito/
+     itálico/sublinhado, tamanho de fonte, cor do texto e alinhamento
+     (esquerda/centro/direita) — tudo via document.execCommand (ver
+     neExec()/neSetFontSize()/neSetColor() em js/folders.js). Além de texto
+     formatado, aceita colar imagens (convertidas pra data URI, ver
      _neHandlePaste) e redimensioná-las arrastando o canto inferior-direito
      (ver _neArmImageResize) — sem editor de terceiros, só o mínimo
      necessário pro que foi pedido. Um título ainda é gerado
@@ -1275,6 +1274,25 @@
           <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec('bold')" title="Bold (Ctrl+B)"><b>B</b></button>
           <button type="button" class="ne-fmt-btn ne-fmt-italic" onmousedown="event.preventDefault()" onclick="neExec('italic')" title="Italic (Ctrl+I)"><i>I</i></button>
           <button type="button" class="ne-fmt-btn ne-fmt-underline" onmousedown="event.preventDefault()" onclick="neExec('underline')" title="Underline (Ctrl+U)"><u>U</u></button>
+          <span class="ne-fmt-sep"></span>
+          <select class="ne-fmt-size" onchange="neSetFontSize(this.value); this.value='';" title="Font size">
+            <option value="">Size</option>
+            <option value="11">Small</option>
+            <option value="13">Normal</option>
+            <option value="17">Large</option>
+            <option value="22">X-Large</option>
+          </select>
+          <input type="color" class="ne-fmt-color" oninput="neSetColor(this.value)" title="Text color" value="#000000">
+          <span class="ne-fmt-sep"></span>
+          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec('justifyLeft')" title="Align left">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M1 7h9M1 11h14M1 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
+          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec('justifyCenter')" title="Align center">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M3.5 7h9M1 11h14M3.5 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
+          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec('justifyRight')" title="Align right">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M6 7h9M1 11h14M6 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
         </div>
         <div class="note-editor-body" id="noteBodyEditor" contenteditable="true" data-placeholder="Write the note here — select text to format it, paste an image (Ctrl+V) to attach it."></div>
       </div>
