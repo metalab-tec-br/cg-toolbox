@@ -529,43 +529,44 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .sec-folder-delete-btn:hover { background: var(--red); color: #fff; }
 
 /* Divisor explícito entre os botões da esquerda (✎ Edit / ✕ Delete) e o
-   botão do canto direito (⧉ Copy, só em pastas de outro usuário — "Add
-   note" saiu do cabeçalho, ver .sec-folder-add-note-btn abaixo) — substitui
-   o ::after padrão de .sec-title (que ficaria ENTRE eles, sem sobrar espaço
-   pro botão do canto direito ficar de fato na borda). `.section-folder`
-   desliga esse ::after padrão só nas seções de pasta
-   (buildFolderSectionFromCards sempre passa essa classe), porque elas
-   montam o próprio divisor manualmente — mesmo quando não há nenhum botão
-   depois dele (aí ele só ocupa o espaço restante, igual o ::after normal). */
+   botão do canto direito (+ Add note na pasta própria, ⧉ Copy na de outro
+   usuário — nunca os dois juntos) — substitui o ::after padrão de
+   .sec-title (que ficaria ENTRE eles, sem sobrar espaço pro botão do canto
+   direito ficar de fato na borda). `.section-folder` desliga esse ::after
+   padrão só nas seções de pasta (buildFolderSectionFromCards sempre passa
+   essa classe), porque elas montam o próprio divisor manualmente — mesmo
+   quando não há nenhum botão depois dele (aí ele só ocupa o espaço
+   restante, igual o ::after normal). */
 .section.section-folder > .sec-title::after { display: none; }
 .sec-title-divider { flex: 1; height: 1px; background: var(--bdr); }
 
-/* Botão "Add note" — antes era um "+" pequeno no canto do cabeçalho (pouco
-   visível/óbvio, a pedido do usuário); agora é a PRIMEIRA coisa dentro do
-   corpo da seção (.sec-body), numa linha própria abaixo do nome da pasta,
-   com o rótulo "Add note" visível — MESMO TAMANHO do botão "Add" da
-   toolbar principal (font-size/padding/width idênticos — ver
-   .ctb-cmd-actions .btn.ctb-cmd-btn em layout.css), não o tamanho do
-   conteúdo. `.sec-body` é flex-column (ver acima) e estica os filhos por
-   padrão (align-items: stretch) — sem `align-self: flex-start` o botão
-   ficaria com a largura inteira da seção; com ele, fica do tamanho fixo
-   certo e alinhado à esquerda. Continua sempre visível (não precisa
-   entrar no modo de edição pra anotar algo). */
+/* Botão "Add note" — 3º giro de posição (a pedido do usuário: "mover o
+   botão de add note para o final da linha, na mesma direção do add").
+   Já foi um "+" pequeno no canto do cabeçalho, depois virou um botão de
+   linha inteira abaixo do nome da pasta; agora volta pro cabeçalho, mas
+   colado na borda direita (rightAction, empurrado até lá pelo mesmo
+   `.sec-title-divider` que separa ✎ Edit/✕ Delete de ⧉ Copy) — mesma
+   posição/direção do botão "Add" da toolbar principal, que também fica
+   encostado na borda direita da própria barra. MESMO TAMANHO do "Add" da
+   toolbar (font-size/padding/width idênticos — ver .ctb-cmd-actions
+   .btn.ctb-cmd-btn em layout.css), só que com as CORES INVERTIDAS (outro
+   pedido do usuário): o "Add" da toolbar é sólido — fundo --teal cheio,
+   texto branco (.ctb-cmd-btn.admin-highlight); este aqui faz o oposto —
+   fundo --teal-bg (tintado/translúcido) com texto e borda --teal. Como
+   --teal-bg é um rgba() sobre --teal (não uma cor fixa), a inversão já sai
+   correta tanto no tema claro quanto no escuro, e acompanha automaticamente
+   qualquer cor de destaque customizada pelo usuário em Configurações. */
 .sec-folder-add-note-btn {
   /* -25% da largura (128px -> 96px), igual ao botão "Add" da toolbar
      (.ctb-cmd-actions .btn.ctb-cmd-btn.admin-highlight em layout.css), pra
      manterem o mesmo tamanho entre si. */
-  align-self: flex-start; width: 96px; flex-shrink: 0;
+  width: 96px; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-  margin: 0 0 4px; padding: 3px 7px; font-size: 10px; white-space: nowrap;
-  /* Cor no mesmo estilo post-it das notes (pedido do usuário: "deixe a cor
-     do botão no mesmo estilo") — em vez da cor de destaque (--teal), usa a
-     faixa mais escura do post-it como fundo e o texto escuro do post-it,
-     igual ao cabeçalho de uma nota. */
-  background: var(--postit-head-bg); border: 1px solid var(--postit-border);
-  color: var(--postit-text); font-weight: 700; letter-spacing: .2px; cursor: pointer;
+  padding: 3px 7px; font-size: 10px; white-space: nowrap;
+  background: var(--teal-bg); border: 1px solid var(--teal);
+  color: var(--teal); font-weight: 700; letter-spacing: .2px; cursor: pointer;
 }
-.sec-folder-add-note-btn:hover { filter: brightness(0.97); }
+.sec-folder-add-note-btn:hover { filter: brightness(1.08); border-color: var(--teal); }
 
 /* Aviso discreto quando uma pasta PRÓPRIA está vazia (0 comandos, 0 notas)
    — antes a pasta simplesmente não aparecia em lugar nenhum até o usuário
