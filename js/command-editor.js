@@ -881,10 +881,11 @@ _ceBindSingleSeg('cmdVendorSeg', 'cmdVendorDDBtn');
 _ceBindSingleSeg('cmdSysSeg', 'cmdSysDDBtn');
 _ceBindMultiSeg('cmdVersionsSeg', 'cmdVersionsDDBtn', null, 'selected');
 _ceBindMultiSeg('cmdEnvSeg', 'cmdEnvDDBtn', null, 'selected');
-document.getElementById('cmdEditorOverlay').addEventListener('click', ev => {
-  if (ev.target.id === 'cmdEditorOverlay') closeCommandEditor();
-});
-document.addEventListener('keydown', ev => {
-  if (ev.key === 'Escape') closeCommandEditor();
-});
+// Antes, clicar fora da caixa (fundo escuro do overlay) OU apertar Escape
+// fechava o editor e descartava qualquer alteração não salva — pedido do
+// usuário: "quando estou editando uma nota ou comando, e clico fora da
+// janela eu perco tudo que tinha feito. mantenha na tela aberta até que eu
+// salve ou feche a janela" (mesmo pedido resolvido para o editor de notas
+// em js/folders.js). Removidos os dois listeners — agora só fecha via um
+// botão explícito ("Cancel"/✕, sem salvar) ou "Save" (cmdEditorSave()).
 _ceRenderWizardState(); // initial paint (step 1 visible, rest hidden) even before the modal is first opened

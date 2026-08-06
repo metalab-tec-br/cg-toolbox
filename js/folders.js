@@ -849,9 +849,13 @@ function _neArmExistingImages(container) {
   container.querySelectorAll('img').forEach(img => _neArmImageResize(img));
 }
 document.getElementById('noteBodyEditor') && document.getElementById('noteBodyEditor').addEventListener('paste', _neHandlePaste);
-document.getElementById('noteEditorOverlay') && document.getElementById('noteEditorOverlay').addEventListener('click', ev => {
-  if (ev.target.id === 'noteEditorOverlay') closeNoteEditorModal();
-});
+// Antes, clicar fora da caixa (no fundo escuro do overlay) fechava o editor
+// e descartava tudo que o usuário tinha escrito — pedido do usuário: "quando
+// estou editando uma nota ou comando, e clico fora da janela eu perco tudo
+// que tinha feito. mantenha na tela aberta até que eu salve ou feche a
+// janela". Removido o listener de clique-fora-fecha (ver equivalente em
+// js/command-editor.js, mesmo pedido) — agora só fecha via "Cancel"/✕
+// (closeNoteEditorModal(), sem salvar) ou "Save" (saveNoteEditor()).
 
 // Filtra os cards pelo texto digitado no campo de pesquisa (nome, descrição, tags e o
 // próprio texto dos comandos). Roda depois do filtro de pastas, então só esconde
