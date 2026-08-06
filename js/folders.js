@@ -554,31 +554,47 @@ function copyFolderFromUser(folderId, folderName, ev) {
 
 // ── Notes (task Notes) — anotações livres dentro de uma pasta própria ──
 // Editor compartilhado create/edit num modal (#noteEditorOverlay em
-// index.html), mesmo padrão de openFolderPromptModal acima. Título é texto
-// simples; a descrição é HTML "rico" digitado num <div contenteditable>
-// (#noteBodyEditor) que aceita colar imagens (convertidas pra data URI e
-// inseridas como <img>, ver _neHandlePaste) e redimensioná-las arrastando o
-// canto inferior direito (ver _neArmImageResize). O servidor sanitiza o
-// HTML antes de gravar (sanitizeNoteHtml em server/index.js) — o front-end
-// não precisa (e não deveria) confiar no próprio HTML gerado como seguro
-// por si só, mas também não faz sanitização própria aqui: só o servidor é a
-// fonte de verdade do que fica salvo.
+// index.html), mesmo padrão de openFolderPromptModal acima.
+// Redesign (pedido: "achei confusa a tela de notas com comandos, ajustar
+// para que fiquem em um só campo e o usuário possa colocar negrito,
+// itálico etc, deixar o fundo transparente"): não existe mais um campo de
+// Título separado — é tudo HTML "rico" digitado num único <div
+// contenteditable> (#noteBodyEditor), com uma pequena barra de negrito/
+// itálico/sublinhado (ver neExec abaixo) e suporte a colar imagens
+// (convertidas pra data URI e inseridas como <img>, ver _neHandlePaste) e
+// redimensioná-las arrastando o canto inferior direito (ver
+// _neArmImageResize). O backend ainda tem uma coluna `title` (ver
+// schema.sql) — em vez de removê-la (migração desnecessária), ela é
+// preenchida automaticamente a partir do texto puro da nota (ver
+// _deriveNoteTitle abaixo), só pra uso interno: mensagem de confirmação ao
+// excluir e nome ao clonar (" (copy)"). O usuário nunca vê/edita esse campo
+// diretamente. O servidor sanitiza o HTML antes de gravar (sanitizeNoteHtml
+// em server/index.js) — o front-end não precisa (e não deveria) confiar no
+// próprio HTML gerado como seguro por si só, mas também não faz
+// sanitização própria aqui: só o servidor é a fonte de verdade do que fica
+// salvo.
 let _noteEditorFolderId = null;
 let _noteEditorNoteId = null;
+// Deriva um "título" curto a partir do texto puro da nota — só usado
+// internamente (ver comentário acima), nunca mostrado como campo próprio.
+function _deriveNoteTitle(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html || '';
+  const text = (tmp.textContent || tmp.innerText || '').replace(/\s+/g, ' ').trim();
+  return text.length > 80 ? text.slice(0, 80).trim() + '…' : text;
+}
 function openNoteEditor(mode, folderId, noteId, ev) {
   if (ev) ev.stopPropagation();
   _noteEditorFolderId = folderId;
   _noteEditorNoteId = noteId || null;
-  let title = '', description = '';
+  let description = '';
   if (mode === 'edit' && noteId) {
     const folder = FOLDERS.find(f => f.id === folderId);
     const note = folder && (folder.notes || []).find(n => n.id === noteId);
-    if (note) { title = note.title || ''; description = note.description || ''; }
+    if (note) { description = note.description || ''; }
   }
   const titleEl = document.getElementById('noteEditorTitle');
   if (titleEl) titleEl.textContent = mode === 'edit' ? 'Edit note' : 'New note';
-  const titleInput = document.getElementById('noteTitleInput');
-  if (titleInput) titleInput.value = title;
   const body = document.getElementById('noteBodyEditor');
   if (body) {
     body.innerHTML = description;
@@ -586,7 +602,7 @@ function openNoteEditor(mode, folderId, noteId, ev) {
   }
   const overlay = document.getElementById('noteEditorOverlay');
   if (overlay) overlay.classList.add('show');
-  setTimeout(() => { if (titleInput) { titleInput.focus(); titleInput.select(); } }, 0);
+  setTimeout(() => { if (body) body.focus(); }, 0);
 }
 function closeNoteEditorModal() {
   const overlay = document.getElementById('noteEditorOverlay');
@@ -594,12 +610,33 @@ function closeNoteEditorModal() {
   _noteEditorFolderId = null;
   _noteEditorNoteId = null;
 }
+// Botões da barra de formatação (negrito/itálico/sublinhado) do editor —
+// document.execCommand está deprecated mas continua funcionando em todos os
+// navegadores relevantes pra formatar um <div contenteditable> local; é a
+// mesma abordagem simples já usada pra colar/redimensionar imagem aqui
+// (sem editor de terceiros). O onmousedown="event.preventDefault()" no
+// botão (ver index.html) evita que o clique tire o foco/seleção de texto do
+// editor antes do comando rodar — sem isso, a seleção seria perdida e nada
+// seria formatado.
+function neExec(cmd) {
+  const body = document.getElementById('noteBodyEditor');
+  if (body) body.focus();
+  document.execCommand(cmd, false, null);
+}
 async function saveNoteEditor() {
-  const titleInput = document.getElementById('noteTitleInput');
   const bodyEl = document.getElementById('noteBodyEditor');
-  const title = ((titleInput && titleInput.value) || '').trim();
   const description = bodyEl ? bodyEl.innerHTML : '';
-  if (!title) { alert('Enter a title for the note.'); return; }
+  // "Vazia" = sem texto E sem nenhuma imagem colada — uma nota só com
+  // imagem (sem nenhum texto) ainda é válida, então não basta checar se
+  // sobra texto depois de tirar as tags (isso descartaria uma nota só de
+  // imagem, já que <img> também some nesse strip).
+  const hasText = !!((bodyEl && bodyEl.textContent) || '').trim();
+  const hasImage = !!(bodyEl && bodyEl.querySelector('img'));
+  if (!hasText && !hasImage) {
+    alert('Write something in the note.');
+    return;
+  }
+  const title = _deriveNoteTitle(description);
   const folderId = _noteEditorFolderId, noteId = _noteEditorNoteId;
   try {
     const res = noteId

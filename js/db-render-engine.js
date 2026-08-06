@@ -473,26 +473,36 @@ function wrapCardsForFolderDrag(cards, folderId) {
   </div>`).join('');
 }
 
-// Card de uma NOTE (título + descrição livre, task Notes) — mesma aparência
-// visual do .card de comando (mesmo container/cabeçalho/ações, ver card() em
-// terminal-renderer.js), só que sem corpo de terminal: a "descrição" É o
-// próprio conteúdo (HTML já sanitizado no servidor — ver sanitizeNoteHtml
-// em server/index.js — então pode ser inserido cru aqui, inclusive
-// <img> coladas/redimensionadas no editor). "Note" na frente do título
-// (badge) é o único jeito de diferenciar visualmente de um card de comando
-// dentro da mesma seção de pasta.
+// Card de uma NOTE (task Notes) — redesign (pedido: "achei confusa a tela
+// de notas com comandos ... ajustar as notas para que fiquem em um só
+// campo ... deixar o fundo transparente"): antes tinha a MESMA estrutura de
+// um card de comando (.card-head/título separado + .note-body), o que
+// parecia "mais um card de comando" na lista, só de outra cor. Agora é um
+// bloco ÚNICO e transparente (.note-flat, ver CSS em components.css) — sem
+// faixa de título própria; a "descrição" É o próprio conteúdo (HTML já
+// sanitizado no servidor — ver sanitizeNoteHtml em server/index.js —
+// então pode ser inserido cru aqui, inclusive <img> coladas/redimensionadas
+// no editor), com o badge "Note" embutido no início do texto em vez de numa
+// faixa própria — único jeito de diferenciar visualmente de um card de
+// comando dentro da mesma seção de pasta.
+// `note.title` (campo do banco, ver schema.sql) não é mais mostrado na
+// tela — é só um resumo em texto puro derivado automaticamente do
+// conteúdo (ver _deriveNoteTitle em js/folders.js), mantido só pra
+// mensagens internas (confirmação de exclusão, sufixo " (copy)" ao clonar).
 // `ownFolder` (= withActions da seção que contém a nota, sempre verdadeiro
 // quando é uma pasta do usuário atual e falso quando é de outro usuário)
 // decide se aparecem os botões de clonar/editar/excluir — uma nota só pode
 // ser alterada por quem a escreveu, e como uma nota só existe dentro de uma
 // pasta que já é sua (não há como criar nota na pasta de outra pessoa), a
 // posse da PASTA já equivale à posse da nota — não precisa comparar
-// note.username com CURRENT_USER separadamente.
+// note.username com CURRENT_USER separadamente. As ações viram um
+// mini-toolbar absolute no canto superior direito, visível só no hover (ver
+// .note-flat-actions em components.css) — sem faixa de cabeçalho pra
+// "morarem" como antes.
 function buildNoteCardHtml(note, ownFolder) {
   if (!note) return '';
-  const titleEsc = escAttr(note.title || 'Untitled note');
-  const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(note.title || '') : titleEsc;
-  const actions = ownFolder ? `<span class="card-actions">
+  const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(note.title || '') : escAttr(note.title || '');
+  const actions = ownFolder ? `<span class="note-flat-actions">
     <button type="button" class="edit-btn" onclick="cloneNote(${note.id}, event)" title="Clone note">
       <svg width="11" height="11" fill="none" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="9" height="9" rx="1.3" stroke="currentColor" stroke-width="1.4"/><path d="M3.2 10.5H2.3a.8.8 0 01-.8-.8v-7A.8.8 0 012.3 2h7a.8.8 0 01.8.8v.9" stroke="currentColor" stroke-width="1.4"/></svg>
     </button>
@@ -501,20 +511,24 @@ function buildNoteCardHtml(note, ownFolder) {
     </button>
     <button type="button" class="edit-btn note-delete-btn" onclick="deleteNoteConfirm(${note.id}, '${jsEsc}', event)" title="Delete note">✕</button>
   </span>` : '';
-  // `class="card"` sem sufixo próprio de propósito — várias contagens de
+  const content = (note.description || '').trim()
+    ? note.description
+    : '<span class="note-flat-empty">(empty note)</span>';
+  // `class="card"` SEM sufixo próprio de propósito — várias contagens de
   // cards pela tela inteira (ver render.js: cardCount) casam com o texto
-  // exato `class="card"` via regex; um classname extra aqui (ex.: "card
-  // note-card") faria essas contagens ficarem pra baixo do total real.
-  // `data-note-id` (em vez de data-cmd-id) já é suficiente pra distinguir
-  // nota de comando em qualquer seletor/handler que precise (ver
-  // wrapCardsForFolderDrag/_fcArmDrag em js/folders.js), e o CSS estiliza
-  // via `.note-body`/`.note-badge`, que só existem no card de nota.
+  // EXATO `<div class="card"` via regex; um classname extra aqui (ex.:
+  // "card note-flat") quebraria esse match (a regex não acha a aspa de
+  // fechamento logo depois de "card"), fazendo notas sumirem da contagem e,
+  // em casos de pasta só com notas, a seção inteira sumir (cardCount==0).
+  // O visual "campo único, fundo transparente" (ver .card[data-note-id] em
+  // components.css) é aplicado via atributo `[data-note-id]`, não via
+  // classe extra — já dá seletor específico o bastante sem mexer na classe.
+  // `data-note-id` (em vez de data-cmd-id) também já é suficiente pra
+  // distinguir nota de comando em qualquer seletor/handler que precise (ver
+  // wrapCardsForFolderDrag/_fcArmDrag em js/folders.js).
   return `<div class="card" data-note-id="${note.id}">
-    <div class="card-head">
-      <span class="card-name"><span class="note-badge">Note</span> ${titleEsc}</span>
-      ${actions}
-    </div>
-    <div class="note-body">${note.description || ''}</div>
+    ${actions}
+    <div class="note-flat-body"><span class="note-badge">Note</span>${content}</div>
   </div>`;
 }
 

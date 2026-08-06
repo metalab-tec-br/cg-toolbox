@@ -1250,11 +1250,19 @@
 
 <!-- ══ NOTE EDITOR — create/edit de uma nota dentro de uma pasta própria
      (task Notes, ver openNoteEditor()/saveNoteEditor() em js/folders.js).
-     Título simples + corpo "rico" num <div contenteditable> que aceita
-     colar imagens (convertidas pra data URI, ver _neHandlePaste) e
-     redimensioná-las arrastando o canto inferior-direito (ver
-     _neArmImageResize) — sem editor de terceiros, só o mínimo necessário
-     pro que foi pedido (texto + imagem colada/redimensionável). ══ -->
+     Redesign (pedido: "achei confusa a tela de notas com comandos, ajustar
+     para que fiquem em um só campo e o usuário possa colocar negrito,
+     itálico etc, deixar o fundo transparente"): campo ÚNICO — sem input de
+     Título separado, só o corpo "rico" num <div contenteditable> com uma
+     barra de formatação (negrito/itálico/sublinhado, via
+     document.execCommand — ver _neExec em js/folders.js) logo acima. Além
+     de texto formatado, aceita colar imagens (convertidas pra data URI, ver
+     _neHandlePaste) e redimensioná-las arrastando o canto inferior-direito
+     (ver _neArmImageResize) — sem editor de terceiros, só o mínimo
+     necessário pro que foi pedido. Um título ainda é gerado
+     AUTOMATICAMENTE a partir do texto (ver saveNoteEditor) só para uso
+     interno (mensagem de confirmação ao excluir, nome ao clonar) — nunca
+     aparece como campo/faixa própria na tela. ══ -->
 <div class="modal-overlay" id="noteEditorOverlay">
   <div class="modal-box">
     <div class="modal-head">
@@ -1263,12 +1271,12 @@
     </div>
     <div class="modal-body">
       <div class="set-group">
-        <span class="set-label">Title</span>
-        <input class="set-input" type="text" id="noteTitleInput" placeholder="e.g. &quot;Change window&quot;, &quot;Escalation contacts&quot;" maxlength="120">
-      </div>
-      <div class="set-group">
-        <span class="set-label">Description</span>
-        <div class="note-editor-body" id="noteBodyEditor" contenteditable="true" data-placeholder="Write the note here — paste an image (Ctrl+V) to attach it, drag its bottom-right corner to resize."></div>
+        <div class="note-editor-toolbar">
+          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec('bold')" title="Bold (Ctrl+B)"><b>B</b></button>
+          <button type="button" class="ne-fmt-btn ne-fmt-italic" onmousedown="event.preventDefault()" onclick="neExec('italic')" title="Italic (Ctrl+I)"><i>I</i></button>
+          <button type="button" class="ne-fmt-btn ne-fmt-underline" onmousedown="event.preventDefault()" onclick="neExec('underline')" title="Underline (Ctrl+U)"><u>U</u></button>
+        </div>
+        <div class="note-editor-body" id="noteBodyEditor" contenteditable="true" data-placeholder="Write the note here — select text to format it, paste an image (Ctrl+V) to attach it."></div>
       </div>
     </div>
     <div class="modal-foot" style="justify-content:flex-end;">
