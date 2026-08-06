@@ -42,6 +42,33 @@ function normalizeMultiSetting(val, fallback) {
   if (!Array.isArray(val)) return val ? [val] : []; // string única (formato antigo) vira array
   return val.filter(v => v !== 'all'); // já é array — respeita como está, inclusive vazio (seleção vazia é válida)
 }
+// LAST_VIEW_KEY — memoriza a visão de navegação atual (Folders vs. menu
+// normal de comandos), separada da preferência "Home page" (`s.home`) do
+// modal de Configurações. Bug reportado: "estou em folders e quando
+// atualizo a página está voltando para tela de comandos" — antes disso,
+// VIEW_FOLDERS_HOME (js/folders.js) só existia derivada de `s.home`, tanto
+// na leitura fria inicial (folders.js) quanto em applyDefaultsFromSettings()
+// abaixo (chamada de novo por reapplyAfterUserSync() em user-sync.js) — ou
+// seja, um F5 sempre voltava pra "Home page" configurada, mesmo que o
+// usuário estivesse navegando em Folders só naquela sessão (sem ter mudado
+// a preferência permanente). Agora, toda vez que o usuário entra/sai de
+// Folders por uma ação explícita (clique em "Folders" na sidebar —
+// viewAllFolders() — ou no nome/logo do app — goHome()), a visão resultante
+// é gravada aqui; resolveFoldersHome() prioriza esse valor sobre `s.home`
+// sempre que ele existir, e só cai pro "Home page" configurado na
+// primeira visita (localStorage ainda vazio neste navegador).
+const LAST_VIEW_KEY = 'cpa-last-view';
+function persistLastView(isFolders) {
+  try { localStorage.setItem(LAST_VIEW_KEY, isFolders ? 'folders' : 'menu'); } catch (e) {}
+}
+function resolveFoldersHome(s) {
+  try {
+    const saved = localStorage.getItem(LAST_VIEW_KEY);
+    if (saved === 'folders') return true;
+    if (saved === 'menu') return false;
+  } catch (e) {}
+  return s.home === 'folders';
+}
 function loadSettings() {
   let s = Object.assign({}, DEFAULT_SETTINGS);
   try {
@@ -376,9 +403,14 @@ function applyDefaultsFromSettings() {
   // primeira chamada (fim deste arquivo, síncrona) folders.js ainda não
   // rodou e a variável não existe ainda; a chamada de user-sync.js roda
   // depois de todo script já ter carregado, e antes do render()/
-  // reloadFoldersFromServer() que a usam.
+  // reloadFoldersFromServer() que a usam. resolveFoldersHome() (acima)
+  // prioriza a visão atual memorizada (LAST_VIEW_KEY) sobre `s.home` — sem
+  // isso, esta chamada feita por reapplyAfterUserSync() a cada F5 sempre
+  // sobrescrevia de volta pro "Home page" configurado, mesmo que o usuário
+  // estivesse em Folders só por navegação (bug: "estou em folders e quando
+  // atualizo a página está voltando para tela de comandos").
   if (typeof VIEW_FOLDERS_HOME !== 'undefined') {
-    VIEW_FOLDERS_HOME = s.home === 'folders';
+    VIEW_FOLDERS_HOME = resolveFoldersHome(s);
     const nav = document.getElementById('foldersNavRow');
     if (nav) nav.classList.toggle('on', VIEW_FOLDERS_HOME);
     if (typeof updateGroupByOptionsForFoldersScope === 'function') updateGroupByOptionsForFoldersScope();

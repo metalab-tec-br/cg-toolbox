@@ -445,8 +445,15 @@
    .dd-panel (ver components.css) para caber ícone + rótulo com folga, e um
    divisor fino entre "Command" e "Folder" (dois grupos de ação distintos),
    igual ao mockup de referência. Ícones na cor de destaque (--teal) em vez
-   do cinza neutro padrão, para dar mais peso visual a cada opção. */
-#addDDPanel { min-width: 176px; padding: 6px; }
+   do cinza neutro padrão, para dar mais peso visual a cada opção.
+   left:auto/right:0 (pedido do usuário: "o menu drop down de add ... está
+   ficando cortado por causa do tamanho do texto. faça com que o menu abra
+   para esquerda") — o botão "Add" fica colado na borda direita da toolbar;
+   o padrão .dd-panel (left:0/right:0, ver components.css) cresce a partir
+   da borda ESQUERDA do botão quando min-width força uma largura maior que a
+   do botão (128px), então o painel (176px) extrapolava a borda direita da
+   tela. Agora ele cresce a partir da borda direita do botão, pra esquerda. */
+#addDDPanel { min-width: 176px; padding: 6px; left: auto; right: 0; }
 #addDDPanel .sb-row { padding: 8px 10px; gap: 10px; font-size: 12.5px; color: var(--text); }
 #addDDPanel .sb-row svg { color: var(--teal); flex-shrink: 0; }
 #addDDPanel .sb-row + .sb-row { border-top: 1px solid var(--bdr); margin-top: 4px; padding-top: 12px; }

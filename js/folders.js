@@ -25,7 +25,11 @@ let FOLDERS = [];
 // navegação por pasta individual pela sidebar (ela não lista mais as pastas
 // — a pedido do usuário; renomear/excluir uma pasta agora é feito no
 // cabeçalho da própria seção, ver .sec-folder-actions em components.css).
-let VIEW_FOLDERS_HOME = loadSettings().home === 'folders';
+// resolveFoldersHome() (js/settings.js) prioriza a última visão memorizada
+// (localStorage 'cpa-last-view', gravada por viewAllFolders()/goHome()
+// abaixo) sobre a preferência "Home page" — bug reportado: "estou em
+// folders e quando atualizo a página está voltando para tela de comandos".
+let VIEW_FOLDERS_HOME = resolveFoldersHome(loadSettings());
 (() => { const row = document.getElementById('foldersNavRow'); if (row) row.classList.toggle('on', VIEW_FOLDERS_HOME); })();
 
 // Busca as pastas reais do usuário atual no servidor e substitui FOLDERS —
@@ -198,16 +202,23 @@ function setFolderScope(scope) {
 function viewAllFolders() {
   if (_q7 === 3) return _rvl9();
   VIEW_FOLDERS_HOME = !VIEW_FOLDERS_HOME;
+  persistLastView(VIEW_FOLDERS_HOME);
   const nav = document.getElementById('foldersNavRow');
   if (nav) nav.classList.toggle('on', VIEW_FOLDERS_HOME);
   updateGroupByOptionsForFoldersScope();
   render();
 }
 // Clique no nome/logo do app: volta para a página inicial configurada
-// (Folders ou Command menu — ver "Home page" em Configurações).
+// (Folders ou Command menu — ver "Home page" em Configurações). Diferente
+// de um F5 (que deve manter a visão atual — ver resolveFoldersHome()), este
+// é um clique deliberado pra "ir pra tela inicial", então também grava o
+// resultado como a nova visão atual (persistLastView) — senão um F5 logo
+// depois de clicar em "voltar pro início" poderia jogar o usuário de volta
+// pra Folders, se ele estivesse navegando lá antes.
 function goHome() {
   const s = loadSettings();
   VIEW_FOLDERS_HOME = s.home === 'folders';
+  persistLastView(VIEW_FOLDERS_HOME);
   const nav = document.getElementById('foldersNavRow');
   if (nav) nav.classList.toggle('on', VIEW_FOLDERS_HOME);
   updateGroupByOptionsForFoldersScope();

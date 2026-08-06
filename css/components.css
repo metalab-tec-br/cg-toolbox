@@ -769,10 +769,14 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    js/terminal-renderer.js e toggleFolderMenu()/toggleCommandInFolder() em
    js/folders.js) — mesma "família visual" do popover de auditoria acima
    (mesmo fundo/borda/sombra), só que controlado por clique (.open) em vez de
-   hover, e alinhado à ESQUERDA do botão (não à direita, como o audit-pop)
-   para não colidir com a borda direita do card em telas estreitas. */
+   hover. Abre para a ESQUERDA (right:0/left:auto, cresce a partir da borda
+   direita do botão) — pedido do usuário: "o menu de adicionar o comando na
+   pasta está ficando cortado por causa do tamanho do texto" — o botão de
+   pastas fica perto da borda direita de cada card/linha, e nomes de pasta
+   mais longos (largura até max-width:260px) cortavam contra a borda direita
+   da tela quando o menu abria pra direita (left:0). */
 .folder-menu-pop {
-  display: none; position: absolute; top: 100%; left: 0; margin-top: 6px;
+  display: none; position: absolute; top: 100%; right: 0; left: auto; margin-top: 6px;
   z-index: 31; width: max-content; min-width: 160px; max-width: 260px;
   max-height: 240px; overflow-y: auto;
   background: var(--surf); border: 1px solid var(--bdr); border-radius: 7px;
