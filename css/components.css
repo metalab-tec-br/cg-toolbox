@@ -552,10 +552,14 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
    .btn.ctb-cmd-btn em layout.css), só que com as CORES INVERTIDAS (outro
    pedido do usuário): o "Add" da toolbar é sólido — fundo --teal cheio,
    texto branco (.ctb-cmd-btn.admin-highlight); este aqui faz o oposto —
-   fundo --teal-bg (tintado/translúcido) com texto e borda --teal. Como
-   --teal-bg é um rgba() sobre --teal (não uma cor fixa), a inversão já sai
-   correta tanto no tema claro quanto no escuro, e acompanha automaticamente
-   qualquer cor de destaque customizada pelo usuário em Configurações. */
+   texto e borda --teal com fundo tintado/translúcido (--teal-bg) no tema
+   ESCURO. No tema CLARO (pedido do usuário: "no tema claro deixe o fundo
+   do add note branco") o fundo vira branco puro (--surf, que já é #FFFFFF
+   nesse tema — ver [data-theme="light"] abaixo) em vez do tingido, porque
+   sobre o fundo já claro da sidebar o --teal-bg translúcido ficava quase
+   imperceptível como "fundo diferente"; branco sólido com borda/texto
+   --teal destaca melhor o botão sem parecer um preenchimento sólido igual
+   ao "Add" da toolbar. */
 .sec-folder-add-note-btn {
   /* -25% da largura (128px -> 96px), igual ao botão "Add" da toolbar
      (.ctb-cmd-actions .btn.ctb-cmd-btn.admin-highlight em layout.css), pra
@@ -567,6 +571,8 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
   color: var(--teal); font-weight: 700; letter-spacing: .2px; cursor: pointer;
 }
 .sec-folder-add-note-btn:hover { filter: brightness(1.08); border-color: var(--teal); }
+[data-theme="light"] .sec-folder-add-note-btn { background: var(--surf); }
+[data-theme="light"] .sec-folder-add-note-btn:hover { background: var(--surf); }
 
 /* Aviso discreto quando uma pasta PRÓPRIA está vazia (0 comandos, 0 notas)
    — antes a pasta simplesmente não aparecia em lugar nenhum até o usuário
