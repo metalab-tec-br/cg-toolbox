@@ -100,16 +100,51 @@ async function reapplyAfterUserSync() {
   if (typeof render === 'function') render();
 }
 
+// Busca /api/me com UMA tentativa extra se a primeira falhar — bug
+// reportado: "botão logout não aparece para usuário local", mesmo após
+// login local bem-sucedido e containers recém reconstruídos. Investigação:
+// a lógica de login/sessão/`/api/me` está correta (testada isoladamente
+// contra um Postgres real simulando login → sessão → checagem do botão,
+// inclusive casos de borda como sessão expirada/usuário desabilitado — ver
+// test_local_login_authmethod.js). O sintoma relatado (linha de role/
+// método VAZIA no dropdown, não só o botão Log out sumindo) só acontece
+// quando este catch abaixo é executado (fetch()/`.json()` falhando) —
+// deixando os elementos no estado "cru" do HTML (vazio/display:none) sem
+// nenhuma indicação de erro. Isso bate com o cenário de logo após um
+// rebuild: nginx pode responder com um 502/503 (corpo não-JSON, então
+// `.json()` lança) enquanto o container do backend ainda está terminando
+// de subir — mesma margem de segurança que já existe em server/db.js
+// (initDb() tenta reconectar ao Postgres por até ~60s). Uma única
+// retentativa aqui, com um pequeno atraso, cobre esse caso sem precisar de
+// reload manual da página.
+async function fetchMeWithRetry() {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const meRes = await fetch('/api/me');
+      if (!meRes.ok) throw new Error(`/api/me respondeu ${meRes.status}`);
+      return await meRes.json();
+    } catch (e) {
+      if (attempt === 2) throw e;
+      await new Promise(r => setTimeout(r, 1200));
+    }
+  }
+}
 async function initUserSync() {
   try {
-    const meRes = await fetch('/api/me');
-    const me = await meRes.json();
+    const me = await fetchMeWithRetry();
     CURRENT_USER = me.username;
     renderCurrentUserUI(me.upn || me.username);
     if (typeof updateAccountUI === 'function') updateAccountUI(me);
   } catch (e) {
     console.warn('Não foi possível identificar o usuário atual', e);
     renderCurrentUserUI(null);
+    // Antes disto o dropdown de conta ficava com a linha de role/método em
+    // branco e SEM nenhuma pista de que algo falhou — indistinguível, pro
+    // usuário, de "Log out não aparece porque a sessão não é local".
+    // Mostrar um aviso explícito (e um jeito de tentar de novo sem F5) deixa
+    // o problema óbvio em vez de silencioso.
+    const roleLine = document.getElementById('hdrUserRoleLine');
+    if (roleLine) roleLine.textContent = 'Could not verify your account — reload the page to try again.';
   }
 
   try {
