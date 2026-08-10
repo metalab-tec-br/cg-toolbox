@@ -1063,18 +1063,32 @@ function applySearchFilter() {
   const out = document.getElementById('out');
   const query = (gv('cmdSearch') || '').trim().toLowerCase();
   const cards = [...out.querySelectorAll('.card')];
-  if (query) {
-    cards.forEach(c => {
-      if (c.style.display === 'none') return;
-      if (!c.textContent.toLowerCase().includes(query)) c.style.display = 'none';
-    });
+  // Bug reportado: "as pastas sem comandos não estão sendo exibidas" — o
+  // loop que esconde `.section` sem NENHUM `.card` visível (mais abaixo)
+  // rodava incondicionalmente, mesmo sem busca nenhuma ativa (query vazia).
+  // Uma pasta vazia (0 comandos/0 notas) já nasce sem nenhum `.card` dentro
+  // — então esse loop escondia ela sempre, não só durante uma pesquisa sem
+  // resultado (que era a intenção original). Seções normais (Tópico/etc.)
+  // nunca são geradas com 0 cards em primeiro lugar (já filtradas na hora
+  // de montar o HTML — ver render.js), então esse "esconder seção vazia" só
+  // fazia sentido mesmo como resultado de uma busca ativa filtrando os
+  // cards de dentro. Sem query, não mexe em .section nenhuma — inclusive
+  // restaura qualquer .section que uma busca ANTERIOR tenha escondido (ex.:
+  // usuário digitou algo, viu 0 resultados, depois apagou a busca).
+  if (!query) {
+    out.querySelectorAll('.section').forEach(sec => { sec.style.display = ''; });
+    return;
   }
+  cards.forEach(c => {
+    if (c.style.display === 'none') return;
+    if (!c.textContent.toLowerCase().includes(query)) c.style.display = 'none';
+  });
   out.querySelectorAll('.section').forEach(sec => {
     const visible = [...sec.querySelectorAll('.card')].some(c => c.style.display !== 'none');
     sec.style.display = visible ? '' : 'none';
   });
   const anyVisible = cards.some(c => c.style.display !== 'none');
-  if (query && !anyVisible && !out.querySelector('.empty')) {
+  if (!anyVisible && !out.querySelector('.empty')) {
     const safe = query.replace(/[<>&]/g, ch => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[ch]));
     out.insertAdjacentHTML('beforeend', `<div class="empty"><div class="empty-ico">🔍</div><p>No commands found for "${safe}".</p></div>`);
   }
