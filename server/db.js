@@ -59,6 +59,7 @@ async function initDb({ retries = 30, delayMs = 2000 } = {}) {
       console.log('[db] Conectado ao PostgreSQL e schema aplicado.');
       await runMigrations();
       await seedDefaultAdmin();
+      await seedDefaultFolders();
       return;
     } catch (err) {
       if (attempt === retries) throw err;
@@ -159,6 +160,29 @@ async function seedDefaultAdmin() {
     );
   } catch (err) {
     console.error('[db] Falha ao semear usuário admin padrão:', err.message);
+  }
+}
+
+// Garante que TODO usuário já cadastrado tenha uma pasta "Favorites" —
+// pedido do usuário: "definir como padrão que todos usuários tenham as
+// pastas Favoritos". Cobre quem já existia ANTES deste recurso (usuários
+// novos, criados depois, já ganham a pasta na hora — ver
+// ensureDefaultFolder() em server/index.js, chamada por getOrCreateUserRole
+// e por POST /api/users). Roda depois de seedDefaultAdmin() (acima) de
+// propósito, pra também cobrir o admin padrão numa instalação nova, no
+// mesmo boot. Um único INSERT ... SELECT, idempotente (ON CONFLICT
+// (username, name) DO NOTHING — mesma constraint única usada pela migração
+// legada de favoritos, ver runMigrations()) — seguro rodar em todo boot,
+// nunca duplica nem sobrescreve uma pasta "Favorites" que o usuário já
+// tenha (inclusive uma renomeada/customizada por ele).
+async function seedDefaultFolders() {
+  try {
+    await pool.query(
+      `INSERT INTO folders (username, name) SELECT username, 'Favorites' FROM users
+       ON CONFLICT (username, name) DO NOTHING`
+    );
+  } catch (err) {
+    console.error('[db] Falha ao semear pasta Favorites padrão para usuários existentes:', err.message);
   }
 }
 

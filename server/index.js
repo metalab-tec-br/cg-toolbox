@@ -205,6 +205,29 @@ function getCurrentSamAccountName(req) {
 // integração externa separado, já protegido pela posse da própria key, sem
 // mudança de comportamento em relação ao que já existia antes deste recurso.
 // ════════════════════════════════════════════════
+// Garante que TODO usuário tenha uma pasta "Favorites" desde o primeiro
+// momento (pedido do usuário: "definir como padrão que todos usuários
+// tenham as pastas Favoritos") — chamada logo após criar a linha em `users`
+// pela primeira vez, tanto pra contas NTLM (vistas pela 1ª vez em
+// getOrCreateUserRole abaixo) quanto pra contas locais (criadas por um admin
+// em POST /api/users). `ON CONFLICT (username, name) DO NOTHING` (mesma
+// constraint única já usada pela migração legada de favoritos, ver
+// server/db.js) torna isto seguro mesmo sob corrida entre abas/instâncias —
+// nunca duplica a pasta, e não falha se ela já existir (ex.: usuário que já
+// tinha renomeado/recriado a própria "Favorites" antes). Usuários já
+// existentes na instalação (de antes deste recurso existir) recebem a
+// pasta via backfill em runMigrations() (server/db.js), não aqui.
+async function ensureDefaultFolder(username) {
+  try {
+    await pool.query(
+      `INSERT INTO folders (username, name) VALUES ($1, 'Favorites') ON CONFLICT (username, name) DO NOTHING`,
+      [username]
+    );
+  } catch (err) {
+    console.error('[folders] Falha ao garantir pasta Favorites padrão para', username, err.message);
+  }
+}
+
 async function getOrCreateUserRole(username) {
   const { rows } = await pool.query('SELECT role, disabled FROM users WHERE username = $1', [username]);
   if (rows.length) return rows[0].disabled ? null : rows[0].role;
@@ -212,6 +235,7 @@ async function getOrCreateUserRole(username) {
     'INSERT INTO users (username, role, is_local) VALUES ($1, $2, 0) ON CONFLICT (username) DO NOTHING',
     [username, 'user']
   );
+  await ensureDefaultFolder(username);
   return 'user';
 }
 
@@ -1264,6 +1288,7 @@ app.post('/api/users', requireAdmin, async (req, res) => {
       'INSERT INTO users (username, password_hash, role, is_local, created_by) VALUES ($1, $2, $3, 1, $4)',
       [trimmed, hashPassword(password), roleVal, getCurrentUsername(req)]
     );
+    await ensureDefaultFolder(trimmed);
     const { rows } = await pool.query(`SELECT ${USERS_PUBLIC_COLUMNS} FROM users WHERE username = $1`, [trimmed]);
     res.status(201).json(rows[0]);
   } catch (err) {
