@@ -460,8 +460,12 @@
                primeiro. stopPropagation evita disparar o toggle do tema
                (onclick do pai) ao clicar num swatch. Agora alinhados à
                esquerda dentro da 2ª metade da linha (antes ficavam
-               encostados na borda direita via margin-left:auto). -->
+               encostados na borda direita via margin-left:auto). Rótulo
+               "Color" na frente, mesmo padrão de "Group by"/"Export to"
+               nas outras linhas divididas (pedido do usuário, com
+               screenshot). -->
           <div class="set-row-half">
+            <span class="set-label">Color</span>
             <div class="accent-swatches" id="accentSwatches" onclick="event.stopPropagation()">
               <button type="button" class="accent-swatch" data-accent="pink" style="background:#DA1572" onclick="setAccentColor('pink')" title="Check Point pink (default)"></button>
               <button type="button" class="accent-swatch" data-accent="blue" style="background:#60A5FA" onclick="setAccentColor('blue')" title="Light blue"></button>
