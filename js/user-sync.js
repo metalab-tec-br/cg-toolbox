@@ -153,12 +153,37 @@ async function fetchMeWithRetry() {
   }
   return lastAnonymous; // esgotou as tentativas ainda "anonymous" — resultado final genuíno
 }
+// Raiz do bug "continuo com problema de exibição do menu de admin. tenho
+// que ficar atualizando a página várias vezes para aparecer": confirmado
+// via DevTools (o usuário mandou o Response de /api/me) que o servidor JÁ
+// respondia isAdmin:true corretamente — o retry acima não era o problema.
+// O bug real está aqui: js/user-sync.js é o PRIMEIRO <script> da página
+// (de propósito, pra começar o fetch cedo — ver comentário no topo do
+// arquivo), mas js/auth.js — onde updateAccountUI()/applyAdminGating()
+// são DEFINIDAS — é o PENÚLTIMO. Em conexões rápidas (intranet local), a
+// resposta de /api/me às vezes chega ANTES do navegador terminar de
+// carregar/executar todos os <script src> entre user-sync.js e auth.js;
+// naquele momento `typeof updateAccountUI === 'function'` dá false, o `if`
+// abaixo não chama nada, e como nada mais nesta página re-tenta depois,
+// o menu de admin fica faltando pro resto daquele carregamento — só um F5
+// (nova corrida, às vezes ganha) resolve. safeUpdateAccountUI() cobre essa
+// janela: se a função ainda não existir agora, tenta de novo no evento
+// 'load' da janela — que só dispara depois que TODOS os <script> da
+// página já rodaram (garantia da própria especificação do HTML, ao
+// contrário do timing do fetch acima), então essa 2ª tentativa é 100%
+// confiável.
+function safeUpdateAccountUI(me) {
+  if (typeof updateAccountUI === 'function') { updateAccountUI(me); return true; }
+  return false;
+}
 async function initUserSync() {
   try {
     const me = await fetchMeWithRetry();
     CURRENT_USER = me.username;
     renderCurrentUserUI(me.upn || me.username);
-    if (typeof updateAccountUI === 'function') updateAccountUI(me);
+    if (!safeUpdateAccountUI(me)) {
+      window.addEventListener('load', () => safeUpdateAccountUI(me), { once: true });
+    }
   } catch (e) {
     console.warn('Não foi possível identificar o usuário atual', e);
     renderCurrentUserUI(null);
