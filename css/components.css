@@ -249,9 +249,19 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 }
 .set-section-title:first-child { border-top: none; margin-top: 0; padding-top: 0; }
 /* ─── CATALOG ADMIN (telas separadas: Versões/Ambientes/Tópicos/Parâmetros) ─── */
+/* .cat-panel agrupa msg/busca/lista/nova-linha com gap próprio, mais compacto que o
+   gap:15px padrão do .modal-body — evita o vão grande entre o título do modal e o
+   campo de busca (reportado pelo usuário como "layout estranho"). */
+.cat-panel { display: flex; flex-direction: column; gap: 8px; }
 .cat-admin-msg { font-size: 11px; min-height: 14px; }
+/* Enquanto vazia (sem erro/sucesso a mostrar), não reserva altura — some do vão acima da busca. */
+.cat-panel .cat-admin-msg:empty { min-height: 0; }
 .cat-admin-msg.err { color: var(--red); }
 .cat-admin-msg.ok { color: var(--teal); }
+/* Linha "+ Add ..." isolada abaixo da linha de novo item (.cat-row), alinhada à
+   direita — assim a linha de novo item fica com o mesmo formato (nome+cor) das
+   linhas existentes, e o botão de ação fica separado, no padrão do modal-foot. */
+.cat-add-actions { display: flex; justify-content: flex-end; margin-top: -2px; }
 .cat-color-input {
   width: 30px; height: 30px; padding: 0; border: 1px solid var(--bdr); border-radius: 6px;
   background: none; cursor: pointer; flex-shrink: 0;
