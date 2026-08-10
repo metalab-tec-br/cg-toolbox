@@ -19,14 +19,11 @@
    em css/layout.css) — regras duplicadas aqui (em vez de carregar
    layout.css inteiro, que traz a grade do app/sidebar que esta página não
    usa) só para a troca automática claro/escuro via [data-theme] no <html>. */
-.login-brand { display: flex; justify-content: center; }
+.login-brand { display: flex; justify-content: center; margin-bottom: 6px; }
 .login-logo-img { width: 180px; height: auto; display: block; }
 .login-logo-img.for-light { display: none; }
 [data-theme="light"] .login-logo-img.for-dark { display: none; }
 [data-theme="light"] .login-logo-img.for-light { display: block; }
-.login-sub {
-  margin: 4px 0 0; text-align: center; font-size: 11px; color: var(--muted);
-}
 .login-card .set-group { margin-top: 14px; }
 .login-submit-btn { margin-top: 16px; width: 100%; text-align: center; padding: 9px 14px; }
 .login-error { text-align: center; }
