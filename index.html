@@ -498,6 +498,12 @@
           <div class="tog-track"><div class="tog-knob"></div></div><span>System commands</span>
         </div>
       </div>
+      <!-- Home page + Group by na mesma linha (pedido do usuário: "divida a
+           linha home page e coloque o group by do lado direito") — Group by
+           é empurrado pro lado direito pela regra genérica ".set-group-row >
+           .set-label ~ .set-label" (margin-left:auto no 2º rótulo em diante
+           da linha), o mesmo truque já usado em .sb-toggle-inline-field
+           acima (Export/Export to). -->
       <div class="set-group set-group-row">
         <span class="set-label">Home page</span>
         <div class="dd" id="mHomeDD">
@@ -510,8 +516,6 @@
             <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mHomeDD')">Close</button></div>
           </div>
         </div>
-      </div>
-      <div class="set-group set-group-row">
         <span class="set-label">Group by</span>
         <div class="dd" id="mGroupByDD">
           <button type="button" class="dd-btn" id="mGroupByDDBtn" onclick="toggleDropdown('mGroupByDD')">

@@ -40,6 +40,13 @@
   padding: 3px 8px 3px 10px; border: 1px solid var(--bdr); border-radius: 6px; background: var(--surf2);
 }
 .set-group-row > .set-label { flex-shrink: 0; margin-bottom: 0; }
+/* Duas linhas fundidas numa só (ex.: Home page + Group by) — o 2º rótulo em
+   diante (e o controle que vem junto) é empurrado pro lado direito da
+   linha, mesmo truque de .accent-swatches/.sb-toggle-inline-field acima.
+   Pedido do usuário: "divida a linha home page e coloque o group by do
+   lado direito". Regra genérica: vale pra qualquer .set-group-row com mais
+   de um .set-label dentro. */
+.set-group-row > .set-label ~ .set-label { margin-left: auto; }
 .set-group-row > .dd,
 .set-group-row > .set-input,
 .set-group-row > .btn { flex: 0 0 auto; min-width: 110px; max-width: 200px; }
