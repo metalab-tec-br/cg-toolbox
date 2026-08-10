@@ -136,32 +136,187 @@ function renderCatAdminAll() {
   renderCatAdminParameters();
 }
 
+// ── Busca (filtro client-side, por tela) ──────────
+// Pedido do usuário: "campo de pesquisa em cada tela de cadastro" — filtra a
+// lista já carregada (sem nova chamada à API), no mesmo estilo do
+// #userSearchInput da aba Users (ver js/users-admin.js). Implementado com
+// display:none em vez de reconstruir o HTML da lista inteira, para não
+// descartar edições ainda não salvas enquanto o usuário digita na busca (o
+// Save em lote abaixo depende dos <input> de cada linha continuarem com o
+// valor que o usuário digitou).
+const CAT_ADMIN_SEARCH = { vendors: '', systems: '', versions: '', environments: '', topics: '', parameters: '' };
+const CAT_ADMIN_LIST_IDS = {
+  vendors: 'catVendorsList', systems: 'catSysList', versions: 'catVersionsList',
+  environments: 'catEnvironmentsList', topics: 'catTopicsList', parameters: 'catParametersList',
+};
+function catAdminSearchInput(kind, value) {
+  CAT_ADMIN_SEARCH[kind] = (value || '').trim().toLowerCase();
+  catAdminApplyFilter(kind);
+}
+function catAdminApplyFilter(kind) {
+  const list = _cat(CAT_ADMIN_LIST_IDS[kind]);
+  if (!list) return;
+  const q = CAT_ADMIN_SEARCH[kind] || '';
+  list.querySelectorAll('[data-cat-search]').forEach(row => {
+    const hay = row.getAttribute('data-cat-search') || '';
+    row.style.display = (!q || hay.indexOf(q) !== -1) ? '' : 'none';
+  });
+}
+
+// ── Barra Save/Cancel no rodapé (substitui o antigo botão 💾 por linha) ──
+// Pedido do usuário: "trocar Save por linha por barra Save/Cancel no
+// rodapé". Cada tela tem seu próprio par de botões (ver index.html,
+// .modal-foot dentro de cada #catalogAdmin*Overlay), habilitados só quando
+// há alguma edição pendente — catAdminMarkDirty() é chamado pelos
+// oninput/onchange dos campos de cada linha (ver renderCatAdminX abaixo).
+// "Save" varre TODAS as linhas da tela e só envia PUT para as que realmente
+// mudaram (compara o valor atual do DOM com o valor em CATALOGS); "Cancel"
+// simplesmente re-renderiza a lista a partir de CATALOGS, descartando
+// qualquer edição não salva.
+const CAT_ADMIN_FOOT_IDS = {
+  vendors: { save: 'catAdminSaveVendors', cancel: 'catAdminCancelVendors' },
+  systems: { save: 'catAdminSaveSystems', cancel: 'catAdminCancelSystems' },
+  versions: { save: 'catAdminSaveVersions', cancel: 'catAdminCancelVersions' },
+  environments: { save: 'catAdminSaveEnvironments', cancel: 'catAdminCancelEnvironments' },
+  topics: { save: 'catAdminSaveTopics', cancel: 'catAdminCancelTopics' },
+  parameters: { save: 'catAdminSaveParameters', cancel: 'catAdminCancelParameters' },
+};
+const CAT_ADMIN_DIRTY = {};
+function catAdminMarkDirty(kind) {
+  if (CAT_ADMIN_DIRTY[kind]) return;
+  CAT_ADMIN_DIRTY[kind] = true;
+  catAdminSetFootEnabled(kind, true);
+}
+function catAdminSetFootEnabled(kind, enabled) {
+  const ids = CAT_ADMIN_FOOT_IDS[kind];
+  if (!ids) return;
+  const saveBtn = _cat(ids.save), cancelBtn = _cat(ids.cancel);
+  if (saveBtn) saveBtn.disabled = !enabled;
+  if (cancelBtn) cancelBtn.disabled = !enabled;
+}
+function catAdminClearDirty(kind) {
+  CAT_ADMIN_DIRTY[kind] = false;
+  catAdminSetFootEnabled(kind, false);
+}
+// Preenchido no fim do arquivo, depois que cada renderCatAdminX() é declarada.
+const CAT_ADMIN_RENDER_FN = {};
+function catAdminCancel(kind) {
+  const fn = CAT_ADMIN_RENDER_FN[kind];
+  if (fn) fn();
+  catAdminMsg('');
+  catAdminClearDirty(kind);
+}
+
+function _catShallowEqual(a, b) {
+  return Object.keys(a).every(k => String(a[k]) === String(b[k]));
+}
+
+// Descreve, para cada tela, como ler o estado atual dos campos de uma linha
+// a partir do DOM (readRow) e qual é o valor "original" em CATALOGS
+// (original), para o Save em lote só enviar PUT das linhas que realmente
+// mudaram. `rowId` é o identificador usado nos ids de DOM de cada campo
+// (ver renderCatAdminX) — para Versions é composto (`system::key`), porque a
+// chave primária real da versão também é composta.
+const CAT_ADMIN_BULK = {
+  vendors: {
+    items: () => CATALOGS.vendors || [],
+    rowId: v => v.key,
+    readRow: key => ({ label: _cat('catVd_label_' + key).value.trim(), color: _cat('catVd_color_' + key).value }),
+    original: v => ({ label: v.label, color: v.color || '#8B949E' }),
+    url: key => '/api/vendors/' + encodeURIComponent(key),
+    validate: b => b.label ? null : 'Fill in the required label(s).',
+    name: v => v.label || v.key,
+  },
+  systems: {
+    items: () => CATALOGS.systems || [],
+    rowId: s => s.key,
+    readRow: key => ({ label: _cat('catSys_label_' + key).value.trim(), color: _cat('catSys_color_' + key).value, vendor: _cat('catSys_vendor_' + key).value }),
+    original: s => ({ label: s.label, color: s.color || '#8B949E', vendor: s.vendor }),
+    url: key => '/api/systems/' + encodeURIComponent(key),
+    validate: b => !b.label ? 'Fill in the required label(s).' : (!b.vendor ? 'Choose a vendor.' : null),
+    name: s => s.label || s.key,
+  },
+  versions: {
+    items: () => CATALOGS.versions || [],
+    rowId: v => v.system + '::' + v.key,
+    readRow: rid => ({ label: _cat('catV_label_' + rid).value.trim(), color: _cat('catV_color_' + rid).value, system: _cat('catV_system_' + rid).value }),
+    original: v => ({ label: v.label, color: v.color || '#8B949E', system: v.system }),
+    url: rid => { const i = rid.indexOf('::'); return `/api/versions/${encodeURIComponent(rid.slice(0, i))}/${encodeURIComponent(rid.slice(i + 2))}`; },
+    validate: b => !b.label ? 'Fill in the required label(s).' : (!b.system ? 'Choose a system.' : null),
+    name: v => v.label || v.key,
+  },
+  environments: {
+    items: () => CATALOGS.environments || [],
+    rowId: e => e.key,
+    readRow: key => ({ label: _cat('catE_label_' + key).value.trim(), color: _cat('catE_color_' + key).value }),
+    original: e => ({ label: e.label, color: e.color || '#8B949E' }),
+    url: key => '/api/environments/' + encodeURIComponent(key),
+    validate: b => b.label ? null : 'Fill in the required label(s).',
+    name: e => e.label || e.key,
+  },
+  topics: {
+    items: () => CATALOGS.topics || [],
+    rowId: t => t.key,
+    readRow: key => ({ label: _cat('catT_label_' + key).value.trim(), color: _cat('catT_color_' + key).value }),
+    original: t => ({ label: t.label, color: t.color || '#8B949E' }),
+    url: key => '/api/topics/' + encodeURIComponent(key),
+    validate: b => b.label ? null : 'Fill in the required label(s).',
+    name: t => t.label || t.key,
+  },
+  parameters: {
+    items: () => CATALOGS.parameters || [],
+    rowId: p => p.key,
+    readRow: key => {
+      const orderRaw = _cat('catP_order_' + key).value;
+      return { label: _cat('catP_label_' + key).value.trim(), sort_order: orderRaw === '' ? 0 : parseInt(orderRaw, 10) };
+    },
+    original: p => ({ label: p.label, sort_order: p.sort_order }),
+    url: key => '/api/parameters/' + encodeURIComponent(key),
+    validate: b => b.label ? null : 'Fill in the required label(s).',
+    name: p => p.label || p.key,
+  },
+};
+
+async function catAdminSaveAll(kind) {
+  const cfg = CAT_ADMIN_BULK[kind];
+  if (!cfg) return;
+  const errors = [];
+  let changed = 0;
+  for (const item of cfg.items()) {
+    const rid = cfg.rowId(item);
+    const body = cfg.readRow(rid);
+    if (_catShallowEqual(body, cfg.original(item))) continue; // linha não foi tocada
+    const err = cfg.validate(body);
+    if (err) { errors.push(`"${cfg.name(item)}": ${err}`); continue; }
+    changed++;
+    try {
+      const res = await fetch(cfg.url(rid), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) {
+        let b = {}; try { b = await res.json(); } catch (e) {}
+        errors.push(`"${cfg.name(item)}": ${b.message || b.error || 'save failed'}.`);
+      }
+    } catch (e) { errors.push(`"${cfg.name(item)}": network error.`); }
+  }
+  await catAdminRefreshCatalogs();
+  if (errors.length) catAdminMsg(errors.join(' '), 'err');
+  else if (changed === 0) catAdminMsg('No changes to save.', 'ok');
+  else catAdminMsg('Changes saved.', 'ok');
+  catAdminClearDirty(kind);
+}
+
 // ── Vendors ──────────────────────────────────────
 function renderCatAdminVendors() {
   const list = _cat('catVendorsList');
   if (!list) return;
   list.innerHTML = (CATALOGS.vendors || []).map(v => `
-    <div class="tag-row">
-      <input class="set-input" id="catVd_label_${_catEscAttr(v.key)}" value="${_catEscAttr(v.label)}" style="flex:1;min-width:80px;">
-      <input type="color" class="cat-color-input" id="catVd_color_${_catEscAttr(v.key)}" value="${_catEscAttr(v.color || '#8B949E')}">
+    <div class="tag-row" data-cat-search="${_catEscAttr((v.key + ' ' + v.label).toLowerCase())}">
+      <input class="set-input" id="catVd_label_${_catEscAttr(v.key)}" value="${_catEscAttr(v.label)}" style="flex:1;min-width:80px;" oninput="catAdminMarkDirty('vendors')">
+      <input type="color" class="cat-color-input" id="catVd_color_${_catEscAttr(v.key)}" value="${_catEscAttr(v.color || '#8B949E')}" oninput="catAdminMarkDirty('vendors')">
       <div class="cat-row-actions">
-        <button type="button" class="edit-btn" onclick="catAdminSaveVendor('${_catEscAttr(v.key)}')" title="Save">💾</button>
         <button type="button" class="edit-btn" onclick="catAdminDeleteVendor('${_catEscAttr(v.key)}')" title="Delete">🗑️</button>
       </div>
     </div>`).join('');
-}
-async function catAdminSaveVendor(key) {
-  const label = _cat('catVd_label_' + key).value.trim();
-  const color = _cat('catVd_color_' + key).value;
-  if (!label) { catAdminMsg('Fill in the required label(s).', 'err'); return; }
-  try {
-    const res = await fetch('/api/vendors/' + encodeURIComponent(key), {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label, color }),
-    });
-    if (!res.ok) return catAdminHandleError(res);
-    catAdminMsg('Saved.', 'ok');
-    catAdminRefreshCatalogs();
-  } catch (e) { catAdminMsg('Something went wrong. Please try again.', 'err'); }
+  catAdminApplyFilter('vendors');
 }
 async function catAdminDeleteVendor(key) {
   const ok = await openConfirmModal(`Delete "${key}"? This action cannot be undone.`);
@@ -198,32 +353,17 @@ function renderCatAdminSystems() {
   if (!list) return;
   const systems = CATALOGS.systems || [];
   list.innerHTML = systems.map(s => `
-    <div class="tag-row">
-      <select class="set-input" id="catSys_vendor_${_catEscAttr(s.key)}" style="max-width:140px;"></select>
-      <input class="set-input" id="catSys_label_${_catEscAttr(s.key)}" value="${_catEscAttr(s.label)}" style="flex:1;min-width:80px;">
-      <input type="color" class="cat-color-input" id="catSys_color_${_catEscAttr(s.key)}" value="${_catEscAttr(s.color || '#8B949E')}">
+    <div class="tag-row" data-cat-search="${_catEscAttr((s.key + ' ' + s.label).toLowerCase())}">
+      <select class="set-input" id="catSys_vendor_${_catEscAttr(s.key)}" style="max-width:140px;" onchange="catAdminMarkDirty('systems')"></select>
+      <input class="set-input" id="catSys_label_${_catEscAttr(s.key)}" value="${_catEscAttr(s.label)}" style="flex:1;min-width:80px;" oninput="catAdminMarkDirty('systems')">
+      <input type="color" class="cat-color-input" id="catSys_color_${_catEscAttr(s.key)}" value="${_catEscAttr(s.color || '#8B949E')}" oninput="catAdminMarkDirty('systems')">
       <div class="cat-row-actions">
-        <button type="button" class="edit-btn" onclick="catAdminSaveSystem('${_catEscAttr(s.key)}')" title="Save">💾</button>
         <button type="button" class="edit-btn" onclick="catAdminDeleteSystem('${_catEscAttr(s.key)}')" title="Delete">🗑️</button>
       </div>
     </div>`).join('');
   systems.forEach(s => _catPopulateSelect('catSys_vendor_' + s.key, CATALOGS.vendors, s.vendor, 'Vendor'));
   _catPopulateSelect('catSysNewVendor', CATALOGS.vendors, null, 'Vendor');
-}
-async function catAdminSaveSystem(key) {
-  const label = _cat('catSys_label_' + key).value.trim();
-  const color = _cat('catSys_color_' + key).value;
-  const vendor = _cat('catSys_vendor_' + key).value;
-  if (!label) { catAdminMsg('Fill in the required label(s).', 'err'); return; }
-  if (!vendor) { catAdminMsg('Choose a vendor.', 'err'); return; }
-  try {
-    const res = await fetch('/api/systems/' + encodeURIComponent(key), {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label, color, vendor }),
-    });
-    if (!res.ok) return catAdminHandleError(res);
-    catAdminMsg('Saved.', 'ok');
-    catAdminRefreshCatalogs();
-  } catch (e) { catAdminMsg('Something went wrong. Please try again.', 'err'); }
+  catAdminApplyFilter('systems');
 }
 async function catAdminDeleteSystem(key) {
   const ok = await openConfirmModal(`Delete "${key}"? This action cannot be undone.`);
@@ -257,8 +397,8 @@ async function catAdminAddSystem() {
 // versão pode existir sob sistemas diferentes (ex.: "R82" em dois sistemas
 // distintos), só não dentro do MESMO vendor (ver comentário em
 // server/schema.sql). Por isso os ids de DOM de cada linha incorporam o
-// sistema (`${system}::${key}`) para não colidir, e save/delete recebem os
-// dois valores e chamam /api/versions/:system/:key.
+// sistema (`${system}::${key}`) para não colidir, e delete recebe os dois
+// valores e chama /api/versions/:system/:key.
 function renderCatAdminVersions() {
   const list = _cat('catVersionsList');
   if (!list) return;
@@ -266,34 +406,18 @@ function renderCatAdminVersions() {
   list.innerHTML = versions.map(v => {
     const rid = _catEscAttr(v.system) + '::' + _catEscAttr(v.key);
     return `
-    <div class="tag-row">
-      <select class="set-input" id="catV_system_${rid}" style="max-width:130px;"></select>
-      <input class="set-input" id="catV_label_${rid}" value="${_catEscAttr(v.label)}" style="flex:1;min-width:80px;">
-      <input type="color" class="cat-color-input" id="catV_color_${rid}" value="${_catEscAttr(v.color || '#8B949E')}">
+    <div class="tag-row" data-cat-search="${_catEscAttr((v.system + ' ' + v.key + ' ' + v.label).toLowerCase())}">
+      <select class="set-input" id="catV_system_${rid}" style="max-width:130px;" onchange="catAdminMarkDirty('versions')"></select>
+      <input class="set-input" id="catV_label_${rid}" value="${_catEscAttr(v.label)}" style="flex:1;min-width:80px;" oninput="catAdminMarkDirty('versions')">
+      <input type="color" class="cat-color-input" id="catV_color_${rid}" value="${_catEscAttr(v.color || '#8B949E')}" oninput="catAdminMarkDirty('versions')">
       <div class="cat-row-actions">
-        <button type="button" class="edit-btn" onclick="catAdminSaveVersion('${_catEscAttr(v.system)}','${_catEscAttr(v.key)}')" title="Save">💾</button>
         <button type="button" class="edit-btn" onclick="catAdminDeleteVersion('${_catEscAttr(v.system)}','${_catEscAttr(v.key)}')" title="Delete">🗑️</button>
       </div>
     </div>`;
   }).join('');
   versions.forEach(v => _catPopulateSelect('catV_system_' + v.system + '::' + v.key, CATALOGS.systems, v.system, 'System'));
   _catPopulateSelect('catVNewSystem', CATALOGS.systems, null, 'System');
-}
-async function catAdminSaveVersion(system, key) {
-  const rid = system + '::' + key;
-  const label = _cat('catV_label_' + rid).value.trim();
-  const color = _cat('catV_color_' + rid).value;
-  const newSystem = _cat('catV_system_' + rid).value;
-  if (!label) { catAdminMsg('Fill in the required label(s).', 'err'); return; }
-  if (!newSystem) { catAdminMsg('Choose a system.', 'err'); return; }
-  try {
-    const res = await fetch(`/api/versions/${encodeURIComponent(system)}/${encodeURIComponent(key)}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label, color, system: newSystem }),
-    });
-    if (!res.ok) return catAdminHandleError(res);
-    catAdminMsg('Saved.', 'ok');
-    catAdminRefreshCatalogs();
-  } catch (e) { catAdminMsg('Something went wrong. Please try again.', 'err'); }
+  catAdminApplyFilter('versions');
 }
 async function catAdminDeleteVersion(system, key) {
   const ok = await openConfirmModal(`Delete "${key}"? This action cannot be undone.`);
@@ -327,27 +451,14 @@ function renderCatAdminEnvironments() {
   const list = _cat('catEnvironmentsList');
   if (!list) return;
   list.innerHTML = (CATALOGS.environments || []).map(e => `
-    <div class="tag-row">
-      <input class="set-input" id="catE_label_${_catEscAttr(e.key)}" value="${_catEscAttr(e.label)}" style="flex:1;min-width:120px;">
-      <input type="color" class="cat-color-input" id="catE_color_${_catEscAttr(e.key)}" value="${_catEscAttr(e.color || '#8B949E')}">
+    <div class="tag-row" data-cat-search="${_catEscAttr((e.key + ' ' + e.label).toLowerCase())}">
+      <input class="set-input" id="catE_label_${_catEscAttr(e.key)}" value="${_catEscAttr(e.label)}" style="flex:1;min-width:120px;" oninput="catAdminMarkDirty('environments')">
+      <input type="color" class="cat-color-input" id="catE_color_${_catEscAttr(e.key)}" value="${_catEscAttr(e.color || '#8B949E')}" oninput="catAdminMarkDirty('environments')">
       <div class="cat-row-actions">
-        <button type="button" class="edit-btn" onclick="catAdminSaveEnvironment('${_catEscAttr(e.key)}')" title="Save">💾</button>
         <button type="button" class="edit-btn" onclick="catAdminDeleteEnvironment('${_catEscAttr(e.key)}')" title="Delete">🗑️</button>
       </div>
     </div>`).join('');
-}
-async function catAdminSaveEnvironment(key) {
-  const label = _cat('catE_label_' + key).value.trim();
-  const color = _cat('catE_color_' + key).value;
-  if (!label) { catAdminMsg('Fill in the required label(s).', 'err'); return; }
-  try {
-    const res = await fetch('/api/environments/' + encodeURIComponent(key), {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label, color }),
-    });
-    if (!res.ok) return catAdminHandleError(res);
-    catAdminMsg('Saved.', 'ok');
-    catAdminRefreshCatalogs();
-  } catch (e) { catAdminMsg('Something went wrong. Please try again.', 'err'); }
+  catAdminApplyFilter('environments');
 }
 async function catAdminDeleteEnvironment(key) {
   const ok = await openConfirmModal(`Delete "${key}"? This action cannot be undone.`);
@@ -382,29 +493,15 @@ function renderCatAdminTopics() {
   const list = _cat('catTopicsList');
   if (!list) return;
   list.innerHTML = (CATALOGS.topics || []).map(tp => `
-    <div class="tag-row">
+    <div class="tag-row" data-cat-search="${_catEscAttr((tp.key + ' ' + tp.label).toLowerCase())}">
       ${tp.is_protected ? `<span class="cat-protected-badge">${_catEscHtml('protected')}</span>` : ''}
-      <input class="set-input" id="catT_label_${_catEscAttr(tp.key)}" value="${_catEscAttr(tp.label)}" style="flex:1;min-width:120px;">
-      <input type="color" class="cat-color-input" id="catT_color_${_catEscAttr(tp.key)}" value="${_catEscAttr(tp.color || '#8B949E')}">
+      <input class="set-input" id="catT_label_${_catEscAttr(tp.key)}" value="${_catEscAttr(tp.label)}" style="flex:1;min-width:120px;" oninput="catAdminMarkDirty('topics')">
+      <input type="color" class="cat-color-input" id="catT_color_${_catEscAttr(tp.key)}" value="${_catEscAttr(tp.color || '#8B949E')}" oninput="catAdminMarkDirty('topics')">
       <div class="cat-row-actions">
-        <button type="button" class="edit-btn" onclick="catAdminSaveTopic('${_catEscAttr(tp.key)}')" title="Save">💾</button>
         ${tp.is_protected ? '' : `<button type="button" class="edit-btn" onclick="catAdminDeleteTopic('${_catEscAttr(tp.key)}')" title="Delete">🗑️</button>`}
       </div>
     </div>`).join('');
-}
-async function catAdminSaveTopic(key) {
-  const label = _cat('catT_label_' + key).value.trim();
-  const color = _cat('catT_color_' + key).value;
-  if (!label) { catAdminMsg('Fill in the required label(s).', 'err'); return; }
-  try {
-    const res = await fetch('/api/topics/' + encodeURIComponent(key), {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label, color }),
-    });
-    if (!res.ok) return catAdminHandleError(res);
-    catAdminMsg('Saved.', 'ok');
-    catAdminRefreshCatalogs();
-  } catch (e) { catAdminMsg('Something went wrong. Please try again.', 'err'); }
+  catAdminApplyFilter('topics');
 }
 async function catAdminDeleteTopic(key) {
   const ok = await openConfirmModal(`Delete "${key}"? This action cannot be undone.`);
@@ -440,30 +537,15 @@ function renderCatAdminParameters() {
   const list = _cat('catParametersList');
   if (!list) return;
   list.innerHTML = (CATALOGS.parameters || []).map(p => `
-    <div class="tag-row">
-      <input class="set-input" type="number" id="catP_order_${_catEscAttr(p.key)}" value="${_catEscAttr(p.sort_order)}" style="max-width:56px;" title="Order">
+    <div class="tag-row" data-cat-search="${_catEscAttr((p.key + ' ' + p.label).toLowerCase())}">
+      <input class="set-input" type="number" id="catP_order_${_catEscAttr(p.key)}" value="${_catEscAttr(p.sort_order)}" style="max-width:56px;" title="Order" oninput="catAdminMarkDirty('parameters')">
       <span class="cat-key-badge" title="{{${_catEscAttr(p.key)}}}">${_catEscHtml(p.key)}</span>
-      <input class="set-input" id="catP_label_${_catEscAttr(p.key)}" value="${_catEscAttr(p.label)}" style="flex:1;min-width:140px;">
+      <input class="set-input" id="catP_label_${_catEscAttr(p.key)}" value="${_catEscAttr(p.label)}" style="flex:1;min-width:140px;" oninput="catAdminMarkDirty('parameters')">
       <div class="cat-row-actions">
-        <button type="button" class="edit-btn" onclick="catAdminSaveParameter('${_catEscAttr(p.key)}')" title="Save">💾</button>
         <button type="button" class="edit-btn" onclick="catAdminDeleteParameter('${_catEscAttr(p.key)}')" title="Delete">🗑️</button>
       </div>
     </div>`).join('');
-}
-async function catAdminSaveParameter(key) {
-  const orderRaw = _cat('catP_order_' + key).value;
-  const sort_order = orderRaw === '' ? 0 : parseInt(orderRaw, 10);
-  const label = _cat('catP_label_' + key).value.trim();
-  if (!label) { catAdminMsg('Fill in the required label(s).', 'err'); return; }
-  try {
-    const res = await fetch('/api/parameters/' + encodeURIComponent(key), {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label, sort_order }),
-    });
-    if (!res.ok) return catAdminHandleError(res);
-    catAdminMsg('Saved.', 'ok');
-    catAdminRefreshCatalogs();
-  } catch (e) { catAdminMsg('Something went wrong. Please try again.', 'err'); }
+  catAdminApplyFilter('parameters');
 }
 async function catAdminDeleteParameter(key) {
   const ok = await openConfirmModal(`Delete "${key}"? This action cannot be undone.`);
@@ -493,3 +575,9 @@ async function catAdminAddParameter() {
     catAdminRefreshCatalogs();
   } catch (e) { catAdminMsg('Something went wrong. Please try again.', 'err'); }
 }
+
+// Precisa vir depois de todas as renderCatAdminX() acima estarem declaradas.
+Object.assign(CAT_ADMIN_RENDER_FN, {
+  vendors: renderCatAdminVendors, systems: renderCatAdminSystems, versions: renderCatAdminVersions,
+  environments: renderCatAdminEnvironments, topics: renderCatAdminTopics, parameters: renderCatAdminParameters,
+});
