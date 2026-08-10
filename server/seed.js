@@ -44,7 +44,6 @@ const COMMANDS = [
     about_when_en: 'Connectivity diagnostics, verifying whether packets reach the firewall, identifying at which point traffic is dropped or modified by NAT.',
     about_obs_pt: 'Pacote aparece em i mas não em I = bloqueado pela policy. Aparece em I mas não em o = problema de roteamento. Salve com -w e analise no Wireshark.',
     about_obs_en: 'Packet appears in i but not in I = blocked by policy. Appears in I but not in o = routing problem. Save with -w and analyze in Wireshark.',
-    tags: [['t-teal', 'PRINCIPAL', 'MAIN'], ['t-blue', 'NGFW', 'NGFW']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'fw monitor -F "{{src_ip}},{{src_port}},{{dst_ip}},{{dst_port}},{{proto}}" -F "{{dst_ip}},{{dst_port}},{{src_ip}},{{src_port}},{{proto}}"'),
@@ -86,7 +85,6 @@ const COMMANDS = [
     about_when_en: 'When you want to confirm the packet physically arrived at the interface, before Check Point inspection. Also useful for capturing management traffic.',
     about_obs_pt: 'tcpdump NÃO vê tráfego acelerado pelo SecureXL. Para tráfego de produção acelerado, use fw monitor.',
     about_obs_en: 'tcpdump does NOT see traffic accelerated by SecureXL. For accelerated production traffic, use fw monitor.',
-    tags: [['t-yellow', 'OS-LEVEL', 'OS-LEVEL']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'tcpdump -i {{iface}} -nn -s 0 "host {{src_ip}} and host {{dst_ip}}"'),
@@ -115,7 +113,6 @@ const COMMANDS = [
     about_when_en: "When fw log doesn't show the drop, when the customer reports connectivity issues but nothing shows in the log, or to identify SecureXL drops.",
     about_obs_pt: 'Impacta performance em produção. Use em janela de manutenção ou em ambiente de homologação. Sempre encerre com: fw ctl debug 0',
     about_obs_en: 'Impacts performance in production. Use during a maintenance window or in a staging environment. Always finish with: fw ctl debug 0',
-    tags: [['t-red', 'CUIDADO', 'CAUTION'], ['t-orange', 'KERNEL', 'KERNEL']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'fw ctl zdebug + drop | grep -E "{{src_ip}}|{{dst_ip}}"'),
@@ -149,7 +146,6 @@ const COMMANDS = [
     about_when_en: "When zdebug isn't enough, when TAC requests a kernel debug, or for VPN issues, incorrect NAT, and unexpected policy behavior.",
     about_obs_pt: 'No R82+, buffer reduziu de 32000 para 8200. Em GWs com 72+ cores, o debug vai para /var/log/debug.log* sem aparecer no terminal. Sempre execute fw ctl debug 0 ao terminar.',
     about_obs_en: 'On R82+, the buffer was reduced from 32000 to 8200. On GWs with 72+ cores, debug goes to /var/log/debug.log* without appearing in the terminal. Always run fw ctl debug 0 when finished.',
-    tags: [['t-red', 'AVANÇADO', 'ADVANCED'], ['t-orange', 'MANUTENÇÃO', 'MAINTENANCE']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'fw ctl debug 0'),
@@ -207,7 +203,6 @@ const COMMANDS = [
     about_when_en: 'Checking whether a specific connection was allowed or denied, which rule was applied, and reviewing communication history between two hosts.',
     about_obs_pt: 'Use -c drop para ver apenas drops. Use -b e -e para limitar o intervalo de tempo. Em ambientes com muito volume de log, prefira o SmartConsole.',
     about_obs_en: 'Use -c drop to see only drops. Use -b and -e to limit the time range. In environments with high log volume, prefer SmartConsole.',
-    tags: [['t-blue', 'CONSULTA', 'QUERY'], ['t-teal', 'LOGS', 'LOGS']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'fw log -n -s {{src_ip}} -d {{dst_ip}}'),
@@ -233,7 +228,6 @@ const COMMANDS = [
     about_when_en: 'Before using fw log or fwm logexport, to identify the correct log file for a specific period.',
     about_obs_pt: 'O arquivo ativo é sempre fw.log. Arquivos rotacionados têm o formato YYYY-MM-DD_HHMMSSfwlog.log',
     about_obs_en: 'The active file is always fw.log. Rotated files use the format YYYY-MM-DD_HHMMSSfwlog.log',
-    tags: [['t-yellow', 'LIST', 'LIST']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'fw lslogs'),
@@ -254,7 +248,6 @@ const COMMANDS = [
     about_when_en: 'Before exporting logs for a specific period, or when the active log file has grown too much and is impacting disk space.',
     about_obs_pt: 'Cria um gap mínimo de log durante a rotação. Use fw logswitch -audit para rotacionar o log de auditoria administrativo.',
     about_obs_en: 'Creates a minimal log gap during rotation. Use fw logswitch -audit to rotate the administrative audit log.',
-    tags: [['t-orange', 'ROTATE', 'ROTATE'], ['t-yellow', 'MANUTENÇÃO', 'MAINTENANCE']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'fw logswitch'),
@@ -277,7 +270,6 @@ const COMMANDS = [
     about_when_en: "Extracting logs for external analysis, sending to the customer, SIEM integration, or when SmartConsole isn't available.",
     about_obs_pt: 'Use -d ; para separar por ponto-e-vírgula (compatível com Excel pt-BR). Use -n para evitar resolução DNS que pode ser lenta.',
     about_obs_en: 'Use -d ; to separate with semicolons (compatible with pt-BR Excel). Use -n to avoid DNS resolution, which can be slow.',
-    tags: [['t-teal', 'EXPORT', 'EXPORT']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'fwm logexport -n -i $FWDIR/log/fw.log -o /tmp/fw_export.txt -p -d ";"'),
@@ -305,7 +297,6 @@ const COMMANDS = [
     about_when_en: "When the gateway was offline for a period and the logs from that interval don't appear in SmartConsole, or after recovering from a link outage.",
     about_obs_pt: 'Execute no SMS ou MDS, não no gateway. O IP informado é o endereço do gateway de onde se quer buscar os logs.',
     about_obs_en: "Run on the SMS or MDS, not on the gateway. The IP provided is the address of the gateway you want to fetch logs from.",
-    tags: [['t-purple', 'FETCH', 'FETCH'], ['t-blue', 'SMS', 'SMS']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.SMS, 'fw fetchlogs {{src_ip}}'),
@@ -330,7 +321,6 @@ const COMMANDS = [
     about_when_en: 'After configuration changes that require a restart, troubleshooting stuck processes, or to apply new licenses.',
     about_obs_pt: 'Em cluster, execute no membro standby primeiro. cpstop derruba o tráfego instantaneamente — prefira cprestart em produção.',
     about_obs_en: 'On a cluster, run on the standby member first. cpstop drops traffic instantly — prefer cprestart in production.',
-    tags: [['t-red', 'CUIDADO', 'CAUTION'], ['t-orange', 'SERVIÇOS', 'SERVICES']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'cpstop'),
@@ -362,7 +352,6 @@ const COMMANDS = [
     about_when_en: 'When a specific process is stuck or consuming resources and you want to restart it without running a full cpstop/cpstart.',
     about_obs_pt: 'cpwd_admin list mostra o estado de cada processo. MONITOR = processo monitorado pelo WatchDog. DEAD = processo que o WatchDog nao conseguiu iniciar.',
     about_obs_en: 'cpwd_admin list shows the state of each process. MONITOR = process monitored by WatchDog. DEAD = process WatchDog was unable to start.',
-    tags: [['t-yellow', 'WATCHDOG', 'WATCHDOG']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'cpwd_admin list'),
@@ -385,7 +374,6 @@ const COMMANDS = [
     about_when_en: 'SIEM integration, auditing administrative access to Gaia, or when the customer needs centralized system logs.',
     about_obs_pt: 'set syslog cplogs on envia logs CP ao Management. set syslog mgmtauditlogs on envia mudanças de config. Sempre execute save config após alterar.',
     about_obs_en: 'set syslog cplogs on sends CP logs to Management. set syslog mgmtauditlogs on sends config changes. Always run save config after making changes.',
-    tags: [['t-blue', 'SYSLOG', 'SYSLOG'], ['t-green', 'GAIA', 'GAIA']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.GAIA, 'show syslog all'),
@@ -410,7 +398,6 @@ const COMMANDS = [
     about_when_en: 'Analyzing CP process failures, startup issues, policy installation errors, or when TAC requests specific log files.',
     about_obs_pt: 'Arquivos .elg contêm logs de processos CP individuais. O arquivo fwk.elg é o log interno do kernel FW. Em produção, monitore o tamanho desses arquivos.',
     about_obs_en: '.elg files contain individual CP process logs. The fwk.elg file is the internal FW kernel log. In production, monitor the size of these files.',
-    tags: [['t-purple', 'FILES', 'FILES']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'ls -lh $FWDIR/log/*.log*'),
@@ -436,7 +423,6 @@ const COMMANDS = [
     about_when_en: 'Checking which policy is active on the gateway, confirming the last install worked, or reinstalling after a communication failure with Management.',
     about_obs_pt: 'Se fw stat retornar vazio ou policy errada, execute fw fetch local. Em cluster, execute em ambos os membros.',
     about_obs_en: "If fw stat returns empty or the wrong policy, run fw fetch local. On a cluster, run on both members.",
-    tags: [['t-yellow', 'POLICY', 'POLICY']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'fw stat'),
@@ -460,7 +446,6 @@ const COMMANDS = [
     about_when_en: 'Checking whether a specific connection is established in the kernel, confirming the TCP state is correct, or seeing how many sessions exist between two hosts.',
     about_obs_pt: 'Tabela de conexões é no kernel, independente do que o log mostra. Se aparece aqui mas não no log, pode ser tráfego acelerado pelo SecureXL.',
     about_obs_en: "The connections table lives in the kernel, independent of what the log shows. If it appears here but not in the log, it may be traffic accelerated by SecureXL.",
-    tags: [['t-blue', 'ESTADO', 'STATE']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'fw tab -t connections -f | grep -E "({{src_ip}}).*({{dst_ip}})|({{dst_ip}}).*({{src_ip}})"'),
@@ -481,7 +466,6 @@ const COMMANDS = [
     about_when_en: 'Checking whether NAT is being applied correctly, identifying which translated IP is being used, or debugging asymmetric NAT issues.',
     about_obs_pt: 'Se a entrada NAT aparece aqui mas a conexão não funciona, verifique roteamento de retorno. NAT Hide aparece como uma entrada por conexão.',
     about_obs_en: "If the NAT entry appears here but the connection doesn't work, check the return routing. NAT Hide appears as one entry per connection.",
-    tags: [['t-blue', 'NAT', 'NAT']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'fw tab -t fwx_cache -f | grep -E "{{src_ip}}|{{dst_ip}}"'),
@@ -501,7 +485,6 @@ const COMMANDS = [
     about_when_en: 'Monitoring connections table usage, checking whether the gateway is near the limit — which can cause out-of-connections drops.',
     about_obs_pt: 'Se o valor atual estiver próximo do limite, há risco de drops por capacidade da tabela. Aumente via fw ctl set int fw_conn_table_limit (temporário) ou pelo SmartConsole.',
     about_obs_en: "If the current value is close to the limit, there's a risk of drops due to table capacity. Increase it via fw ctl set int fw_conn_table_limit (temporary) or through SmartConsole.",
-    tags: [['t-blue', 'ESTADO', 'STATE']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'fw tab -t connections -s'),
@@ -522,7 +505,6 @@ const COMMANDS = [
     about_when_en: "When there's a suspicion of NAT issues due to table exhaustion, or to monitor usage in environments with high NAT Hide volume.",
     about_obs_pt: 'Tabela cheia pode causar falhas silenciosas de NAT. O tamanho é configurável via SmartConsole em Gateway Properties > Advanced.',
     about_obs_en: 'A full table can cause silent NAT failures. Size is configurable via SmartConsole under Gateway Properties > Advanced.',
-    tags: [['t-blue', 'NAT', 'NAT']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'fw tab -t fwx_cache -s'),
@@ -545,7 +527,6 @@ const COMMANDS = [
     about_when_en: "Confirming routing is correct for the destination, identifying the output interface, or checking whether the next hop is reachable via ARP.",
     about_obs_pt: 'ip route get simula a decisão de roteamento real do kernel — mais confiável que netstat -rn para ver qual rota será usada efetivamente.',
     about_obs_en: "ip route get simulates the kernel's actual routing decision — more reliable than netstat -rn for seeing which route will actually be used.",
-    tags: [['t-teal', 'ROUTING', 'ROUTING']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'ip route get {{dst_ip}}'),
@@ -569,7 +550,6 @@ const COMMANDS = [
     about_when_en: 'Route auditing, checking for a default route, identifying active interfaces, or confirming ARP entries for next hops.',
     about_obs_pt: 'Para verificar a rota específica de um destino, preencha o IP Destino acima e use o comando ip route get gerado automaticamente.',
     about_obs_en: 'To check the specific route for a destination, fill in the Destination IP above and use the automatically generated ip route get command.',
-    tags: [['t-teal', 'ROUTING', 'ROUTING']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'netstat -rn'),
@@ -595,7 +575,6 @@ const COMMANDS = [
     about_when_en: 'General gateway health monitoring, checking load (CPU/memory/connections), initial diagnostics before any troubleshooting.',
     about_obs_pt: 'cpview é o melhor ponto de partida para diagnóstico: mostra throughput, conexões, CPU por core e estado do SecureXL. Pressione ? dentro do cpview para ajuda.',
     about_obs_en: 'cpview is the best starting point for diagnostics: shows throughput, connections, CPU per core and SecureXL state. Press ? inside cpview for help.',
-    tags: [['t-teal', 'STATUS', 'STATUS']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'cpstat fw'),
@@ -628,7 +607,6 @@ const COMMANDS = [
     about_when_en: "Checking whether SecureXL is active, confirming traffic is being accelerated, or before doing debug (accelerated traffic doesn't show up in fw monitor with -e/-i).",
     about_obs_pt: 'Se SecureXL estiver ativo, capturas com fw monitor -e/-i podem não capturar tráfego acelerado. Use -F ou desabilite temporariamente com fwaccel off (impacta performance).',
     about_obs_en: 'If SecureXL is active, captures with fw monitor -e/-i may not capture accelerated traffic. Use -F or temporarily disable with fwaccel off (impacts performance).',
-    tags: [['t-purple', 'SECUREXL', 'SECUREXL'], ['t-orange', 'ACCEL', 'ACCEL']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'fwaccel stat'),
@@ -659,7 +637,6 @@ const COMMANDS = [
     about_when_en: "When traffic doesn't show up in fw monitor because it's accelerated, or to check whether a specific connection is on the fast path.",
     about_obs_pt: 'No R82/R82.10, use simple_debug_filter para filtrar por IP diretamente no kernel SecureXL (mais eficiente que grep em produção).',
     about_obs_en: 'On R82/R82.10, use simple_debug_filter to filter by IP directly in the SecureXL kernel (more efficient than grep in production).',
-    tags: [['t-purple', 'SECUREXL', 'SECUREXL']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'fwaccel conns | grep -E "{{src_ip}}|{{dst_ip}}"'),
@@ -686,7 +663,6 @@ const COMMANDS = [
     about_when_en: "First step when investigating a disabled blade, an expired license, or to survey what's installed before opening a TAC case.",
     about_obs_pt: 'cplic print mostra apenas a máquina local. Use -x para incluir licenças já expiradas na listagem.',
     about_obs_en: 'cplic print only shows the local machine. Use -x to include already-expired licenses in the listing.',
-    tags: [['t-teal', 'LICENÇA', 'LICENSE'], ['t-blue', 'CONSULTA', 'QUERY']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'cplic print'),
@@ -710,7 +686,6 @@ const COMMANDS = [
     about_when_en: "When a blade seems to not be working and you need to quickly confirm whether it's a licensing gap or a configuration issue.",
     about_obs_pt: 'Retorna sucesso/falha simples — combine com cplic print para ver o detalhe completo da licença.',
     about_obs_en: 'Returns a simple success/failure — combine with cplic print to see the full license detail.',
-    tags: [['t-blue', 'CONSULTA', 'QUERY']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'cplic check -p vpn'),
@@ -731,7 +706,6 @@ const COMMANDS = [
     about_when_en: 'After generating/associating a license in the User Center, to sync it without manually pasting the string; or to install offline a license received in a .lic file.',
     about_obs_pt: 'cplic get exige conectividade do Management com o User Center. Em ambiente air-gapped/offline, use cplic put ou a ativação manual via Gaia Portal.',
     about_obs_en: 'cplic get requires Management connectivity to the User Center. In an air-gapped/offline environment, use cplic put or manual activation via the Gaia Portal.',
-    tags: [['t-green', 'INSTALAÇÃO', 'INSTALLATION']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.SMS, 'cplic get -p all'),
@@ -755,7 +729,6 @@ const COMMANDS = [
     about_when_en: 'When replacing an expired/incorrect license with a new one, or clearing test licenses before the final license.',
     about_obs_pt: 'Remove só da máquina local, não do repositório do Management. Garanta a nova licença antes de remover — sem licença válida, blades podem parar de funcionar.',
     about_obs_en: "Removes only from the local machine, not from the Management repository. Make sure the new license is in place before removing — without a valid license, blades may stop working.",
-    tags: [['t-red', 'CUIDADO', 'CAUTION'], ['t-teal', 'LICENÇA', 'LICENSE']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'cplic print -x'),
@@ -777,7 +750,6 @@ const COMMANDS = [
     about_when_en: 'When centralizing license control for multiple gateways on Management, or auditing which licenses are available for assignment.',
     about_obs_pt: 'O repositório é só um cadastro central — a licença passa a valer na máquina após cplic get/put no próprio gateway. Disponível apenas no Management Server.',
     about_obs_en: 'The repository is just a central record — the license takes effect on the machine only after cplic get/put on the gateway itself. Available only on the Management Server.',
-    tags: [['t-purple', 'MANAGEMENT', 'MANAGEMENT']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.SMS, 'cplic db_print'),
@@ -799,7 +771,6 @@ const COMMANDS = [
     about_when_en: 'Practically limited to migrations from very old environments — rarely needed in current R81.x/R82.x installations.',
     about_obs_pt: 'Se a licença já foi emitida no User Center para a versão atual, este passo normalmente não é necessário.',
     about_obs_en: "If the license was already issued in the User Center for the current version, this step usually isn't necessary.",
-    tags: [['t-yellow', 'LEGADO', 'LEGACY']],
     versions: [], environments: [],
     linesDefault: [
       cmdLine(PR.FW, 'cplic upgrade -p <caminho-do-arquivo>'),
@@ -826,7 +797,6 @@ const COMMANDS = [
     about_when_en: 'Before any cluster intervention, after an unexpected failover, or when suspecting split-brain.',
     about_obs_pt: 'Verifique sempre cphaprob -a if para identificar interfaces com problema de sincronizacao.',
     about_obs_en: 'Always check cphaprob -a if to identify interfaces with synchronization problems.',
-    tags: [['t-yellow', 'CLUSTER', 'CLUSTER'], ['t-blue', 'HA', 'HA']],
     versions: [], environments: ['cluster'],
     linesDefault: [
       cmdLine(PR.FW, 'cphaprob stat'),
@@ -850,7 +820,6 @@ const COMMANDS = [
     about_when_en: 'Whenever you need to run commands in a specific VS. Without vsenv, commands run in the physical context (VS0).',
     about_obs_pt: 'vsenv 0 retorna ao contexto fisico do chassis.',
     about_obs_en: 'vsenv 0 returns to the physical chassis context.',
-    tags: [['t-teal', 'VSX', 'VSX']],
     versions: [], environments: ['vsx'],
     linesDefault: [
       cmdLine(PR.FW, 'vsx stat'),
@@ -875,7 +844,6 @@ const COMMANDS = [
     about_when_en: 'Troubleshooting a Maestro environment, checking SGM state, distributing commands in bulk.',
     about_obs_pt: 'asg_cmd executa em todos os SGMs. g_* agrega retorno. Use asg diag para identificar SGMs com problema.',
     about_obs_en: 'asg_cmd runs on all SGMs. g_* aggregates the return. Use asg diag to identify SGMs with problems.',
-    tags: [['t-purple', 'MAESTRO', 'MAESTRO']],
     versions: [], environments: ['maestro'],
     linesDefault: [
       cmdLine(PR.MHO, 'asg stat'),
@@ -900,7 +868,6 @@ const COMMANDS = [
     about_when_en: 'When you need to access logs, policy, or status of a specific domain within the MDS.',
     about_obs_pt: 'Todos os comandos de gateway (fw stat, fw log) devem ser executados no contexto da CMA, nunca direto no MDS.',
     about_obs_en: 'All gateway commands (fw stat, fw log) must be run in the CMA context, never directly on the MDS.',
-    tags: [['t-blue', 'MDS', 'MDS']],
     versions: [], environments: ['mds'],
     linesDefault: [
       cmdLine(PR.MDS, 'mdsstat'),
@@ -928,7 +895,6 @@ const COMMANDS = [
     about_when_en: 'When working directly in the Gaia restricted shell, before needing advanced commands (fw monitor, tcpdump, fw ctl debug, cplic, etc.) that require Expert mode.',
     about_obs_pt: 'A maioria das ferramentas de troubleshooting de kernel e tráfego não tem equivalente nativo no Clish — é necessário entrar em modo Expert (bash) com o comando expert.',
     about_obs_en: 'Most kernel and traffic troubleshooting tools have no native Clish equivalent — you need to enter Expert mode (bash) with the expert command.',
-    tags: [['t-green', 'GAIA', 'GAIA'], ['t-blue', 'CLISH', 'CLISH']],
     versions: [], environments: ['gaia'],
     linesDefault: [
       cmdLine(PR.GAIA, 'show version all'),
@@ -948,7 +914,7 @@ const COMMANDS = [
 // ════════════════════════════════════════════════
 // Insert
 // ════════════════════════════════════════════════
-// NOTA: todo o texto do banco (commands.name/desc/about_*, command_tags.label,
+// NOTA: todo o texto do banco (commands.name/desc/about_*,
 // command_lines.content, command_diffs.note, command_diff_lines.content)
 // virou campo único (sem _pt/_en) e o sistema é 100% em inglês — a pedido do
 // usuário (ver schema.sql). Este script legado ainda guarda os literais de
@@ -997,9 +963,6 @@ async function seed() {
         canon(c.about_obs_en, c.about_obs_pt),
       ]);
 
-      for (const [i, [cls, pt, en]] of (c.tags || []).entries()) {
-        await client.query('INSERT INTO command_tags (command_id, css_class, label, sort_order) VALUES ($1, $2, $3, $4)', [c.id, cls, canon(en, pt), i]);
-      }
       // Um comando pode pertencer a mais de um Tópico (c.topics, opcional); por padrão
       // usa o único `c.topic` do registro legado (todo comando tem sempre >=1 tópico).
       for (const tp of (c.topics && c.topics.length ? c.topics : [c.topic])) {

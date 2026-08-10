@@ -196,15 +196,6 @@ CREATE TABLE IF NOT EXISTS parameters (
   sort_order     INTEGER NOT NULL DEFAULT 0
 );
 
--- Tags/badges exibidos no cabeçalho do card (ex.: PRINCIPAL/NGFW, CUIDADO/KERNEL).
-CREATE TABLE IF NOT EXISTS command_tags (
-  id         SERIAL PRIMARY KEY,
-  command_id TEXT NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
-  css_class  TEXT NOT NULL,      -- t-red | t-blue | t-teal | t-yellow | t-orange | t-purple | t-green
-  label      TEXT NOT NULL,
-  sort_order INTEGER NOT NULL DEFAULT 0
-);
-
 -- Linhas de terminal do card. `variant` distingue o bloco normal do bloco
 -- "placeholder" mostrado quando requires_ips=1 e SRC/DST (ou requires_ip_port=1 e IP/Porta) ainda não foram preenchidos.
 CREATE TABLE IF NOT EXISTS command_lines (

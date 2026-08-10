@@ -116,7 +116,6 @@ Cria um comando. Corpo (campos obrigatórios em **negrito**):
   "about_purpose": "...",
   "about_when": "...",
   "about_obs": "...",
-  "tags": [{ "css_class": "t-red", "label": "KERNEL", "sort_order": 0 }],
   "lines": [
     { "variant": "default", "sort_order": 0, "line_type": "cmd", "prompt": "[Expert@FW]#", "content": "fw monitor -e \"...\"", "supports_export": true }
   ],
@@ -150,7 +149,7 @@ Retorna `201` com o **Command** criado. `400 validation_error` se faltar campo
 obrigatório. `409 conflict` se `id` já existir.
 
 ### `PUT /api/commands/:id`
-Mesmo corpo do `POST` (substitui TODOS os filhos — tags/linhas/diffs/escopo). Se `id`
+Mesmo corpo do `POST` (substitui TODOS os filhos — linhas/diffs/escopo). Se `id`
 vier no corpo, precisa bater com o da URL. Sem restrição de dono entre usuários comuns
 — qualquer um edita qualquer comando de qualquer outro usuário. **Exceção**: comandos
 de referência (`created_by: "System"`) só podem ser editados por admins — usuário
@@ -159,7 +158,7 @@ comum recebe `403 forbidden` (a UI já esconde o botão Edit nesse caso e oferec
 usuário atual. `404 not_found` / `400 validation_error` / `403 forbidden`.
 
 ### `DELETE /api/commands/:id` — **(admin)**
-Remove o comando e (via `ON DELETE CASCADE`) todas as suas linhas/tags/diffs/escopo/
+Remove o comando e (via `ON DELETE CASCADE`) todas as suas linhas/diffs/escopo/
 membership em pastas. `204` no sucesso, `404 not_found`, `403 forbidden` se o chamador
 não for admin.
 
@@ -181,7 +180,6 @@ não for admin.
   "desc": "Captures traffic at kernel level",
   "desc_empty": null,
   "about": { "icon": "ℹ️", "purpose": "...", "when": "...", "obs": "..." },
-  "tags": [{ "css_class": "t-red", "label": "KERNEL" }],
   "vendors": ["check-point"],
   "systems": ["gaia"],
   "versions": ["r8110"],

@@ -120,6 +120,15 @@ async function runMigrations() {
     `);
     await pool.query(`ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS entity_type TEXT NOT NULL DEFAULT 'command'`);
     await pool.query(`ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS details TEXT`);
+    // Remoção da feature Tags/badges (pedido do usuário: "no arquivo de
+    // template existe a coluna Tags que não deveria existir na aplicação" —
+    // decisão confirmada de remover Tags de toda a aplicação, não só do CSV).
+    // command_tags saiu de CREATE TABLE IF NOT EXISTS em schema.sql (instalações
+    // novas nunca a criam); aqui é só o DROP para quem já tinha a tabela de um
+    // deploy anterior — apaga os dados de tags já cadastrados, mas nada mais no
+    // app volta a lê-los depois desta mudança (badge some do card, campo some
+    // do editor, coluna some do CSV/template).
+    await pool.query(`DROP TABLE IF EXISTS command_tags`);
     await pool.query(`
       UPDATE folder_commands fc SET sort_order = ranked.rn
       FROM (

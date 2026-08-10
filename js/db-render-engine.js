@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════
 // DB RENDER ENGINE — turns /api/commands rows (already language-resolved by
-// the server: name/desc/about/tags/diffs text is in the requested language)
+// the server: name/desc/about/diffs text is in the requested language)
 // into the same card()/section() HTML terminal-renderer.js has always produced.
 //
 // Two rendering paths:
@@ -370,7 +370,7 @@ function mapAbout(about, values) {
 // Bloco "placeholder" compartilhado por requires_ips (SRC/DST vazios) e requires_ip_port
 // (IP/Porta genéricos vazios) — mesma lógica de fallback (nome/desc/raw "vazio"), só muda
 // a condição que dispara.
-function buildEmptyStateCard(row, values, tags, about) {
+function buildEmptyStateCard(row, values, about) {
   const emptyLines = (row.lines && row.lines.empty) || [];
   if (!emptyLines.length) return null; // e.g. conntable/nattable/routespecific: card omitido inteiramente
   const name = (row.name_empty !== null && row.name_empty !== undefined && row.name_empty !== '') ? row.name_empty : row.name;
@@ -381,7 +381,7 @@ function buildEmptyStateCard(row, values, tags, about) {
     id: row.id,
     name: resolveTokens(name, values),
     desc: resolveTokens(desc, values),
-    about, tags,
+    about,
     lines: dbLinesToTerm(emptyLines, values),
     diffs, raw,
     folderIds: row.folder_ids,
@@ -391,11 +391,10 @@ function buildEmptyStateCard(row, values, tags, about) {
 }
 
 function buildCardHtmlForRow(row, values, hasIPs) {
-  const tags = (row.tags || []).map(tg => [tg.css_class, tg.label]);
   const about = mapAbout(row.about, values);
 
   if (row.requires_ips && !hasIPs) {
-    return buildEmptyStateCard(row, values, tags, about);
+    return buildEmptyStateCard(row, values, about);
   }
 
   // IP/Porta genéricos (sem direção — ver query-bar.js): usados por comandos como
@@ -403,7 +402,7 @@ function buildCardHtmlForRow(row, values, hasIPs) {
   // SRC/DST. Gatilho independente de hasIPs, lido direto de values.ip/values.port.
   const hasIpPort = !!(values.ip && values.port);
   if (row.requires_ip_port && !hasIpPort) {
-    return buildEmptyStateCard(row, values, tags, about);
+    return buildEmptyStateCard(row, values, about);
   }
 
   let lines, diffs, raw;
@@ -423,7 +422,7 @@ function buildCardHtmlForRow(row, values, hasIPs) {
     id: row.id,
     name: resolveTokens(row.name, values),
     desc: resolveTokens(row.desc, values),
-    about, tags, lines, diffs, raw,
+    about, lines, diffs, raw,
     folderIds: row.folder_ids,
     createdBy: row.created_by, modifiedBy: row.modified_by, updatedAt: row.updated_at, isSystem: row.is_system,
     vendors: row.vendors, systems: row.systems, versions: row.versions, environments: row.environments,

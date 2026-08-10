@@ -418,8 +418,7 @@ async function lookupUpnFromAD(samAccountName) {
 // (não deveria acontecer em uso normal, getCurrentUsername sempre devolve
 // algo) simplesmente recebem folder_ids: [].
 async function shapeCommand(row, username) {
-  const [tagsQ, vendorsQ, systemsQ, versionsQ, envQ, topicsQ, folderQ, linesQ, diffsQ] = await Promise.all([
-    pool.query('SELECT css_class, label FROM command_tags WHERE command_id = $1 ORDER BY sort_order, id', [row.id]),
+  const [vendorsQ, systemsQ, versionsQ, envQ, topicsQ, folderQ, linesQ, diffsQ] = await Promise.all([
     pool.query('SELECT vendor FROM command_vendors WHERE command_id = $1 ORDER BY vendor', [row.id]),
     pool.query('SELECT system FROM command_systems WHERE command_id = $1 ORDER BY system', [row.id]),
     pool.query('SELECT version FROM command_versions WHERE command_id = $1 ORDER BY version', [row.id]),
@@ -438,7 +437,6 @@ async function shapeCommand(row, username) {
     pool.query('SELECT id, version, note, sort_order FROM command_diffs WHERE command_id = $1 ORDER BY sort_order, id', [row.id]),
   ]);
 
-  const tags = tagsQ.rows.map(t => ({ css_class: t.css_class, label: t.label }));
   const vendors = vendorsQ.rows.map(v => v.vendor);
   const systemList = systemsQ.rows.map(s => s.system);
   const versions = versionsQ.rows.map(v => v.version);
@@ -490,7 +488,6 @@ async function shapeCommand(row, username) {
       when: row.about_when,
       obs: row.about_obs,
     },
-    tags,
     vendors,
     systems: systemList,
     versions,
@@ -1526,15 +1523,6 @@ function buildCommandColumns(body) {
 // Insere todas as tabelas filhas de um comando, dentro da MESMA transação
 // (client) do INSERT/UPDATE de `commands` que chamou isto.
 async function insertChildren(client, id, body) {
-  const tags = body.tags || [];
-  for (let i = 0; i < tags.length; i++) {
-    const tag = tags[i];
-    await client.query(
-      'INSERT INTO command_tags (command_id, css_class, label, sort_order) VALUES ($1, $2, $3, $4)',
-      [id, tag.css_class, tag.label, Number.isInteger(tag.sort_order) ? tag.sort_order : i]
-    );
-  }
-
   for (const tp of resolveTopics(body)) {
     await client.query('INSERT INTO command_topics (command_id, topic) VALUES ($1, $2)', [id, tp]);
   }
@@ -1702,7 +1690,6 @@ app.put('/api/commands/:id', async (req, res) => {
         ]
       );
 
-      await client.query('DELETE FROM command_tags WHERE command_id = $1', [id]);
       await client.query('DELETE FROM command_topics WHERE command_id = $1', [id]);
       await client.query('DELETE FROM command_vendors WHERE command_id = $1', [id]);
       await client.query('DELETE FROM command_systems WHERE command_id = $1', [id]);

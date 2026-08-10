@@ -258,12 +258,10 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .cat-row-actions { display: flex; gap: 4px; flex-shrink: 0; margin-left: auto; }
 
 .list-editor { display: flex; flex-direction: column; gap: 8px; }
-.line-row, .tag-row, .diff-row {
+.line-row, .diff-row {
   display: flex; flex-direction: column; gap: 6px; background: var(--surf2);
   border: 1px solid var(--bdr); border-radius: 6px; padding: 9px;
 }
-.tag-row { flex-direction: row; align-items: center; flex-wrap: wrap; }
-.tag-row .set-input { flex: 1; min-width: 90px; }
 .row-head { display: flex; align-items: center; gap: 8px; }
 .row-head .set-input { flex-shrink: 0; }
 .ln-export-label {
@@ -664,29 +662,21 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 }
 .card-name { font-size: 12px; font-weight: 700; color: var(--text); flex: 1; min-width: 100px; }
 .card-desc { font-size: 10.5px; color: var(--muted); }
-.tag {
-  font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
-  font-family: var(--mono); white-space: nowrap;
-}
-.t-teal   { background: var(--teal-bg);   color: var(--teal);   border: 1px solid rgba(255,79,160,.3); }
-.t-blue   { background: var(--blue-bg);   color: var(--blue);   border: 1px solid rgba(96,165,250,.25); }
-.t-orange { background: var(--orange-bg); color: var(--orange); border: 1px solid rgba(251,146,60,.25); }
-.t-yellow { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(251,191,36,.25); }
-.t-red    { background: var(--red-bg);    color: var(--red);    border: 1px solid rgba(248,113,113,.25); }
-.t-purple { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(192,132,252,.25); }
-.t-green  { background: var(--green-bg);  color: var(--green);  border: 1px solid rgba(74,222,128,.25); }
 
 /* Tags de escopo (Vendor/Sistema/Versão/Ambiente) — mostradas logo após o nome
    do comando no cabeçalho do card (ver scopeTagsHtml em js/terminal-renderer.js).
-   Reaproveita o componente .tag (tamanho/padding/fonte), mas com uma cor neutra
-   própria (em vez das variantes .t-*) + um "pip" colorido com a cor cadastrada
-   no catálogo (mesmo .sb-pip usado nas listas da sidebar, ver layout.css). */
+   Badge com cor neutra própria + um "pip" colorido com a cor cadastrada no
+   catálogo (mesmo .sb-pip usado nas listas da sidebar, ver layout.css). Era
+   antes compartilhado com o componente .tag (badges de "Tags"/header tags dos
+   comandos, feature removida — ver histórico) — agora tem sua própria
+   definição completa (tamanho/padding/fonte), sem depender de mais nada. */
 .scope-tags { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .scope-tag {
   display: inline-flex; align-items: center;
   background: var(--surf); color: var(--muted);
   border: 1px solid var(--bdr);
-  font-size: 10px; padding: 3px 9px;
+  font-size: 10px; padding: 3px 9px; font-weight: 700; border-radius: 3px;
+  font-family: var(--mono); white-space: nowrap;
 }
 .scope-tag .sb-pip { margin-right: 5px; width: 7px; height: 7px; }
 .scope-tag-empty { color: var(--muted); opacity: .7; font-style: italic; }
@@ -1070,8 +1060,7 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    exata em que foram cadastradas entre as linhas do comando (dbLinesToTerm/
    termRender preservam a ordem de cadastro; nada aqui reordena ou filtra por tipo). */
 .compact-cards .card-desc,
-.compact-cards .card-about,
-.compact-cards .tag:not(.scope-tag) { display: none; }
+.compact-cards .card-about { display: none; }
 
 /* O antigo "Admin mode" (body.hide-command-editing) foi removido — incluir/
    duplicar/editar comandos, import/export em massa, gerenciamento de

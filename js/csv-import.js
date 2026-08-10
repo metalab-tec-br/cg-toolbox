@@ -90,7 +90,7 @@ function splitCell(cell) { return String(cell || '').split(',').map(s => s.trim(
 // instruções — os detalhes ficam no texto do modal. ──
 const IMPORT_HEADERS = [
   'Name', 'Description', 'Vendor', 'System', 'Topics', 'Versions', 'Environments',
-  'Tags', 'Requires IP/Port', 'Prompt', 'Command', 'Note', 'Purpose', 'When to use', 'Notes',
+  'Requires IP/Port', 'Prompt', 'Command', 'Note', 'Purpose', 'When to use', 'Notes',
 ];
 // Vendor/System/Version/Environment/Topics são todos obrigatórios agora (ver
 // buildImportPayload abaixo) — "all" não é mais um valor aceito nestas 4
@@ -99,7 +99,7 @@ const IMPORT_EXAMPLE_ROW = [
   'Check WatchDog process status', 'Shows whether a monitored WatchDog process is alive',
   'Check Point', 'Gaia',
   'System Monitoring', 'R82', 'Standalone',
-  'monitoring', 'No', '[Expert@FW]#', 'cpwd_admin list', '',
+  'No', '[Expert@FW]#', 'cpwd_admin list', '',
   'Confirms a critical process (fwd, cpd, etc.) is being watched and running.',
   'After a restart, or when troubleshooting a service that keeps failing.', '',
 ];
@@ -173,10 +173,6 @@ function resolveTopics(cell, warnings) {
   });
   return [...new Set(keys)];
 }
-function parseTagsCell(cell) {
-  return (cell || '').split(',').map(s => s.trim()).filter(Boolean)
-    .map(label => ({ css_class: 't-teal', label }));
-}
 function parseYesNo(cell) {
   return /^(y|yes|s|sim|true|1)$/i.test((cell || '').trim());
 }
@@ -235,7 +231,6 @@ function buildImportPayload(obj, existingIdsInBatch) {
   if (!versions.length) return { error: 'No valid "Version" (at least one is required — must match an existing version)' };
   const environments = resolveMultiCatalog(getCell(obj, 'Environments', 'Environment'), CATALOGS.environments || [], warnings, 'Environment', 'environment');
   if (!environments.length) return { error: 'No valid "Environment" (at least one is required — must match an existing environment)' };
-  const tags = parseTagsCell(getCell(obj, 'Tags'));
   // "Requires IP/Port" = Yes só faz sentido pra um comando que muda de
   // conteúdo quando SRC/DST estão vazios (ver toggle "This command changes
   // content when SRC/DST are empty" no editor manual, passo Avançado) — e
@@ -277,7 +272,7 @@ function buildImportPayload(obj, existingIdsInBatch) {
   const payload = {
     id, name,
     desc: getCell(obj, 'Description', 'Desc'),
-    topics, vendors, systems, versions, environments, tags,
+    topics, vendors, systems, versions, environments,
     requires_ips,
     about_purpose: getCell(obj, 'Purpose'),
     about_when: getCell(obj, 'When to use', 'When'),
