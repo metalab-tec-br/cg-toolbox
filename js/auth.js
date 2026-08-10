@@ -28,8 +28,15 @@ function updateAccountUI(me) {
     const methodLabel = me.authMethod === 'local' ? 'local account' : (me.authMethod === 'api_key' ? 'API key' : 'Windows login');
     roleLine.textContent = `${roleLabel} — signed in via ${methodLabel}`;
   }
+  // Log out sempre visível pra todo mundo (pedido do usuário) — antes só
+  // aparecia pra quem tinha logado com conta local (authMethod === 'local'),
+  // escondido para sessões NTLM/API key. Clicar em Log out continua seguro
+  // pra esses casos: POST /api/auth/logout só apaga a sessão LOCAL se
+  // existir uma (ver server/index.js) — pra quem está em NTLM/API key vira
+  // um no-op inofensivo, só recarrega a página (volta a identificar via
+  // NTLM/API key normalmente).
   const logoutBtn = document.getElementById('hdrLogoutBtn');
-  if (logoutBtn) logoutBtn.style.display = (me.authMethod === 'local') ? '' : 'none';
+  if (logoutBtn) logoutBtn.style.display = '';
 
   if (typeof applyAdminGating === 'function') applyAdminGating();
 }

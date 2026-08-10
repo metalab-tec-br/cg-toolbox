@@ -30,16 +30,19 @@
   <div class="hdr-gap"></div>
   <!-- Menu de conta — clicar no usuário identificado abre um dropdown com o
        role atual e a opção de logar com uma credencial local diferente (ver
-       js/auth.js). "Log out" só aparece quando a sessão ativa é local (ver
-       hdrLogoutBtn) — sair de uma sessão local sempre volta a identificar
-       pelo login do Windows (NTLM), nunca deixa a aplicação sem usuário. -->
+       js/auth.js). "Log out" aparece pra TODO usuário (pedido do usuário) —
+       antes ficava escondido (ver hdrLogoutBtn) fora de sessão local; clicar
+       nele fora de uma sessão local é um no-op seguro no backend (só apaga
+       sessão local se houver uma) e simplesmente recarrega a página, voltando
+       a identificar pelo login do Windows (NTLM)/API key, nunca deixa a
+       aplicação sem usuário. -->
   <div class="dd hdr-user-dd" id="hdrUserDD">
     <button type="button" class="hdr-user" id="hdrUser" onclick="toggleDropdown('hdrUserDD')" title="Account">
       <svg class="hdr-user-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18.5a6 6 0 0 1 11 0"/></svg><span id="currentUserLabel"></span>
     </button>
     <div class="dd-panel" id="hdrUserPanel" style="left:auto; right:0; min-width:210px;">
       <div class="set-hint" id="hdrUserRoleLine" style="padding:4px 8px 8px;"></div>
-      <button type="button" class="seg-btn" id="hdrLogoutBtn" onclick="authLogout()" style="display:none;">Log out</button>
+      <button type="button" class="seg-btn" id="hdrLogoutBtn" onclick="authLogout()">Log out</button>
       <button type="button" class="seg-btn" onclick="openLoginModal()">Log in as different user</button>
     </div>
   </div>
