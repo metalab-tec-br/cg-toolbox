@@ -26,24 +26,35 @@
    Configurações para reduzir a altura total (ex.: "Home page [Command
    menu]"). O campo (dropdown/input/botão) fica com largura flexível mas
    limitada, para não esticar demais em rótulos curtos.
-   Virou uma barra horizontal com contorno (mesmo padrão visual dos toggles
-   .sb-toggle e das linhas .settings-tile do Register) — antes era um texto
-   solto sem caixa, inconsistente com o resto do modal. O dropdown/input
-   interno perde a própria borda/fundo (fica "achatado") pra não duplicar a
-   caixa — a barra .set-group-row já é o contorno único da linha. */
+   Barra horizontal com contorno (mesmo padrão visual dos toggles .sb-toggle
+   e das linhas .settings-tile do Register). O controle (dropdown/input) tem
+   seu PRÓPRIO fundo/borda (var(--surf), contra o var(--surf2) da linha) —
+   pedido do usuário (com screenshot): "ficou estranho o campo e a escolha
+   no final da mesma linha. separe em o que é, e ao lado o menu dropdown".
+   Antes o dropdown perdia fundo/borda (ficava "achatado", igual à barra),
+   sem nenhuma fronteira visível entre o rótulo e o controle — parecia um
+   texto solto colado no fim da linha, não um controle clicável. Padrão
+   comum em telas de configuração atuais (GitHub/Notion/Linear): rótulo à
+   esquerda em texto simples, controle à direita como um "chip"/pill com
+   contorno próprio. Padding da linha e do botão reduzidos (linha mais baixa
+   — outro pedido do usuário: "diminuir a altura dessa campos"). */
 .set-group-row {
   flex-direction: row; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 7px 10px; border: 1px solid var(--bdr); border-radius: 6px; background: var(--surf2);
+  padding: 6px 8px 6px 10px; border: 1px solid var(--bdr); border-radius: 6px; background: var(--surf2);
 }
 .set-group-row > .set-label { flex-shrink: 0; margin-bottom: 0; }
 .set-group-row > .dd,
 .set-group-row > .set-input,
-.set-group-row > .btn { flex: 1 1 auto; min-width: 120px; max-width: 220px; }
-.set-group-row > .dd > .dd-btn { background: transparent; border-color: transparent; }
-.set-group-row > .dd > .dd-btn:hover { border-color: transparent; color: var(--teal); }
-.set-group-row > .dd.open > .dd-btn { border-color: transparent; }
-.set-group-row > .set-input { background: transparent; border-color: transparent; text-align: right; }
-.set-group-row > .set-input:focus { border-color: transparent; }
+.set-group-row > .btn { flex: 0 1 auto; min-width: 110px; max-width: 200px; }
+.set-group-row > .dd > .dd-btn {
+  background: var(--surf); border: 1px solid var(--bdr); padding: 4px 8px;
+}
+.set-group-row > .dd > .dd-btn:hover { border-color: var(--teal); color: var(--teal); }
+.set-group-row > .dd.open > .dd-btn { border-color: var(--teal); }
+.set-group-row > .set-input {
+  background: var(--surf); border: 1px solid var(--bdr); text-align: right; padding: 4px 8px;
+}
+.set-group-row > .set-input:focus { border-color: var(--teal); }
 /* Grupo compacto: o toggle não estica para preencher a linha inteira, fica só
    do tamanho do próprio conteúdo (ex.: Admin mode, no final do modal). */
 .set-group-compact { align-items: flex-start; }
