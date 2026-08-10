@@ -47,7 +47,11 @@ let VIEW_FOLDERS_HOME = resolveFoldersHome(loadSettings());
 // notas/comandos etc.) indefinida pro resto da sessão, até um F5 sem
 // VIEW_FOLDERS_HOME=true no boot rodar o arquivo inteiro de novo sem cair
 // nesse ramo. Declarar aqui, antes de qualquer função que a use, resolve.
-let FOLDER_SCOPE = 'mine';
+// Valor inicial vem de resolveFolderScope() (js/settings.js, 'cpa-folder-
+// scope') — bug reportado: "estou em folders exibindo todas as pastas, mas
+// quando atualizo a página está voltando o filtro para my folders". Ver
+// persistFolderScope() em setFolderScope() mais abaixo.
+let FOLDER_SCOPE = resolveFolderScope();
 
 // Busca as pastas reais do usuário atual no servidor e substitui FOLDERS —
 // chamado uma vez no boot (via user-sync.js) depois que o usuário é
@@ -161,9 +165,11 @@ updateGroupByOptionsForFoldersScope();
 
 // ── Seletor de ESCOPO de pastas dentro de Folders (substitui Group by lá —
 // ver comentário acima) ──
-// FOLDER_SCOPE: 'mine' (padrão) | 'all' | 'user:<username>'. Só em memória
-// (não persistido) de propósito, mesma decisão já tomada para
-// FOLDER_EDIT_MODE — não precisa sobreviver a um reload da página.
+// FOLDER_SCOPE: 'mine' (padrão) | 'all' | 'user:<username>'. Persistido
+// (cpa-folder-scope, ver resolveFolderScope()/persistFolderScope() em
+// js/settings.js) — diferente de FOLDER_EDIT_MODE (modo transitório de
+// edição, esse sim só em memória de propósito), este é um FILTRO de
+// verdade, e o usuário espera que sobreviva a um F5 como qualquer outro.
 // (declarada mais acima, junto de VIEW_FOLDERS_HOME — ver comentário lá.)
 function folderScopeLabel(scope) {
   if (scope === 'all') return 'All';
@@ -197,6 +203,7 @@ function renderFolderScopeOptions() {
 }
 function setFolderScope(scope) {
   FOLDER_SCOPE = scope || 'mine';
+  if (typeof persistFolderScope === 'function') persistFolderScope(FOLDER_SCOPE);
   renderFolderScopeOptions(); // reconstrói a lista com o item certo marcado ".on"
   const btn = document.getElementById('folderScopeDDBtn');
   const label = btn && btn.querySelector('.dd-label');

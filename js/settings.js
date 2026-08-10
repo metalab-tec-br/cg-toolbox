@@ -69,6 +69,29 @@ function resolveFoldersHome(s) {
   } catch (e) {}
   return s.home === 'folders';
 }
+
+// FOLDER_SCOPE_KEY — memoriza o escopo de pastas escolhido dentro de Folders
+// ("My folders" / "All" / um usuário específico — ver #folderScopeDD e
+// setFolderScope() em js/folders.js), pelo mesmo motivo de LAST_VIEW_KEY
+// acima. Bug reportado: "estou em folders exibindo todas as pastas, mas
+// quando atualizo a página está voltando o filtro para my folders" — antes,
+// FOLDER_SCOPE era deliberadamente só em memória (comentário original: "não
+// precisa sobreviver a um reload da página", mesma decisão que ainda vale
+// para FOLDER_EDIT_MODE, que é um modo transitório de edição, não um
+// filtro). Diferente de FOLDER_EDIT_MODE, o usuário pode legitimamente
+// querer continuar vendo "All" (ou as pastas de um colega específico) depois
+// de um F5 — então persiste, mesmo padrão de LAST_VIEW_KEY.
+const FOLDER_SCOPE_KEY = 'cpa-folder-scope';
+function persistFolderScope(scope) {
+  try { localStorage.setItem(FOLDER_SCOPE_KEY, scope || 'mine'); } catch (e) {}
+}
+function resolveFolderScope() {
+  try {
+    const saved = localStorage.getItem(FOLDER_SCOPE_KEY);
+    if (saved) return saved;
+  } catch (e) {}
+  return 'mine';
+}
 function loadSettings() {
   let s = Object.assign({}, DEFAULT_SETTINGS);
   try {
