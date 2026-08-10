@@ -614,10 +614,20 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
   const nameEsc = escAttr(folderName);
   const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(folderName) : nameEsc;
 
+  // "Favorites" é a pasta padrão criada automaticamente pra todo usuário
+  // (ver ensureDefaultFolder() em server/index.js) — pedido do usuário: "a
+  // pasta Favorites do sistema não pode ser alterada o nome nem excluída".
+  // Continua podendo entrar em modo de edição pra reordenar comandos/notas
+  // dentro dela (drag-and-drop); só o campo de nome (nameHtml abaixo) e o
+  // botão ✕ Delete ficam suprimidos. O servidor recusa com 403 mesmo que
+  // essa checagem de UI seja contornada (ver PUT/DELETE /api/folders/:id em
+  // server/index.js, FAVORITES_FOLDER_NAME).
+  const isFavorites = withActions && folderName === 'Favorites';
+
   const editBtn = withActions
     ? `<button type="button" class="sec-folder-btn sec-folder-edit-btn${editMode ? ' on' : ''}" onmousedown="event.preventDefault()" onclick="toggleFolderEditMode(${folderId}, event)" title="${editMode ? 'Done editing' : 'Edit folder'}">✎</button>`
     : '';
-  const deleteTag = (withActions && editMode)
+  const deleteTag = (withActions && editMode && !isFavorites)
     ? `<button type="button" class="sec-folder-delete-btn" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${folderId}, '${jsEsc}', event)" title="Delete folder">✕ Delete</button>`
     : '';
   const leftActions = (editBtn || deleteTag) ? `<span class="sec-folder-actions">${editBtn}${deleteTag}</span>` : '';
@@ -655,7 +665,7 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
   // toggle de recolher/expandir da seção (.sec-title tem
   // onclick="toggleSection(...)" — ver collapsibleGroup em
   // terminal-renderer.js). Enter salva (blur), Escape cancela e reverte.
-  const nameHtml = (withActions && editMode)
+  const nameHtml = (withActions && editMode && !isFavorites)
     ? `<input type="text" class="sec-folder-name-input" value="${nameEsc}" data-folder-id="${folderId}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onkeydown="_folderNameInputKeydown(event)" onblur="_folderNameInputBlur(event)">`
     : nameEsc;
   const headerHtml = `${folderIcon(true, 12)} ${nameHtml} <span class="sec-count">${cards.length}</span>${leftActions}${divider}${rightAction}`;

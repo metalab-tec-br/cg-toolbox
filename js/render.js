@@ -227,13 +227,13 @@ async function render() {
         const usernames = [...byUser.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
         folderGroups = usernames.map(username => {
           const isOwn = typeof CURRENT_USER !== 'undefined' && CURRENT_USER === username;
-          // Admin pode renomear/excluir a pasta de QUALQUER usuário (pedido:
-          // "admins continuam podendo fazer tudo", mesma regra aplicada a
-          // comandos — ver PUT/DELETE /api/folders/:id em server/index.js,
-          // que já aceita isso do lado do servidor). `copyable`/`ownFolder`
-          // das notas continuam ligados à posse real (isOwn) — só a ação de
-          // gerenciar a pasta em si (renomear/excluir) ganha o bypass.
-          const canManage = isOwn || (typeof CG_IS_ADMIN !== 'undefined' && CG_IS_ADMIN);
+          // Renomear/excluir uma pasta é SEMPRE restrito ao dono, mesmo para
+          // admin (pedido do usuário: "cada usuário só pode alterar ou
+          // excluir a sua própria pasta" — diferente da regra de comandos,
+          // que continua dando exceção a admins; ver PUT/DELETE
+          // /api/folders/:id em server/index.js, que recusa com 404 quando
+          // quem pediu não é o dono, sem exceção de role).
+          const canManage = isOwn;
           const userKey = username.replace(/[^a-zA-Z0-9_-]/g, '_');
           const userFolders = byUser.get(username).slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
           const folderSections = userFolders.map(f => {
@@ -258,8 +258,8 @@ async function render() {
         // agrupamento "👤 username" (só faz sentido pra "All", que mistura
         // várias pessoas na mesma tela).
         const isOwn = typeof CURRENT_USER !== 'undefined' && CURRENT_USER === targetUsername;
-        // Mesmo bypass de admin do ramo "all" acima.
-        const canManage = isOwn || (typeof CG_IS_ADMIN !== 'undefined' && CG_IS_ADMIN);
+        // Mesma regra do ramo "all" acima: sem bypass de admin.
+        const canManage = isOwn;
         const sortedFolders = relevant.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
         folderGroups = sortedFolders.map(f => {
           const cmdById = new Map(commands.filter(c => f.command_ids.has(c.id)).map(c => [c.id, c]));

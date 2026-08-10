@@ -194,6 +194,16 @@ function getCurrentUsername(req) {
 // isso, sem precisar de job/cron separado.
 // ════════════════════════════════════════════════
 const AUDIT_LOG_RETENTION_DAYS = 30;
+// Nome fixo da pasta padrão criada automaticamente pra todo usuário (ver
+// ensureDefaultFolder() abaixo e o backfill em server/db.js::runMigrations()).
+// PUT/DELETE /api/folders/:id recusam alterar essa pasta — pedido do
+// usuário: "a pasta Favorites do sistema não pode ser alterada o nome nem
+// excluída". Como UNIQUE(username, name) garante no máximo UMA pasta com
+// esse nome por usuário, e ela só é criada pelo próprio backend (nunca por
+// um POST do usuário renomeando algo pra "Favorites" depois — nesse caso já
+// existiria e o INSERT bateria em 409), o nome sozinho identifica a pasta
+// protegida sem precisar de uma coluna extra tipo `is_protected`.
+const FAVORITES_FOLDER_NAME = 'Favorites';
 async function logAudit(username, action, entityType, entityId, entityName, details) {
   try {
     await pool.query(
@@ -728,31 +738,35 @@ app.post('/api/folders', async (req, res) => {
   }
 });
 
-// Renomeia uma pasta. Um usuário comum só renomeia as PRÓPRIAS pastas
-// (username === currentUser); admins podem renomear a de qualquer usuário
-// (pedido do usuário: "admins continuam podendo fazer tudo" — mesma regra
-// aplicada aos comandos, ver PUT/DELETE /api/commands/:id acima). 404 tanto
-// se o id não existir quanto se existir mas for de outro usuário e quem
-// pediu não for admin — não vazamos a distinção nesse caso.
+// Renomeia uma pasta. SÓ o dono renomeia a própria pasta — admin NÃO tem
+// mais bypass aqui (pedido do usuário: "cada usuário só pode alterar ou
+// excluir a sua própria pasta"; diferente da regra de comandos, que continua
+// dando exceção a admins). 404 tanto se o id não existir quanto se existir
+// mas for de outro usuário — não vazamos a distinção nesse caso. A pasta
+// "Favorites" (padrão, ver FAVORITES_FOLDER_NAME acima) nunca pode ser
+// renomeada, nem pelo próprio dono.
 app.put('/api/folders/:id', async (req, res) => {
   const name = String((req.body && req.body.name) || '').trim();
   try {
     if (!name) return res.status(400).json({ error: 'validation_error', message: '"name" is required' });
     const username = getCurrentUsername(req);
-    const isAdmin = (await getCurrentRole(req)) === 'admin';
-    // Nome ANTES da renomeação — só para o audit_log ("Renamed from X to
-    // Y"), já que o UPDATE abaixo não devolve o valor antigo.
+    // Nome/dono ANTES da renomeação — usado tanto pra checar posse/proteção
+    // quanto pro audit_log ("Renamed from X to Y"), já que o UPDATE abaixo
+    // não devolve o valor antigo.
     const { rows: beforeRows } = await pool.query('SELECT name, username FROM folders WHERE id = $1', [req.params.id]);
+    if (!beforeRows.length || beforeRows[0].username !== username) {
+      return res.status(404).json({ error: 'not_found', message: `Folder '${req.params.id}' not found` });
+    }
+    if (beforeRows[0].name === FAVORITES_FOLDER_NAME) {
+      return res.status(403).json({ error: 'forbidden', message: `The "${FAVORITES_FOLDER_NAME}" folder cannot be renamed.` });
+    }
     const { rows } = await pool.query(
-      isAdmin
-        ? 'UPDATE folders SET name = $1 WHERE id = $2 RETURNING id, name, sort_order'
-        : 'UPDATE folders SET name = $1 WHERE id = $2 AND username = $3 RETURNING id, name, sort_order',
-      isAdmin ? [name, req.params.id] : [name, req.params.id, username]
+      'UPDATE folders SET name = $1 WHERE id = $2 AND username = $3 RETURNING id, name, sort_order',
+      [name, req.params.id, username]
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found', message: `Folder '${req.params.id}' not found` });
-    const oldName = beforeRows[0] && beforeRows[0].name;
-    const ownerNote = isAdmin && beforeRows[0] && beforeRows[0].username !== username ? ` (owner: ${beforeRows[0].username})` : '';
-    const details = oldName && oldName !== name ? `Renamed from "${oldName}" to "${name}"${ownerNote}` : (ownerNote || null);
+    const oldName = beforeRows[0].name;
+    const details = oldName !== name ? `Renamed from "${oldName}" to "${name}"` : null;
     await logAudit(username, 'update', 'folder', String(rows[0].id), rows[0].name, details);
     res.json(rows[0]);
   } catch (err) {
@@ -762,26 +776,26 @@ app.put('/api/folders/:id', async (req, res) => {
   }
 });
 
-// Apaga uma pasta — mesma regra do PUT acima: dono ou admin. folder_commands
-// é limpo sozinho via ON DELETE CASCADE (ver schema.sql); os comandos em si
-// e as OUTRAS pastas do dono não são afetados.
+// Apaga uma pasta — mesma regra do PUT acima: SÓ o dono, sem bypass de
+// admin. folder_commands é limpo sozinho via ON DELETE CASCADE (ver
+// schema.sql); os comandos em si e as OUTRAS pastas do dono não são
+// afetados. A pasta "Favorites" nunca pode ser excluída, nem pelo dono.
 app.delete('/api/folders/:id', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
-    const isAdmin = (await getCurrentRole(req)) === 'admin';
     // Nome/dono ANTES de excluir — a linha some depois do DELETE, então
-    // precisamos disso agora para o audit_log (entity_name fica denormalizado).
+    // precisamos disso agora pra checar posse/proteção e pro audit_log
+    // (entity_name fica denormalizado).
     const { rows: beforeRows } = await pool.query('SELECT name, username FROM folders WHERE id = $1', [req.params.id]);
-    const { rowCount } = await pool.query(
-      isAdmin
-        ? 'DELETE FROM folders WHERE id = $1'
-        : 'DELETE FROM folders WHERE id = $1 AND username = $2',
-      isAdmin ? [req.params.id] : [req.params.id, username]
-    );
+    if (!beforeRows.length || beforeRows[0].username !== username) {
+      return res.status(404).json({ error: 'not_found', message: `Folder '${req.params.id}' not found` });
+    }
+    if (beforeRows[0].name === FAVORITES_FOLDER_NAME) {
+      return res.status(403).json({ error: 'forbidden', message: `The "${FAVORITES_FOLDER_NAME}" folder cannot be deleted.` });
+    }
+    const { rowCount } = await pool.query('DELETE FROM folders WHERE id = $1 AND username = $2', [req.params.id, username]);
     if (!rowCount) return res.status(404).json({ error: 'not_found', message: `Folder '${req.params.id}' not found` });
-    const before = beforeRows[0] || {};
-    const ownerNote = isAdmin && before.username !== username ? `Owner: ${before.username}` : null;
-    await logAudit(username, 'delete', 'folder', req.params.id, before.name, ownerNote);
+    await logAudit(username, 'delete', 'folder', req.params.id, beforeRows[0].name, null);
     res.status(204).end();
   } catch (err) {
     console.error(err);
