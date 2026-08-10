@@ -39,26 +39,35 @@
   flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px;
   padding: 3px 8px 3px 10px; border: 1px solid var(--bdr); border-radius: 6px; background: var(--surf2);
 }
-.set-group-row > .set-label { flex-shrink: 0; margin-bottom: 0; }
-/* Duas linhas fundidas numa só (ex.: Home page + Group by) — o 2º rótulo em
-   diante (e o controle que vem junto) é empurrado pro lado direito da
-   linha, mesmo truque de .accent-swatches/.sb-toggle-inline-field acima.
-   Pedido do usuário: "divida a linha home page e coloque o group by do
-   lado direito". Regra genérica: vale pra qualquer .set-group-row com mais
-   de um .set-label dentro. */
-.set-group-row > .set-label ~ .set-label { margin-left: auto; }
-.set-group-row > .dd,
-.set-group-row > .set-input,
-.set-group-row > .btn { flex: 0 0 auto; min-width: 110px; max-width: 200px; }
-.set-group-row > .dd > .dd-btn {
+.set-group-row .set-label { flex-shrink: 0; margin-bottom: 0; }
+/* Duas linhas fundidas numa só (ex.: Home page + Group by) — cada metade
+   (rótulo + controle) fica dentro do seu próprio .set-row-half (50/50,
+   ambos alinhados à esquerda dentro do seu espaço). Pedido do usuário:
+   "divida as linhas no meio e deixe tudo alinhado para esquerda" (troca do
+   padrão anterior de empurrar o 2º rótulo pro canto direito). Os seletores
+   abaixo usam combinador descendente (sem ">") porque .set-label/.dd/
+   .set-input/.btn agora podem estar um nível mais fundo, dentro de um
+   .set-row-half, em vez de filhos diretos de .set-group-row. */
+.set-group-row .dd,
+.set-group-row .set-input,
+.set-group-row .btn { flex: 0 0 auto; min-width: 110px; max-width: 200px; }
+.set-group-row .dd > .dd-btn {
   background: var(--surf); border: 1px solid var(--bdr); padding: 4px 8px;
 }
-.set-group-row > .dd > .dd-btn:hover { border-color: var(--teal); color: var(--teal); }
-.set-group-row > .dd.open > .dd-btn { border-color: var(--teal); }
-.set-group-row > .set-input {
+.set-group-row .dd > .dd-btn:hover { border-color: var(--teal); color: var(--teal); }
+.set-group-row .dd.open > .dd-btn { border-color: var(--teal); }
+.set-group-row .set-input {
   background: var(--surf); border: 1px solid var(--bdr); text-align: left; padding: 4px 8px;
 }
-.set-group-row > .set-input:focus { border-color: var(--teal); }
+.set-group-row .set-input:focus { border-color: var(--teal); }
+/* Metade da linha (50/50) — usado quando duas linhas são fundidas numa só
+   (ex.: Home page + Group by, Export + Export to) e cada metade deve ficar
+   alinhada à esquerda dentro do seu próprio espaço, em vez de o 2º item ser
+   empurrado pro canto direito da linha. Pedido do usuário: "divida as
+   linhas no meio e deixe tudo alinhado para esquerda" (troca do truque
+   anterior de margin-left:auto). Funciona tanto dentro de .set-group-row
+   quanto de .sb-toggle (mesmo display:flex + align-items:center dos dois). */
+.set-row-half { flex: 1 1 50%; display: flex; align-items: center; gap: 8px; min-width: 0; }
 /* Grupo compacto: o toggle não estica para preencher a linha inteira, fica só
    do tamanho do próprio conteúdo (ex.: Admin mode, no final do modal). */
 .set-group-compact { align-items: flex-start; }
@@ -68,16 +77,18 @@
 .accent-swatches { display: flex; gap: 6px; flex: 0 0 auto; }
 /* Dentro do toggle "Dark mode": empurra os swatches para a direita, na mesma linha. */
 .sb-toggle .accent-swatches { margin-left: auto; }
-/* Dentro do toggle "Export": campo "Export to" (mLogFile) na mesma linha,
-   empurrado para a direita (mesmo padrão de .accent-swatches acima) —
-   pedido do usuário: "divida a linha do Export e coloque o Export to na
-   mesma linha do lado direito". O input tem fundo/borda PRÓPRIOS (var(--surf)
-   contra o var(--surf2) do toggle), mesmo tratamento visual dos dropdowns em
-   .set-group-row. onclick="event.stopPropagation()" no wrapper e no input
-   (ver index.html) evita que interagir com o campo dispare o
-   toggleModalExport() do elemento pai. */
+/* Dentro do toggle "Export": campo "Export to" (mLogFile) na mesma linha.
+   Combinada com .set-row-half (ver acima) pra ocupar a metade direita da
+   linha, alinhada à esquerda dentro do seu próprio espaço — pedido do
+   usuário: "divida as linhas no meio e deixe tudo alinhado para esquerda"
+   (antes usava margin-left:auto pra empurrar pro canto direito). O input
+   tem fundo/borda PRÓPRIOS (var(--surf) contra o var(--surf2) do toggle),
+   mesmo tratamento visual dos dropdowns em .set-group-row.
+   onclick="event.stopPropagation()" no wrapper e no input (ver index.html)
+   evita que interagir com o campo dispare o toggleModalExport() do
+   elemento pai. */
 .sb-toggle-inline-field {
-  margin-left: auto; display: flex; align-items: center; gap: 8px; min-width: 0;
+  display: flex; align-items: center; gap: 8px; min-width: 0;
 }
 .sb-toggle-inline-field > .set-label { flex-shrink: 0; margin-bottom: 0; }
 .sb-toggle-inline-field > .set-input {

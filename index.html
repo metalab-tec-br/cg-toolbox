@@ -461,33 +461,37 @@
           </div>
         </div>
       </div>
-      <!-- Home page + Group by na mesma linha (pedido do usuário: "divida a
-           linha home page e coloque o group by do lado direito") — Group by
-           é empurrado pro lado direito pela regra genérica ".set-group-row >
-           .set-label ~ .set-label" (margin-left:auto no 2º rótulo em diante
-           da linha), o mesmo truque já usado em .sb-toggle-inline-field
-           acima (Export/Export to). -->
+      <!-- Home page + Group by na mesma linha, dividida ao meio (pedido do
+           usuário: "divida a linha no meio e deixe tudo alinhado para
+           esquerda" — antes Group by ficava encostado na borda direita via
+           margin-left:auto; agora cada metade (.set-row-half, flex:1 1 50%)
+           começa exatamente na metade da linha, com seu próprio rótulo e
+           controle alinhados à esquerda dentro dela). -->
       <div class="set-group set-group-row">
-        <span class="set-label">Home page</span>
-        <div class="dd" id="mHomeDD">
-          <button type="button" class="dd-btn" id="mHomeDDBtn" onclick="toggleDropdown('mHomeDD')">
-            <span class="dd-label">Folders</span><span class="dd-arrow">▾</span>
-          </button>
-          <div class="dd-panel seg" id="mHome">
-            <button type="button" class="seg-btn" data-val="folders">Folders</button>
-            <button type="button" class="seg-btn" data-val="menu">Command menu</button>
-            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mHomeDD')">Close</button></div>
+        <div class="set-row-half">
+          <span class="set-label">Home page</span>
+          <div class="dd" id="mHomeDD">
+            <button type="button" class="dd-btn" id="mHomeDDBtn" onclick="toggleDropdown('mHomeDD')">
+              <span class="dd-label">Folders</span><span class="dd-arrow">▾</span>
+            </button>
+            <div class="dd-panel seg" id="mHome">
+              <button type="button" class="seg-btn" data-val="folders">Folders</button>
+              <button type="button" class="seg-btn" data-val="menu">Command menu</button>
+              <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mHomeDD')">Close</button></div>
+            </div>
           </div>
         </div>
-        <span class="set-label">Group by</span>
-        <div class="dd" id="mGroupByDD">
-          <button type="button" class="dd-btn" id="mGroupByDDBtn" onclick="toggleDropdown('mGroupByDD')">
-            <span class="dd-label">Topic</span><span class="dd-arrow">▾</span>
-          </button>
-          <div class="dd-panel seg" id="mGroupBy">
-            <button type="button" class="seg-btn" data-val="creator">Created by</button>
-            <button type="button" class="seg-btn" data-val="topic">Topic</button>
-            <button type="button" class="seg-btn" data-val="version">Version</button>
+        <div class="set-row-half">
+          <span class="set-label">Group by</span>
+          <div class="dd" id="mGroupByDD">
+            <button type="button" class="dd-btn" id="mGroupByDDBtn" onclick="toggleDropdown('mGroupByDD')">
+              <span class="dd-label">Topic</span><span class="dd-arrow">▾</span>
+            </button>
+            <div class="dd-panel seg" id="mGroupBy">
+              <button type="button" class="seg-btn" data-val="creator">Created by</button>
+              <button type="button" class="seg-btn" data-val="topic">Topic</button>
+              <button type="button" class="seg-btn" data-val="version">Version</button>
+            </div>
           </div>
         </div>
       </div>
@@ -587,14 +591,19 @@
         <!-- Mesma preferência pessoal do toggle "Export" da sidebar (Options)
              — só um espelho aqui no modal, igual ao par tog-details/mDescToggle
              acima (ver syncExportToggleUI em js/settings.js). O caminho de
-             exportação (Export to / mLogFile) mora na MESMA linha, à direita
-             (pedido do usuário: "divida a linha do Export e coloque o Export
-             to na mesma linha do lado direito"). stopPropagation no wrapper
-             E no input evita que clicar/digitar ali dispare o onclick da
-             linha inteira (toggleModalExport()). -->
+             exportação (Export to / mLogFile) mora na MESMA linha, dividida
+             ao meio (pedido do usuário: "divida a linha no meio e deixe tudo
+             alinhado para esquerda" — antes "Export to" ficava encostado na
+             borda direita via margin-left:auto; agora cada metade (.set-row-half,
+             flex:1 1 50%) começa exatamente na metade da linha, com seu
+             conteúdo alinhado à esquerda dentro dela). stopPropagation no
+             wrapper E no input evita que clicar/digitar ali dispare o
+             onclick da linha inteira (toggleModalExport()). -->
         <div class="sb-toggle" id="mExportToggle" onclick="toggleModalExport()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>Export</span>
-          <div class="sb-toggle-inline-field" onclick="event.stopPropagation()">
+          <div class="set-row-half">
+            <div class="tog-track"><div class="tog-knob"></div></div><span>Export</span>
+          </div>
+          <div class="set-row-half sb-toggle-inline-field" onclick="event.stopPropagation()">
             <span class="set-label">Export to</span>
             <!-- Texto livre, sem validação de extensão nem de formato — pode
                  conter substituições de shell como $(hostname), resolvidas
