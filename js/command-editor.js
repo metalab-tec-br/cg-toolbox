@@ -310,9 +310,10 @@ function _ceHideError() {
 function _ceBuildLineRow(data, opts) {
   data = data || { line_type: 'cmd', prompt: '[Expert@FW]#', content: '', supports_export: false, image_data: '' };
   const allowImage = !opts || opts.allowImage !== false;
-  // O dropdown principal só oferece cmd / text / image — note/warn/info/ok viram
-  // categorias do tipo "text" (ver comentário em CMD_EDITOR_TEXT_CATEGORIES).
-  const availableTypes = allowImage ? ['cmd', 'text', 'image'] : ['cmd', 'text'];
+  // O dropdown principal só oferece cmd / image / text (ordem alfabética) —
+  // note/warn/info/ok viram categorias do tipo "text" (ver comentário em
+  // CMD_EDITOR_TEXT_CATEGORIES).
+  const availableTypes = allowImage ? ['cmd', 'image', 'text'] : ['cmd', 'text'];
   const isTextCategory = CMD_EDITOR_TEXT_CATEGORIES.includes(data.line_type);
   const displayType = isTextCategory ? 'text' : data.line_type;
   const selectedCategory = isTextCategory ? data.line_type : CMD_EDITOR_TEXT_CATEGORIES[0];

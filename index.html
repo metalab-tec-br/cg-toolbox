@@ -485,19 +485,15 @@
         </div>
       </div>
       <div class="set-group set-group-row">
-        <span class="set-label">Environment</span>
-        <div class="dd" id="mEnvDD">
-          <button type="button" class="dd-btn" id="mEnvDDBtn" onclick="toggleDropdown('mEnvDD')">
-            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
+        <span class="set-label">Home page</span>
+        <div class="dd" id="mHomeDD">
+          <button type="button" class="dd-btn" id="mHomeDDBtn" onclick="toggleDropdown('mHomeDD')">
+            <span class="dd-label">Folders</span><span class="dd-arrow">▾</span>
           </button>
-          <div class="dd-panel seg" id="mEnv">
-            <button type="button" class="seg-btn" data-val="cluster">Cluster HA</button>
-            <button type="button" class="seg-btn" data-val="gaia">Gaia (Clish)</button>
-            <button type="button" class="seg-btn" data-val="maestro">Maestro</button>
-            <button type="button" class="seg-btn" data-val="mds">MDS / MDM</button>
-            <button type="button" class="seg-btn" data-val="standalone">Standalone</button>
-            <button type="button" class="seg-btn" data-val="vsx">VSX</button>
-            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mEnvDD')">Close</button></div>
+          <div class="dd-panel seg" id="mHome">
+            <button type="button" class="seg-btn" data-val="folders">Folders</button>
+            <button type="button" class="seg-btn" data-val="menu">Command menu</button>
+            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mHomeDD')">Close</button></div>
           </div>
         </div>
       </div>
@@ -515,15 +511,18 @@
         </div>
       </div>
       <div class="set-group set-group-row">
-        <span class="set-label">Home page</span>
-        <div class="dd" id="mHomeDD">
-          <button type="button" class="dd-btn" id="mHomeDDBtn" onclick="toggleDropdown('mHomeDD')">
-            <span class="dd-label">Folders</span><span class="dd-arrow">▾</span>
+        <span class="set-label">Path — file export</span>
+        <input class="set-input" id="mLogFile" placeholder="/tmp/fw_export.txt">
+      </div>
+      <div class="set-group set-group-row">
+        <span class="set-label">Vendor</span>
+        <div class="dd" id="mVendorDD">
+          <button type="button" class="dd-btn" id="mVendorDDBtn" onclick="toggleDropdown('mVendorDD')">
+            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
           </button>
-          <div class="dd-panel seg" id="mHome">
-            <button type="button" class="seg-btn" data-val="folders">Folders</button>
-            <button type="button" class="seg-btn" data-val="menu">Command menu</button>
-            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mHomeDD')">Close</button></div>
+          <div class="dd-panel seg" id="mVendor">
+            <button type="button" class="seg-btn" data-val="check-point">Check Point</button>
+            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mVendorDD')">Close</button></div>
           </div>
         </div>
       </div>
@@ -540,8 +539,36 @@
         </div>
       </div>
       <div class="set-group set-group-row">
-        <span class="set-label">Path — file export</span>
-        <input class="set-input" id="mLogFile" placeholder="/tmp/fw_export.txt">
+        <span class="set-label">Version</span>
+        <div class="dd" id="mVersionDD">
+          <button type="button" class="dd-btn" id="mVersionDDBtn" onclick="toggleDropdown('mVersionDD')">
+            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="mVersion">
+            <button type="button" class="seg-btn" data-val="R81.10">R81.10</button>
+            <button type="button" class="seg-btn" data-val="R81.20">R81.20</button>
+            <button type="button" class="seg-btn" data-val="R82">R82</button>
+            <button type="button" class="seg-btn" data-val="R82.10">R82.10</button>
+            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mVersionDD')">Close</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="set-group set-group-row">
+        <span class="set-label">Environment</span>
+        <div class="dd" id="mEnvDD">
+          <button type="button" class="dd-btn" id="mEnvDDBtn" onclick="toggleDropdown('mEnvDD')">
+            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="mEnv">
+            <button type="button" class="seg-btn" data-val="cluster">Cluster HA</button>
+            <button type="button" class="seg-btn" data-val="gaia">Gaia (Clish)</button>
+            <button type="button" class="seg-btn" data-val="maestro">Maestro</button>
+            <button type="button" class="seg-btn" data-val="mds">MDS / MDM</button>
+            <button type="button" class="seg-btn" data-val="standalone">Standalone</button>
+            <button type="button" class="seg-btn" data-val="vsx">VSX</button>
+            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mEnvDD')">Close</button></div>
+          </div>
+        </div>
       </div>
       <div class="set-group set-group-row">
         <span class="set-label">Topic</span>
@@ -569,33 +596,6 @@
             <button type="button" class="seg-btn" data-val="tables">Tables</button>
             <button type="button" class="seg-btn" data-val="vpn">VPN</button>
             <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mTypeDD')">Close</button></div>
-          </div>
-        </div>
-      </div>
-      <div class="set-group set-group-row">
-        <span class="set-label">Vendor</span>
-        <div class="dd" id="mVendorDD">
-          <button type="button" class="dd-btn" id="mVendorDDBtn" onclick="toggleDropdown('mVendorDD')">
-            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
-          </button>
-          <div class="dd-panel seg" id="mVendor">
-            <button type="button" class="seg-btn" data-val="check-point">Check Point</button>
-            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mVendorDD')">Close</button></div>
-          </div>
-        </div>
-      </div>
-      <div class="set-group set-group-row">
-        <span class="set-label">Version</span>
-        <div class="dd" id="mVersionDD">
-          <button type="button" class="dd-btn" id="mVersionDDBtn" onclick="toggleDropdown('mVersionDD')">
-            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
-          </button>
-          <div class="dd-panel seg" id="mVersion">
-            <button type="button" class="seg-btn" data-val="R81.10">R81.10</button>
-            <button type="button" class="seg-btn" data-val="R81.20">R81.20</button>
-            <button type="button" class="seg-btn" data-val="R82">R82</button>
-            <button type="button" class="seg-btn" data-val="R82.10">R82.10</button>
-            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mVersionDD')">Close</button></div>
           </div>
         </div>
       </div>

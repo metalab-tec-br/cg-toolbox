@@ -24,28 +24,25 @@
 .set-label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; color: var(--dim); }
 /* Rótulo + campo na mesma linha (em vez de empilhados) — usado no modal de
    Configurações para reduzir a altura total (ex.: "Home page [Command
-   menu]"). O campo (dropdown/input/botão) fica com largura flexível mas
-   limitada, para não esticar demais em rótulos curtos.
-   Barra horizontal com contorno (mesmo padrão visual dos toggles .sb-toggle
-   e das linhas .settings-tile do Register). O controle (dropdown/input) tem
-   seu PRÓPRIO fundo/borda (var(--surf), contra o var(--surf2) da linha) —
-   pedido do usuário (com screenshot): "ficou estranho o campo e a escolha
-   no final da mesma linha. separe em o que é, e ao lado o menu dropdown".
-   Antes o dropdown perdia fundo/borda (ficava "achatado", igual à barra),
-   sem nenhuma fronteira visível entre o rótulo e o controle — parecia um
-   texto solto colado no fim da linha, não um controle clicável. Padrão
-   comum em telas de configuração atuais (GitHub/Notion/Linear): rótulo à
-   esquerda em texto simples, controle à direita como um "chip"/pill com
-   contorno próprio. Padding da linha e do botão reduzidos (linha mais baixa
-   — outro pedido do usuário: "diminuir a altura dessa campos"). */
+   menu]"). O controle (dropdown/input) tem seu PRÓPRIO fundo/borda
+   (var(--surf), contra o var(--surf2) da linha) — pedido anterior do
+   usuário (com screenshot): "separe em o que é, e ao lado o menu dropdown".
+   Dropdown logo ao lado do nome do campo, ambos alinhados à esquerda
+   (justify-content: flex-start — pedido do usuário: "colocar o menu
+   dropdown ao lado do nome do campo, alinhando para esquerda"; antes era
+   space-between, empurrando o controle pro fim da linha, longe do rótulo).
+   Padding vertical igual ao dos toggles .sb-toggle (Dark mode/Details) logo
+   acima, pra as linhas terem a MESMA altura (outro pedido do usuário) — sem
+   isso, o "chip" aninhado do dropdown (com seu próprio padding/borda) deixa
+   esta linha visivelmente mais alta que um toggle simples. */
 .set-group-row {
-  flex-direction: row; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 6px 8px 6px 10px; border: 1px solid var(--bdr); border-radius: 6px; background: var(--surf2);
+  flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px;
+  padding: 3px 8px 3px 10px; border: 1px solid var(--bdr); border-radius: 6px; background: var(--surf2);
 }
 .set-group-row > .set-label { flex-shrink: 0; margin-bottom: 0; }
 .set-group-row > .dd,
 .set-group-row > .set-input,
-.set-group-row > .btn { flex: 0 1 auto; min-width: 110px; max-width: 200px; }
+.set-group-row > .btn { flex: 0 0 auto; min-width: 110px; max-width: 200px; }
 .set-group-row > .dd > .dd-btn {
   background: var(--surf); border: 1px solid var(--bdr); padding: 4px 8px;
 }
@@ -184,8 +181,11 @@
 
 /* Grupo de toggles compactos no topo do modal (Tema / Descrição / Modo administrador):
    mesmo estilo dos toggles da sidebar (botão + rótulo na mesma linha, toggle antes do
-   texto), em ordem alfabética (ver sortToggleGroup em state.js). */
-#settingsToggleGroup { gap: 6px; padding-bottom: 4px; border-bottom: 1px solid var(--bdr); margin-bottom: 2px; }
+   texto), em ordem alfabética (ver sortToggleGroup em state.js). Sem divisória
+   abaixo (pedido do usuário) — as linhas de dropdown/input logo em seguida já têm
+   a mesma altura e o mesmo estilo de "chip" com contorno, então a barra
+   horizontal ficava redundante como separador. */
+#settingsToggleGroup { gap: 6px; }
 #settingsToggleGroup .sb-toggle { margin-bottom: 0; }
 
 
