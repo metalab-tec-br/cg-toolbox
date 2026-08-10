@@ -6,8 +6,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "seed": "node seed.js",
-    "wipe": "node wipe-database.js"
+    "seed": "node seed.js"
   },
   "dependencies": {
     "express": "^4.19.2",
