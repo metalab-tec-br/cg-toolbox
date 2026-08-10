@@ -4,7 +4,10 @@
 const SETTINGS_KEY = 'cpa-settings';
 const DEFAULT_SETTINGS = {
   home: 'menu', vendor: [], sys: [], version: [], env: [], type: [],
-  logFile: '/tmp/fw_export.txt',
+  // Padrão usa $(hostname) — substituição de shell resolvida pelo próprio
+  // gateway Check Point ao rodar o comando exportado (não pelo app), então
+  // já nasce nomeando o arquivo por equipamento (pedido do usuário).
+  logFile: '/tmp/$(hostname).txt',
   showCardDetails: false,
   enableCommandEditing: false,
   exportEnabled: false,

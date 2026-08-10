@@ -49,7 +49,7 @@
 .set-group-row > .dd > .dd-btn:hover { border-color: var(--teal); color: var(--teal); }
 .set-group-row > .dd.open > .dd-btn { border-color: var(--teal); }
 .set-group-row > .set-input {
-  background: var(--surf); border: 1px solid var(--bdr); text-align: right; padding: 4px 8px;
+  background: var(--surf); border: 1px solid var(--bdr); text-align: left; padding: 4px 8px;
 }
 .set-group-row > .set-input:focus { border-color: var(--teal); }
 /* Grupo compacto: o toggle não estica para preencher a linha inteira, fica só

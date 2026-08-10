@@ -218,7 +218,7 @@
       <div class="tog-track"><div class="tog-knob"></div></div><span>Export</span>
     </div>
     <div class="sb-file-wrap" id="fw-log">
-      <input class="sb-file" id="f-log" value="/tmp/fw_export.txt" oninput="render()">
+      <input class="sb-file" id="f-log" value="/tmp/$(hostname).txt" oninput="render()">
     </div>
     <!-- Mesma preferência pessoal espelhada em Configurações → User
          preferences (mShowImagesToggle) — ver toggleShowImages()/
@@ -517,7 +517,7 @@
              próprio gateway Check Point ao rodar o comando exportado (não
              pelo app). Placeholder ilustra os dois casos (caminho fixo com
              extensão, ou usando $(hostname) sem extensão nenhuma). -->
-        <input class="set-input" id="mLogFile" placeholder="/tmp/fw_export.txt ou /tmp/$(hostname)_export">
+        <input class="set-input" id="mLogFile" placeholder="/tmp/$(hostname).txt">
       </div>
       <div class="set-group set-group-row">
         <span class="set-label">Vendor</span>
