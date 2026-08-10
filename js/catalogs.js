@@ -217,7 +217,19 @@ function ccRefreshCascade() {
     if (typeof updateSystemDDLabel === 'function') updateSystemDDLabel();
   }
 
-  const sysSel = ccResolveParentSelection(ST.sys);
+  // O FK direto de Versão é Sistema, não Vendor — mas se o usuário só
+  // restringiu Vendor e ainda não escolheu um Sistema específico (System
+  // continua "All", ST.sys vazio), o filtro de Versão não pode ficar
+  // "solto": herda, por baixo dos panos, o conjunto de sistemas já
+  // restringido pelo Vendor (mesmos vendorSel/sysScoped calculados acima)
+  // — senão versões ligadas a sistemas de OUTRO vendor continuam
+  // aparecendo. Pedido do usuário: "selecionei Check Point em Vendor e em
+  // versões está aparecendo versões da Fortinet". Quando o usuário já
+  // escolheu um Sistema específico, esse continua sendo o filtro (ST.sys
+  // tem prioridade sobre o vendorSel implícito).
+  const sysSel = (ST.sys && ST.sys.length)
+    ? ST.sys
+    : (vendorSel ? (CATALOGS.systems || []).filter(s => vendorSel.includes(s.vendor)).map(s => s.key) : null);
   const versionScoped = ccDirectFieldScoped(CATALOGS.versions || [], 'system', sysSel);
   let versionChanged = false;
   ['vList', 'mVersion'].forEach(id => { if (ccApplyScopeDisabled(id, id === 'vList' ? '.sb-row' : '.seg-btn', id === 'vList' ? 'data-v' : 'data-val', versionScoped)) versionChanged = true; });
