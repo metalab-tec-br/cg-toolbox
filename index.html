@@ -445,19 +445,31 @@
       <div class="set-group" id="settingsToggleGroup">
         <span class="set-label">Default settings</span>
         <div class="sb-toggle" id="mThemeToggle" onclick="toggleModalTheme()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>Dark mode</span>
+          <!-- Linha dividida ao meio, mesmo padrão de Home page/Group by e
+               Export/Export to (pedido do usuário: "coloque uma divisão nas
+               colunas home page e export igual entre as linhas. faça o
+               mesmo na linha dark mode e alinhe as cores a esquerda") — a
+               divisória vertical vem de ".set-row-half + .set-row-half"
+               (ver css/components.css). -->
+          <div class="set-row-half">
+            <div class="tog-track"><div class="tog-knob"></div></div><span>Dark mode</span>
+          </div>
           <!-- Cor de destaque (--teal/--teal-bg) — vale igual nos dois temas,
                ver ACCENT_PRESETS/applyAccentColor em js/theme.js. Padrão: rosa
                (cor oficial de marca da Check Point, #DA1572), por isso listado
                primeiro. stopPropagation evita disparar o toggle do tema
-               (onclick do pai) ao clicar num swatch. -->
-          <div class="accent-swatches" id="accentSwatches" onclick="event.stopPropagation()">
-            <button type="button" class="accent-swatch" data-accent="pink" style="background:#DA1572" onclick="setAccentColor('pink')" title="Check Point pink (default)"></button>
-            <button type="button" class="accent-swatch" data-accent="blue" style="background:#60A5FA" onclick="setAccentColor('blue')" title="Light blue"></button>
-            <button type="button" class="accent-swatch" data-accent="green" style="background:#4ADE80" onclick="setAccentColor('green')" title="Green"></button>
-            <button type="button" class="accent-swatch" data-accent="purple" style="background:#C084FC" onclick="setAccentColor('purple')" title="Purple"></button>
-            <button type="button" class="accent-swatch" data-accent="orange" style="background:#FB923C" onclick="setAccentColor('orange')" title="Orange"></button>
-            <button type="button" class="accent-swatch" data-accent="red" style="background:#F87171" onclick="setAccentColor('red')" title="Red"></button>
+               (onclick do pai) ao clicar num swatch. Agora alinhados à
+               esquerda dentro da 2ª metade da linha (antes ficavam
+               encostados na borda direita via margin-left:auto). -->
+          <div class="set-row-half">
+            <div class="accent-swatches" id="accentSwatches" onclick="event.stopPropagation()">
+              <button type="button" class="accent-swatch" data-accent="pink" style="background:#DA1572" onclick="setAccentColor('pink')" title="Check Point pink (default)"></button>
+              <button type="button" class="accent-swatch" data-accent="blue" style="background:#60A5FA" onclick="setAccentColor('blue')" title="Light blue"></button>
+              <button type="button" class="accent-swatch" data-accent="green" style="background:#4ADE80" onclick="setAccentColor('green')" title="Green"></button>
+              <button type="button" class="accent-swatch" data-accent="purple" style="background:#C084FC" onclick="setAccentColor('purple')" title="Purple"></button>
+              <button type="button" class="accent-swatch" data-accent="orange" style="background:#FB923C" onclick="setAccentColor('orange')" title="Orange"></button>
+              <button type="button" class="accent-swatch" data-accent="red" style="background:#F87171" onclick="setAccentColor('red')" title="Red"></button>
+            </div>
           </div>
         </div>
       </div>

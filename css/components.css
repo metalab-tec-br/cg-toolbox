@@ -68,6 +68,14 @@
    anterior de margin-left:auto). Funciona tanto dentro de .set-group-row
    quanto de .sb-toggle (mesmo display:flex + align-items:center dos dois). */
 .set-row-half { flex: 1 1 50%; display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* Linha divisória vertical entre as duas metades (2ª metade em diante) —
+   mesma cor/espessura da borda das próprias linhas (var(--bdr), 1px),
+   pra ficar "igual" visualmente. Pedido do usuário: "coloque uma divisão
+   nas colunas home page e export igual entre as linhas. faça o mesmo na
+   linha dark mode e alinhe as cores a esquerda" — regra genérica, vale
+   pras 3 linhas fundidas (Home page/Group by, Export/Export to, Dark
+   mode/cor de destaque). */
+.set-row-half + .set-row-half { border-left: 1px solid var(--bdr); padding-left: 10px; }
 /* Grupo compacto: o toggle não estica para preencher a linha inteira, fica só
    do tamanho do próprio conteúdo (ex.: Admin mode, no final do modal). */
 .set-group-compact { align-items: flex-start; }
@@ -75,8 +83,10 @@
 
 /* ─── Cor de destaque (Configurações → linha do Dark mode) ─── */
 .accent-swatches { display: flex; gap: 6px; flex: 0 0 auto; }
-/* Dentro do toggle "Dark mode": empurra os swatches para a direita, na mesma linha. */
-.sb-toggle .accent-swatches { margin-left: auto; }
+/* Dentro do toggle "Dark mode": os swatches moram na 2ª metade (.set-row-half),
+   alinhados à esquerda dentro dela (ver .set-row-half acima) — antes eram
+   empurrados até a borda direita da linha via margin-left:auto; pedido do
+   usuário: "alinhe as cores a esquerda". */
 /* Dentro do toggle "Export": campo "Export to" (mLogFile) na mesma linha.
    Combinada com .set-row-half (ver acima) pra ocupar a metade direita da
    linha, alinhada à esquerda dentro do seu próprio espaço — pedido do
