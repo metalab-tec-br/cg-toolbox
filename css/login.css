@@ -19,7 +19,7 @@
    em css/layout.css) — regras duplicadas aqui (em vez de carregar
    layout.css inteiro, que traz a grade do app/sidebar que esta página não
    usa) só para a troca automática claro/escuro via [data-theme] no <html>. */
-.login-brand { display: flex; justify-content: center; margin-bottom: 6px; }
+.login-brand { display: flex; justify-content: center; margin-top: 14px; margin-bottom: 6px; }
 .login-logo-img { width: 180px; height: auto; display: block; }
 .login-logo-img.for-light { display: none; }
 [data-theme="light"] .login-logo-img.for-dark { display: none; }
