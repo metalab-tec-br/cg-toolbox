@@ -691,22 +691,19 @@ async function openCommandEditor(mode, id, ev) {
       alert('Failed to save the command. Please try again.');
       return;
     }
-    // Um usuário comum só edita o PRÓPRIO comando (created_by ===
-    // CURRENT_USER); comandos de outro usuário ou de referência
-    // (created_by='System') só podem ser editados por admins — o botão Edit
-    // já fica escondido nesses casos (ver terminal-renderer.js), mas
-    // repetimos a checagem aqui como defesa em profundidade (ex.: chamada
-    // direta via console) antes de abrir o formulário de edição. O servidor
-    // também recusa com 403 (ver PUT /api/commands/:id em server/index.js) —
-    // esta checagem só evita abrir a tela para nada.
-    if (mode === 'edit' && !window.CG_IS_ADMIN) {
+    // Um usuário comum edita o PRÓPRIO comando OU um comando de referência
+    // (created_by='System') — pedido do usuário: "todos usuários podem
+    // alterar os comandos do sistema". Só o comando de OUTRO usuário
+    // continua bloqueado. O botão Edit já reflete essa mesma regra (ver
+    // terminal-renderer.js), mas repetimos a checagem aqui como defesa em
+    // profundidade (ex.: chamada direta via console) antes de abrir o
+    // formulário de edição. O servidor também recusa com 403 (ver PUT
+    // /api/commands/:id em server/index.js) — esta checagem só evita abrir
+    // a tela para nada.
+    if (mode === 'edit' && !window.CG_IS_ADMIN && !row.is_system) {
       const isOwn = typeof CURRENT_USER !== 'undefined' && CURRENT_USER === row.created_by;
-      if (row.is_system) {
-        alert('Only admins can edit System commands. Use "Duplicate" to create your own editable copy.');
-        return;
-      }
       if (!isOwn) {
-        alert('You can only edit your own commands. Use "Duplicate" to create your own editable copy.');
+        alert('You can only edit your own commands (or System commands). Use "Duplicate" to create your own editable copy.');
         return;
       }
     }
@@ -839,11 +836,12 @@ async function cmdEditorSave() {
     const serverMsg = msg.split(' — ').slice(1).join(' — ');
     if (msg.indexOf('409') !== -1) _ceShowError('A command with this name already exists — try a slightly different name and save again.');
     else if (msg.indexOf('400') !== -1) _ceShowError(serverMsg || 'Fill in the required fields: Vendor, System, Version, Environment, Topic, Name.');
-    // 403: só acontece tentando editar um comando System sem ser admin — a UI já
-    // bloqueia isso antes (botão Edit escondido + guarda em openCommandEditor),
-    // mas mantemos a mensagem específica do servidor aqui como último resort
-    // (ver PUT /api/commands/:id em server/index.js).
-    else if (msg.indexOf('403') !== -1) _ceShowError(serverMsg || 'Only admins can edit System commands. Duplicate it to create your own editable copy.');
+    // 403: só acontece tentando editar o comando de OUTRO usuário sem ser
+    // admin (System commands já são editáveis por todos — ver comentário em
+    // PUT /api/commands/:id em server/index.js) — a UI já bloqueia isso
+    // antes (botão Edit escondido + guarda em openCommandEditor), mas
+    // mantemos a mensagem específica do servidor aqui como último resort.
+    else if (msg.indexOf('403') !== -1) _ceShowError(serverMsg || 'You can only edit your own commands (or System commands). Duplicate it to create your own editable copy.');
     else _ceShowError('Failed to save the command. Please try again.');
   }
 }

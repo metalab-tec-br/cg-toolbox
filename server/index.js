@@ -15,11 +15,20 @@
 //      prompt de senha, desde que o site esteja na zona "Intranet local").
 //   3) Fallback dev: header x-dev-user / query __user / usuário do SO.
 //
-// Regra de PERMISSÃO: PUT/DELETE /api/commands/:id não têm restrição de dono
-// (task #291) — qualquer usuário autenticado pode editar/excluir qualquer
-// comando, inclusive os de referência (created_by='System'). `modified_by`
-// sempre registra quem fez a última alteração, e toda criação/edição/exclusão
-// fica no audit_log (ver logAudit()).
+// Regra de PERMISSÃO (atualizada — pedido do usuário):
+//   - EDITAR (PUT /api/commands/:id): qualquer usuário autenticado pode
+//     editar o PRÓPRIO comando OU um comando de referência
+//     (created_by='System'). Não pode editar o comando de OUTRO usuário —
+//     precisa duplicar (POST normal) e editar a cópia.
+//   - EXCLUIR (DELETE /api/commands/:id): um usuário comum só exclui o
+//     PRÓPRIO comando; comandos System ou de outro usuário exigem admin.
+//   - Pastas (folders) seguem a mesma lógica de "só o dono, admin faz tudo"
+//     (ver PUT/DELETE /api/folders/:id abaixo) — não existe pasta "System",
+//     então aqui não há exceção equivalente.
+// Admins não têm nenhuma dessas restrições (podem editar/excluir qualquer
+// comando ou pasta). `modified_by` sempre registra quem fez a última
+// alteração, e toda criação/edição/exclusão relevante fica no audit_log
+// (ver logAudit()).
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -168,22 +177,50 @@ function getCurrentUsername(req) {
   try { return os.userInfo().username; } catch (e) { return 'guest'; }
 }
 // ════════════════════════════════════════════════
-// AUDIT LOG — uma linha por criação/edição/exclusão de comando (ver
-// audit_log em schema.sql). Chamado nos 3 handlers POST/PUT/DELETE
-// /api/commands abaixo. Retenção de 30 dias: toda gravação também apaga
-// linhas mais antigas que isso, sem precisar de job/cron separado.
+// AUDIT LOG — uma linha por criação/edição/exclusão feita por um usuário, em
+// QUALQUER entidade organizacional (comandos, pastas, notas, catálogos de
+// Vendor/System/Version/Environment/Topic/Parameter, usuários, API keys —
+// ver audit_log em schema.sql). Chamado em cada rota POST/PUT/DELETE
+// relevante abaixo. `details` é um resumo curto de O QUE foi feito (ex.:
+// "Changed: name, topic" numa edição de comando, "Renamed from X to Y" numa
+// pasta) — pedido do usuário: "registrar... inclusive o que foi feito".
+// Deliberadamente FORA do escopo deste log: preferências pessoais por
+// usuário (tema, buscas recentes, filtros — PUT /api/user-data/
+// /api/global-settings) e reordenar itens dentro de uma pasta (drag-and-
+// drop) — mudam a cada interação trivial da UI, e logar cada uma inundaria
+// o log de auditoria (limite de 1000 linhas/30 dias) sem agregar sinal de
+// segurança/rastreabilidade real.
+// Retenção de 30 dias: toda gravação também apaga linhas mais antigas que
+// isso, sem precisar de job/cron separado.
 // ════════════════════════════════════════════════
 const AUDIT_LOG_RETENTION_DAYS = 30;
-async function logAudit(username, action, commandId, commandName) {
+async function logAudit(username, action, entityType, entityId, entityName, details) {
   try {
     await pool.query(
-      'INSERT INTO audit_log (username, action, command_id, command_name) VALUES ($1,$2,$3,$4)',
-      [username || null, action, commandId || null, commandName || null]
+      'INSERT INTO audit_log (username, action, entity_type, entity_id, entity_name, details) VALUES ($1,$2,$3,$4,$5,$6)',
+      [username || null, action, entityType || 'command', entityId || null, entityName || null, details || null]
     );
     await pool.query(`DELETE FROM audit_log WHERE ts < NOW() - INTERVAL '${AUDIT_LOG_RETENTION_DAYS} days'`);
   } catch (e) {
     console.error('logAudit failed:', e);
   }
+}
+// Compara campos escalares de duas versões de uma entidade e devolve um
+// resumo tipo "Changed: name, topic" com os RÓTULOS (não os valores — texto
+// livre como "about_obs"/descrição de nota pode ser longo, e o valor em si
+// já não importa tanto quanto SABER que aquele campo mudou) dos campos cujo
+// valor mudou. `fieldLabels` é um objeto { chave: 'Rótulo' }. Retorna null
+// quando nada mudou (evita um details vazio/enganoso tipo "Changed: ").
+function summarizeChangedFields(before, after, fieldLabels) {
+  const changed = [];
+  for (const [key, label] of Object.entries(fieldLabels)) {
+    const a = before ? before[key] : undefined;
+    const b = after ? after[key] : undefined;
+    const na = a === undefined || a === null ? '' : String(a);
+    const nb = b === undefined || b === null ? '' : String(b);
+    if (na !== nb) changed.push(label);
+  }
+  return changed.length ? `Changed: ${changed.join(', ')}` : null;
 }
 
 // sAMAccountName "puro" (sem DOMÍNIO\), usado como chave de busca no Active
@@ -682,6 +719,7 @@ app.post('/api/folders', async (req, res) => {
       'INSERT INTO folders (username, name) VALUES ($1, $2) RETURNING id, name, sort_order',
       [username, name]
     );
+    await logAudit(username, 'create', 'folder', String(rows[0].id), name);
     res.status(201).json({ id: rows[0].id, name: rows[0].name, sort_order: rows[0].sort_order, command_ids: [] });
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'conflict', message: `You already have a folder named "${name}"` });
@@ -702,6 +740,9 @@ app.put('/api/folders/:id', async (req, res) => {
     if (!name) return res.status(400).json({ error: 'validation_error', message: '"name" is required' });
     const username = getCurrentUsername(req);
     const isAdmin = (await getCurrentRole(req)) === 'admin';
+    // Nome ANTES da renomeação — só para o audit_log ("Renamed from X to
+    // Y"), já que o UPDATE abaixo não devolve o valor antigo.
+    const { rows: beforeRows } = await pool.query('SELECT name, username FROM folders WHERE id = $1', [req.params.id]);
     const { rows } = await pool.query(
       isAdmin
         ? 'UPDATE folders SET name = $1 WHERE id = $2 RETURNING id, name, sort_order'
@@ -709,6 +750,10 @@ app.put('/api/folders/:id', async (req, res) => {
       isAdmin ? [name, req.params.id] : [name, req.params.id, username]
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found', message: `Folder '${req.params.id}' not found` });
+    const oldName = beforeRows[0] && beforeRows[0].name;
+    const ownerNote = isAdmin && beforeRows[0] && beforeRows[0].username !== username ? ` (owner: ${beforeRows[0].username})` : '';
+    const details = oldName && oldName !== name ? `Renamed from "${oldName}" to "${name}"${ownerNote}` : (ownerNote || null);
+    await logAudit(username, 'update', 'folder', String(rows[0].id), rows[0].name, details);
     res.json(rows[0]);
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'conflict', message: `A folder named "${name}" already exists for that folder's owner` });
@@ -724,6 +769,9 @@ app.delete('/api/folders/:id', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
     const isAdmin = (await getCurrentRole(req)) === 'admin';
+    // Nome/dono ANTES de excluir — a linha some depois do DELETE, então
+    // precisamos disso agora para o audit_log (entity_name fica denormalizado).
+    const { rows: beforeRows } = await pool.query('SELECT name, username FROM folders WHERE id = $1', [req.params.id]);
     const { rowCount } = await pool.query(
       isAdmin
         ? 'DELETE FROM folders WHERE id = $1'
@@ -731,6 +779,9 @@ app.delete('/api/folders/:id', async (req, res) => {
       isAdmin ? [req.params.id] : [req.params.id, username]
     );
     if (!rowCount) return res.status(404).json({ error: 'not_found', message: `Folder '${req.params.id}' not found` });
+    const before = beforeRows[0] || {};
+    const ownerNote = isAdmin && before.username !== username ? `Owner: ${before.username}` : null;
+    await logAudit(username, 'delete', 'folder', req.params.id, before.name, ownerNote);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -745,9 +796,10 @@ app.post('/api/folders/:id/commands/:commandId', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
     const { id, commandId } = req.params;
-    const folder = await pool.query('SELECT id FROM folders WHERE id = $1 AND username = $2', [id, username]);
+    const folder = await pool.query('SELECT id, name FROM folders WHERE id = $1 AND username = $2', [id, username]);
     if (!folder.rows.length) return res.status(404).json({ error: 'not_found', message: `Folder '${id}' not found` });
-    if (!(await getCommandRow(commandId))) return res.status(404).json({ error: 'not_found', message: `Command '${commandId}' not found` });
+    const cmdRow = await getCommandRow(commandId);
+    if (!cmdRow) return res.status(404).json({ error: 'not_found', message: `Command '${commandId}' not found` });
     // Comando novo entra no FIM da ordem da pasta (task #458) — MAX(sort_order)+1
     // em vez de 0 fixo, senão toda inclusão nova empataria na primeira posição.
     // GREATEST entre folder_commands E notes (task Notes) — as duas tabelas
@@ -766,6 +818,7 @@ app.post('/api/folders/:id/commands/:commandId', async (req, res) => {
        ON CONFLICT DO NOTHING`,
       [id, commandId]
     );
+    await logAudit(username, 'update', 'folder', id, folder.rows[0].name, `Added command "${cmdRow.name}"`);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -779,9 +832,11 @@ app.delete('/api/folders/:id/commands/:commandId', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
     const { id, commandId } = req.params;
-    const folder = await pool.query('SELECT id FROM folders WHERE id = $1 AND username = $2', [id, username]);
+    const folder = await pool.query('SELECT id, name FROM folders WHERE id = $1 AND username = $2', [id, username]);
     if (!folder.rows.length) return res.status(404).json({ error: 'not_found', message: `Folder '${id}' not found` });
+    const cmdRow = await getCommandRow(commandId);
     await pool.query('DELETE FROM folder_commands WHERE folder_id = $1 AND command_id = $2', [id, commandId]);
+    await logAudit(username, 'update', 'folder', id, folder.rows[0].name, `Removed command "${cmdRow ? cmdRow.name : commandId}"`);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -890,6 +945,7 @@ app.post('/api/folders/:id/copy', async (req, res) => {
       );
       return folder;
     });
+    await logAudit(username, 'create', 'folder', String(newFolder.id), newFolder.name, `Copied from folder "${baseName}"`);
     const { rows: cmdRows } = await pool.query(
       'SELECT command_id FROM folder_commands WHERE folder_id = $1 ORDER BY sort_order, created_at',
       [newFolder.id]
@@ -983,6 +1039,7 @@ app.post('/api/folders/:id/notes', async (req, res) => {
        RETURNING id, folder_id, title, description, sort_order, created_at, updated_at`,
       [id, username, title, description]
     );
+    await logAudit(username, 'create', 'note', String(rows[0].id), title || '(untitled)');
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -1005,6 +1062,9 @@ app.put('/api/notes/:id', async (req, res) => {
       [title, description, req.params.id, username]
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found', message: `Note '${req.params.id}' not found` });
+    // Sem diff de conteúdo (description é HTML rico, pode ser longo — ver
+    // sanitizeNoteHtml acima) — só registra que a nota foi editada.
+    await logAudit(username, 'update', 'note', String(rows[0].id), title || '(untitled)');
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -1016,8 +1076,10 @@ app.put('/api/notes/:id', async (req, res) => {
 app.delete('/api/notes/:id', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
+    const before = await pool.query('SELECT title FROM notes WHERE id = $1 AND username = $2', [req.params.id, username]);
     const { rowCount } = await pool.query('DELETE FROM notes WHERE id = $1 AND username = $2', [req.params.id, username]);
     if (!rowCount) return res.status(404).json({ error: 'not_found', message: `Note '${req.params.id}' not found` });
+    await logAudit(username, 'delete', 'note', req.params.id, (before.rows[0] && before.rows[0].title) || '(untitled)');
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -1046,6 +1108,7 @@ app.post('/api/notes/:id/clone', async (req, res) => {
        RETURNING id, folder_id, title, description, sort_order, created_at, updated_at`,
       [folderId, username, `${title} (copy)`, description]
     );
+    await logAudit(username, 'create', 'note', String(rows[0].id), rows[0].title || '(untitled)', `Cloned from note "${title || '(untitled)'}"`);
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -1054,19 +1117,23 @@ app.post('/api/notes/:id/clone', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════
-// GET /api/audit-log — lista as alterações de comando (criar/editar/excluir)
-// dos últimos 30 dias, mais recente primeiro. Teto de 1000 linhas.
+// GET /api/audit-log — lista as alterações (criar/editar/excluir, em
+// qualquer entidade — ver comentário em logAudit() acima) dos últimos 30
+// dias, mais recente primeiro. Teto de 1000 linhas. `command_id`/
+// `command_name` continuam no JSON de resposta (apontando para os mesmos
+// valores de entity_id/entity_name) só para não quebrar nenhum consumidor
+// externo (API key) que já lia esses nomes de campo antes desta mudança.
 // ════════════════════════════════════════════════
 app.get('/api/audit-log', requireAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, ts, username, action, command_id, command_name
+      `SELECT id, ts, username, action, entity_type, entity_id, entity_name, details
        FROM audit_log
        WHERE ts >= NOW() - INTERVAL '${AUDIT_LOG_RETENTION_DAYS} days'
        ORDER BY ts DESC, id DESC
        LIMIT 1000`
     );
-    res.json(rows);
+    res.json(rows.map(r => ({ ...r, command_id: r.entity_id, command_name: r.entity_name })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
@@ -1229,6 +1296,8 @@ app.post('/api/api-keys', requireAdmin, async (req, res) => {
        RETURNING id, name, key_prefix, role, created_by, created_at, expires_at, last_used_at, revoked_at`,
       [name.trim(), keyPrefix, keyHash, finalRole, createdBy, expiresAt]
     );
+    // Nunca grava a key em si (rawKey) no audit_log — só nome/role/validade.
+    await logAudit(createdBy, 'create', 'api_key', String(rows[0].id), name.trim(), `Role: ${finalRole}, validity: ${finalValidity}`);
     res.status(201).json({ ...rows[0], key: rawKey });
   } catch (err) {
     console.error(err);
@@ -1243,8 +1312,10 @@ app.delete('/api/api-keys/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'validation_error', message: 'Invalid id' });
   try {
+    const before = await pool.query('SELECT name FROM api_keys WHERE id = $1', [id]);
     const { rows } = await pool.query('DELETE FROM api_keys WHERE id = $1 RETURNING id', [id]);
     if (!rows.length) return res.status(404).json({ error: 'not_found', message: `API key '${id}' not found` });
+    await logAudit(getCurrentUsername(req), 'delete', 'api_key', String(id), before.rows[0] && before.rows[0].name);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -1290,6 +1361,8 @@ app.post('/api/users', requireAdmin, async (req, res) => {
     );
     await ensureDefaultFolder(trimmed);
     const { rows } = await pool.query(`SELECT ${USERS_PUBLIC_COLUMNS} FROM users WHERE username = $1`, [trimmed]);
+    // Nunca grava a senha (nem o hash) no audit_log — só o role atribuído.
+    await logAudit(getCurrentUsername(req), 'create', 'user', trimmed, trimmed, `Role: ${roleVal}`);
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -1330,6 +1403,13 @@ app.put('/api/users/:username', requireAdmin, async (req, res) => {
       [newRole, newDisabled ? 1 : 0, passwordHash, username]
     );
     const { rows } = await pool.query(`SELECT ${USERS_PUBLIC_COLUMNS} FROM users WHERE username = $1`, [username]);
+    // Nunca grava senha/hash no audit_log — só sinaliza QUE ela mudou (sem o
+    // valor), junto de role/disabled reais via summarizeChangedFields.
+    const changedLabels = [];
+    if (existing.role !== newRole) changedLabels.push('role');
+    if (!!existing.disabled !== !!newDisabled) changedLabels.push('disabled');
+    if (req.body.password) changedLabels.push('password');
+    await logAudit(getCurrentUsername(req), 'update', 'user', username, username, changedLabels.length ? `Changed: ${changedLabels.join(', ')}` : null);
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -1348,6 +1428,7 @@ app.delete('/api/users/:username', requireAdmin, async (req, res) => {
       if (remaining < 1) return res.status(409).json({ error: 'conflict', message: 'At least one enabled admin must remain' });
     }
     await pool.query('DELETE FROM users WHERE username = $1', [username]); // cascades sessions (ON DELETE CASCADE)
+    await logAudit(getCurrentUsername(req), 'delete', 'user', username, username);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -1523,7 +1604,7 @@ app.post('/api/commands', async (req, res) => {
       await insertChildren(client, id, req.body);
     });
 
-    await logAudit(username, 'create', id, cols.name);
+    await logAudit(username, 'create', 'command', id, cols.name);
     const row = await findCommand(id);
     res.status(201).json(await shapeCommand(row, username));
   } catch (err) {
@@ -1542,17 +1623,18 @@ app.put('/api/commands/:id', async (req, res) => {
     if (!found) return res.status(404).json({ error: 'not_found', message: `Command '${id}' not found` });
 
     const currentUser = getCurrentUsername(req);
-    // Um usuário comum só altera o PRÓPRIO comando (created_by ===
-    // currentUser); para editar o de outro usuário — ou um comando de
-    // referência (created_by='System') — precisa duplicar primeiro (POST
-    // normal, cria um comando novo em nome dele) e editar a cópia. Admins
-    // não têm essa restrição: podem alterar qualquer comando, inclusive
-    // System.
-    if ((await getCurrentRole(req)) !== 'admin' && found.created_by !== currentUser) {
-      const message = found.created_by === 'System'
-        ? 'Only admins can edit System commands. Duplicate it to create your own editable copy.'
-        : 'You can only edit your own commands. Duplicate it to create your own editable copy.';
-      return res.status(403).json({ error: 'forbidden', message });
+    // Um usuário comum pode editar o PRÓPRIO comando OU um comando de
+    // referência (created_by='System') — pedido do usuário: "todos usuários
+    // podem alterar os comandos do sistema". Não pode editar o comando de
+    // OUTRO usuário — precisa duplicar primeiro (POST normal, cria um
+    // comando novo em nome dele) e editar a cópia. Admins não têm essa
+    // restrição: podem alterar qualquer comando.
+    const isSystemCommand = found.created_by === 'System';
+    if ((await getCurrentRole(req)) !== 'admin' && found.created_by !== currentUser && !isSystemCommand) {
+      return res.status(403).json({
+        error: 'forbidden',
+        message: 'You can only edit your own commands (or System commands). Duplicate it to create your own editable copy.',
+      });
     }
 
     const bodyForValidation = { ...req.body, id: req.body.id || id };
@@ -1600,7 +1682,17 @@ app.put('/api/commands/:id', async (req, res) => {
       await insertChildren(client, id, req.body);
     });
 
-    await logAudit(currentUser, 'update', id, cols.name);
+    // Resumo de "o que foi feito" nesta edição (pedido do usuário) — compara
+    // só os campos ESCALARES do comando (não tenta diffar as linhas/tags/
+    // vendors/etc., que são sempre apagadas e reinseridas por inteiro a cada
+    // PUT — ver DELETEs acima — então "mudaram" seria sempre verdadeiro e
+    // sem sinal real).
+    const changeDetails = summarizeChangedFields(found, cols, {
+      name: 'name', topic: 'topic', desc: 'description',
+      about_purpose: 'purpose', about_when: 'when to use', about_obs: 'notes',
+      requires_ips: 'IP/Port list support', requires_ip_port: 'IP+Port pairing',
+    });
+    await logAudit(currentUser, 'update', 'command', id, cols.name, changeDetails);
     const row = await findCommand(id);
     res.json(await shapeCommand(row, currentUser));
   } catch (err) {
@@ -1634,7 +1726,7 @@ app.delete('/api/commands/:id', async (req, res) => {
     // command_id em folder_commands tem FK ON DELETE CASCADE (ver schema.sql)
     // — apagar o comando já limpa sozinho sua presença em qualquer pasta.
     await pool.query('DELETE FROM commands WHERE id = $1', [id]);
-    await logAudit(currentUser, 'delete', id, found.name);
+    await logAudit(currentUser, 'delete', 'command', id, found.name);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -1731,6 +1823,7 @@ app.post('/api/vendors', async (req, res) => {
     const maxRes = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS m FROM vendors');
     await pool.query('INSERT INTO vendors (key, label, color, sort_order) VALUES ($1, $2, $3, $4)', [key, label, color || '#8B949E', maxRes.rows[0].m + 1]);
     const { rows } = await pool.query('SELECT * FROM vendors WHERE key = $1', [key]);
+    await logAudit(getCurrentUsername(req), 'create', 'vendor', key, label);
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -1749,6 +1842,8 @@ app.put('/api/vendors/:key', async (req, res) => {
     if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
     await pool.query('UPDATE vendors SET label = $1, color = $2, sort_order = $3 WHERE key = $4', [label, color, sortOrder, key]);
     const { rows } = await pool.query('SELECT * FROM vendors WHERE key = $1', [key]);
+    const details = summarizeChangedFields(existing, { label, color, sort_order: sortOrder }, { label: 'label', color: 'color', sort_order: 'order' });
+    await logAudit(getCurrentUsername(req), 'update', 'vendor', key, label, details);
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -1763,6 +1858,7 @@ app.delete('/api/vendors/:key', async (req, res) => {
     const count = await countUsage('command_vendors', 'vendor', key);
     if (count > 0) return res.status(409).json({ error: 'in_use', message: `Vendor '${key}' is used by ${count} command(s)`, count });
     await pool.query('DELETE FROM vendors WHERE key = $1', [key]); // cascades systems (and, por sua vez, versions)
+    await logAudit(getCurrentUsername(req), 'delete', 'vendor', key, existingRows[0].label);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -1782,6 +1878,7 @@ app.post('/api/systems', async (req, res) => {
     const maxRes = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS m FROM systems');
     await pool.query('INSERT INTO systems (key, vendor, label, color, sort_order) VALUES ($1, $2, $3, $4, $5)', [key, vendor, label, color || '#8B949E', maxRes.rows[0].m + 1]);
     const { rows } = await pool.query('SELECT * FROM systems WHERE key = $1', [key]);
+    await logAudit(getCurrentUsername(req), 'create', 'system', key, label);
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -1805,6 +1902,8 @@ app.put('/api/systems/:key', async (req, res) => {
     // Reatribuir o vendor do Sistema mantém versions.vendor em sincronia.
     await pool.query('UPDATE versions SET vendor = $1 WHERE system = $2', [vendor, key]);
     const { rows } = await pool.query('SELECT * FROM systems WHERE key = $1', [key]);
+    const details = summarizeChangedFields(existing, { label, color, vendor, sort_order: sortOrder }, { label: 'label', color: 'color', vendor: 'vendor', sort_order: 'order' });
+    await logAudit(getCurrentUsername(req), 'update', 'system', key, label, details);
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -1819,6 +1918,7 @@ app.delete('/api/systems/:key', async (req, res) => {
     const count = await countUsage('command_systems', 'system', key);
     if (count > 0) return res.status(409).json({ error: 'in_use', message: `System '${key}' is used by ${count} command(s)`, count });
     await pool.query('DELETE FROM systems WHERE key = $1', [key]); // cascades versions (system FK)
+    await logAudit(getCurrentUsername(req), 'delete', 'system', key, existingRows[0].label);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -1873,6 +1973,7 @@ app.post('/api/versions', async (req, res) => {
       [system, systemRow.vendor, key, label, color || '#8B949E', maxRes.rows[0].m + 1]
     );
     const { rows } = await pool.query('SELECT * FROM versions WHERE system = $1 AND key = $2', [system, key]);
+    await logAudit(getCurrentUsername(req), 'create', 'version', key, label, `System: ${system}`);
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -1906,6 +2007,8 @@ app.put('/api/versions/:system/:key', async (req, res) => {
       [label, color, sortOrder, newSystem, newVendor, system, key]
     );
     const { rows } = await pool.query('SELECT * FROM versions WHERE system = $1 AND key = $2', [newSystem, key]);
+    const details = summarizeChangedFields(existing, { label, color, sort_order: sortOrder, system: newSystem }, { label: 'label', color: 'color', sort_order: 'order', system: 'system' });
+    await logAudit(getCurrentUsername(req), 'update', 'version', key, label, details);
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -1920,6 +2023,7 @@ app.delete('/api/versions/:system/:key', async (req, res) => {
     const count = await countUsage('command_versions', 'version', key);
     if (count > 0) return res.status(409).json({ error: 'in_use', message: `Version '${key}' is used by ${count} command(s)`, count });
     await pool.query('DELETE FROM versions WHERE system = $1 AND key = $2', [system, key]);
+    await logAudit(getCurrentUsername(req), 'delete', 'version', key, existingRows[0].label, `System: ${system}`);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -1936,6 +2040,7 @@ app.post('/api/environments', async (req, res) => {
     const maxRes = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS m FROM environments');
     await pool.query('INSERT INTO environments (key, label, color, sort_order) VALUES ($1, $2, $3, $4)', [key, label, color || '#8B949E', maxRes.rows[0].m + 1]);
     const { rows } = await pool.query('SELECT * FROM environments WHERE key = $1', [key]);
+    await logAudit(getCurrentUsername(req), 'create', 'environment', key, label);
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -1954,6 +2059,8 @@ app.put('/api/environments/:key', async (req, res) => {
     if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
     await pool.query('UPDATE environments SET label = $1, color = $2, sort_order = $3 WHERE key = $4', [label, color, sortOrder, key]);
     const { rows } = await pool.query('SELECT * FROM environments WHERE key = $1', [key]);
+    const details = summarizeChangedFields(existing, { label, color, sort_order: sortOrder }, { label: 'label', color: 'color', sort_order: 'order' });
+    await logAudit(getCurrentUsername(req), 'update', 'environment', key, label, details);
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -1968,6 +2075,7 @@ app.delete('/api/environments/:key', async (req, res) => {
     const count = await countUsage('command_environments', 'environment', key);
     if (count > 0) return res.status(409).json({ error: 'in_use', message: `Environment '${key}' is used by ${count} command(s)`, count });
     await pool.query('DELETE FROM environments WHERE key = $1', [key]);
+    await logAudit(getCurrentUsername(req), 'delete', 'environment', key, existingRows[0].label);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -1987,6 +2095,7 @@ app.post('/api/topics', async (req, res) => {
       [key, label, color || '#8B949E', maxRes.rows[0].m + 1]
     );
     const { rows } = await pool.query('SELECT * FROM topics WHERE key = $1', [key]);
+    await logAudit(getCurrentUsername(req), 'create', 'topic', key, label);
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -2006,6 +2115,8 @@ app.put('/api/topics/:key', async (req, res) => {
     // is_protected nunca é alterável por esta API.
     await pool.query('UPDATE topics SET label = $1, color = $2, sort_order = $3 WHERE key = $4', [label, color, sortOrder, key]);
     const { rows } = await pool.query('SELECT * FROM topics WHERE key = $1', [key]);
+    const details = summarizeChangedFields(existing, { label, color, sort_order: sortOrder }, { label: 'label', color: 'color', sort_order: 'order' });
+    await logAudit(getCurrentUsername(req), 'update', 'topic', key, label, details);
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -2022,6 +2133,7 @@ app.delete('/api/topics/:key', async (req, res) => {
     const count = await countUsage('command_topics', 'topic', key);
     if (count > 0) return res.status(409).json({ error: 'in_use', message: `Topic '${key}' is used by ${count} command(s)`, count });
     await pool.query('DELETE FROM topics WHERE key = $1', [key]);
+    await logAudit(getCurrentUsername(req), 'delete', 'topic', key, existing.label);
     res.status(204).end();
   } catch (err) {
     console.error(err);
@@ -2067,6 +2179,7 @@ app.post('/api/parameters', async (req, res) => {
     const order = Number.isInteger(sort_order) ? sort_order : maxRes.rows[0].m + 1;
     await pool.query('INSERT INTO parameters (key, label, sort_order) VALUES ($1, $2, $3)', [key, label, order]);
     const { rows } = await pool.query('SELECT * FROM parameters WHERE key = $1', [key]);
+    await logAudit(getCurrentUsername(req), 'create', 'parameter', key, label);
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -2085,6 +2198,8 @@ app.put('/api/parameters/:key', async (req, res) => {
     // `key` nunca é alterável por esta API.
     await pool.query('UPDATE parameters SET label = $1, sort_order = $2 WHERE key = $3', [label, sortOrder, key]);
     const { rows } = await pool.query('SELECT * FROM parameters WHERE key = $1', [key]);
+    const details = summarizeChangedFields(existing, { label, sort_order: sortOrder }, { label: 'label', sort_order: 'order' });
+    await logAudit(getCurrentUsername(req), 'update', 'parameter', key, label, details);
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -2107,6 +2222,7 @@ app.delete('/api/parameters/:key', async (req, res) => {
     const usage = await countParameterTemplateUsage(key);
     if (usage > 0) return res.status(409).json({ error: 'in_use', message: `Parameter '${key}' is used by ${usage} command(s)`, count: usage });
     await pool.query('DELETE FROM parameters WHERE key = $1', [key]);
+    await logAudit(getCurrentUsername(req), 'delete', 'parameter', key, existingRows[0].label);
     res.status(204).end();
   } catch (err) {
     console.error(err);

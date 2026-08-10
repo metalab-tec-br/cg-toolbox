@@ -95,6 +95,31 @@ async function runMigrations() {
     // ao aplicar esta migração; só passa a ser reordenável a partir daqui.
     // row_number() é 1-based; window function particionada por pasta.
     await pool.query(`ALTER TABLE folder_commands ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0`);
+    // audit_log: generalizado de "só comandos" (command_id/command_name)
+    // para qualquer entidade organizacional (pastas, notas, catálogos,
+    // usuários, API keys — ver comentário em schema.sql e logAudit() em
+    // server/index.js). RENAME COLUMN não aceita "IF EXISTS" na coluna (só
+    // na tabela) — por isso o DO $$ ... $$ abaixo confere via
+    // information_schema antes de renomear, tornando isso seguro de rodar
+    // em todo boot: na 2ª vez em diante, entity_id/entity_name já existem e
+    // o bloco não faz nada. Instalações novas já nascem com os nomes certos
+    // (ver CREATE TABLE em schema.sql), então aqui só entram bancos de
+    // antes desta mudança.
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'audit_log' AND column_name = 'command_id')
+           AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'audit_log' AND column_name = 'entity_id') THEN
+          ALTER TABLE audit_log RENAME COLUMN command_id TO entity_id;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'audit_log' AND column_name = 'command_name')
+           AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'audit_log' AND column_name = 'entity_name') THEN
+          ALTER TABLE audit_log RENAME COLUMN command_name TO entity_name;
+        END IF;
+      END $$;
+    `);
+    await pool.query(`ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS entity_type TEXT NOT NULL DEFAULT 'command'`);
+    await pool.query(`ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS details TEXT`);
     await pool.query(`
       UPDATE folder_commands fc SET sort_order = ranked.rn
       FROM (

@@ -747,11 +747,11 @@
       <button class="modal-close" onclick="closeAuditLogModal()">✕</button>
     </div>
     <div class="modal-body">
-      <span class="set-hint">Command create/update/delete history — entries older than 30 days are removed automatically.</span>
+      <span class="set-hint">Create/update/delete history for commands, folders, notes, catalogs, users and API keys — entries older than 30 days are removed automatically.</span>
       <div class="audit-log-wrap" id="auditLogWrap">
         <table class="audit-log-table">
           <thead>
-            <tr><th>Date/Time</th><th>User</th><th>Action</th><th>Command</th></tr>
+            <tr><th>Date/Time</th><th>User</th><th>Action</th><th>Type</th><th>Item</th><th>Details</th></tr>
           </thead>
           <tbody id="auditLogTbody"></tbody>
         </table>

@@ -1080,15 +1080,28 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    (Configurações → System) ficam sempre disponíveis para qualquer usuário. */
 
 /* ─── AUDIT LOG MODAL (Settings → View audit log, see js/audit-log.js) ─── */
+/* Modal um pouco mais largo que .modal-wide padrão (760px) — 6 colunas agora
+   (Date/User/Action/Type/Item/Details, era 4) precisam de mais espaço,
+   principalmente a coluna Details (resumo de "o que foi feito"). */
+#auditLogOverlay .modal-box { width: min(920px, 100%); }
 .audit-log-wrap { max-height: 55vh; overflow-y: auto; border: 1px solid var(--bdr); border-radius: 8px; }
-.audit-log-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.audit-log-table { width: 100%; border-collapse: collapse; font-size: 11.5px; table-layout: fixed; }
 .audit-log-table th {
   position: sticky; top: 0; background: var(--surf2); color: var(--dim);
   font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px;
   text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--bdr);
 }
-.audit-log-table td { padding: 7px 10px; border-bottom: 1px solid var(--bdr); color: var(--text); white-space: nowrap; }
+.audit-log-table td { padding: 7px 10px; border-bottom: 1px solid var(--bdr); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .audit-log-table tr:last-child td { border-bottom: none; }
+/* Item/Details podem ser mais longos (nome de comando/pasta, resumo de
+   campos alterados) — quebram linha em vez de cortar com "...". */
+.audit-log-table td:nth-child(5), .audit-log-table td:nth-child(6) { white-space: normal; overflow: visible; text-overflow: clip; }
+.audit-log-table th:nth-child(1), .audit-log-table td:nth-child(1) { width: 15%; }
+.audit-log-table th:nth-child(2), .audit-log-table td:nth-child(2) { width: 13%; }
+.audit-log-table th:nth-child(3), .audit-log-table td:nth-child(3) { width: 10%; }
+.audit-log-table th:nth-child(4), .audit-log-table td:nth-child(4) { width: 10%; }
+.audit-log-table th:nth-child(5), .audit-log-table td:nth-child(5) { width: 22%; }
+.audit-log-table th:nth-child(6), .audit-log-table td:nth-child(6) { width: 30%; }
 .audit-log-loading { text-align: center; color: var(--muted); padding: 18px 10px !important; white-space: normal !important; }
 .audit-log-empty { text-align: center; color: var(--muted); font-size: 12px; padding: 18px 10px; }
 .audit-action-pill {

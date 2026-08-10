@@ -340,17 +340,30 @@ CREATE TABLE IF NOT EXISTS user_data (
   PRIMARY KEY (username, data_key)
 );
 
--- Log de auditoria de comandos — uma linha por criação/edição/exclusão.
--- `command_name` fica DENORMALIZADO (copiado no momento do registro) porque um
--- 'delete' apaga a linha de `commands`. Retenção de 30 dias, aplicada inline
--- a cada gravação (ver logAudit() em server/index.js) — sem job/cron separado.
+-- Log de auditoria — uma linha por criação/edição/exclusão feita por um
+-- usuário, em QUALQUER tipo de dado organizacional (comandos, pastas, notas,
+-- catálogos, usuários, API keys — ver logAudit() em server/index.js, chamada
+-- em cada rota POST/PUT/DELETE relevante). `entity_type` distingue o tipo
+-- ('command' | 'folder' | 'note' | 'vendor' | 'system' | 'version' |
+-- 'environment' | 'topic' | 'parameter' | 'user' | 'api_key'); `entity_name`
+-- fica DENORMALIZADO (copiado no momento do registro) porque um 'delete'
+-- apaga a linha original — sem isso, a entrada do log ficaria sem nome
+-- depois de excluído. `details` é um resumo em texto livre de O QUE mudou
+-- (ex.: "Changed: name, description" numa edição, ou "Renamed from X to Y"),
+-- fica NULL quando a ação já é autoexplicativa (create/delete simples).
+-- Retenção de 30 dias, aplicada inline a cada gravação — sem job/cron
+-- separado. Colunas antigas (command_id/command_name, de quando este log só
+-- cobria comandos) são migradas para entity_id/entity_name em runMigrations()
+-- (server/db.js) — ver comentário lá.
 CREATE TABLE IF NOT EXISTS audit_log (
   id           SERIAL PRIMARY KEY,
   ts           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   username     TEXT,
-  action       TEXT NOT NULL, -- 'create' | 'update' | 'delete'
-  command_id   TEXT,
-  command_name TEXT
+  action       TEXT NOT NULL,      -- 'create' | 'update' | 'delete'
+  entity_type  TEXT NOT NULL DEFAULT 'command',
+  entity_id    TEXT,
+  entity_name  TEXT,
+  details      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_audit_log_ts ON audit_log(ts);
 
