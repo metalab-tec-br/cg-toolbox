@@ -187,6 +187,22 @@ function folderScopeUsernames() {
   return usernames;
 }
 function renderFolderScopeOptions() {
+  // Também mantém o rótulo do botão (#folderScopeDDBtn .dd-label) em dia com
+  // FOLDER_SCOPE, não só a lista de opções — bug reportado: "estou na pasta
+  // do usuário metalab, ao atualizar a página continua exibindo as pastas
+  // do usuário metalab, mas no filtro mostra my folders". O HTML nasce com
+  // ".dd-label">My folders" fixo (index.html) e, até esta função existir
+  // sozinha responsável pelo rótulo, só era atualizado dentro de
+  // setFolderScope() — nunca no boot. No boot, FOLDER_SCOPE já vem
+  // corretamente restaurado (resolveFolderScope()) e os cards filtrados já
+  // saem certos (por isso "continua exibindo as pastas do usuário
+  // metalab"), mas updateGroupByOptionsForFoldersScope() (chamada no
+  // carregamento do script) só chamava esta função para reconstruir a
+  // LISTA (com o ".on" certo) — o texto do botão fechado ficava
+  // desatualizado até o usuário abrir/escolher algo no dropdown de novo.
+  const btn = document.getElementById('folderScopeDDBtn');
+  const label = btn && btn.querySelector('.dd-label');
+  if (label) label.textContent = folderScopeLabel(FOLDER_SCOPE);
   const panel = document.getElementById('folderScopeToggle');
   if (!panel) return;
   const usernames = folderScopeUsernames();
@@ -204,10 +220,7 @@ function renderFolderScopeOptions() {
 function setFolderScope(scope) {
   FOLDER_SCOPE = scope || 'mine';
   if (typeof persistFolderScope === 'function') persistFolderScope(FOLDER_SCOPE);
-  renderFolderScopeOptions(); // reconstrói a lista com o item certo marcado ".on"
-  const btn = document.getElementById('folderScopeDDBtn');
-  const label = btn && btn.querySelector('.dd-label');
-  if (label) label.textContent = folderScopeLabel(FOLDER_SCOPE);
+  renderFolderScopeOptions(); // reconstrói a lista (".on" certo) e o rótulo do botão
   const dd = document.getElementById('folderScopeDD');
   if (dd) dd.classList.remove('open');
   if (FOLDER_SCOPE !== 'mine' && typeof ALL_USERS_FOLDERS !== 'undefined' && !ALL_USERS_FOLDERS.length && typeof reloadAllUsersFoldersFromServer === 'function') {
