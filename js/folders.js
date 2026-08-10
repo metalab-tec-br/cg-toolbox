@@ -275,7 +275,7 @@ function goHome() {
 // atualização é otimista — marca/desmarca só o item clicado e o botão de
 // pasta do card, SEM re-renderizar — para o dropdown continuar aberto e
 // permitir marcar várias pastas em sequência.
-function toggleCommandInFolder(cmdId, folderId, itemEl) {
+async function toggleCommandInFolder(cmdId, folderId, itemEl) {
   const folder = FOLDERS.find(f => f.id === folderId);
   if (!folder) return;
   const wasOn = folder.command_ids.has(cmdId);
@@ -309,8 +309,34 @@ function toggleCommandInFolder(cmdId, folderId, itemEl) {
     }
   }
 
+  // Mantém o cache de comandos (fetchCommands(), ver js/api-client.js) em
+  // dia — buildFolderSection (js/db-render-engine.js) filtra pelas PRÓPRIAS
+  // c.folder_ids do comando (o que veio do servidor), não pelo
+  // FOLDERS[].command_ids atualizado acima. Sem isso, a seção só refletia o
+  // toggle depois de um F5 (que reseta o cache e busca folder_ids frescos do
+  // servidor) — bug reportado pelo usuário.
+  try {
+    const cmds = await fetchCommands();
+    const cmd = cmds.find(c => c.id === cmdId);
+    if (cmd) {
+      const ids = new Set(cmd.folder_ids || []);
+      if (wasOn) ids.delete(folderId); else ids.add(folderId);
+      cmd.folder_ids = [...ids];
+    }
+  } catch (e) { /* cache vazio/erro — o próximo render() tenta buscar de novo */ }
+
   if (VIEW_FOLDERS_HOME) {
-    render();
+    // render() reconstrói #out inteiro (o comando pode migrar de seção ao
+    // marcar/desmarcar uma pasta), o que destruiria o dropdown aberto sem
+    // nenhum feedback de que o clique registrou — reabre o MESMO dropdown
+    // (agora com o card, possivelmente em outra seção) logo em seguida, em
+    // vez de simplesmente deixá-lo sumir.
+    await render();
+    const pop = document.querySelector(`.card[data-cmd-id="${CSS.escape(cmdId)}"] .folder-menu-pop`);
+    if (pop) {
+      document.querySelectorAll('.folder-menu-pop.open').forEach(p => { if (p !== pop) p.classList.remove('open'); });
+      pop.classList.add('open');
+    }
   } else if (itemEl) {
     itemEl.classList.toggle('on', !wasOn);
     const chk = itemEl.querySelector('.folder-menu-chk');
