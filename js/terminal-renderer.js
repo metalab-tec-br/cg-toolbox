@@ -392,10 +392,10 @@ function scopeLabelColor(catalogArr, key) {
 // (mesmo elemento .sb-pip usado nas listas da sidebar, ver ccBuildSidebarPanel em
 // catalogs.js) na cor do primeiro item cadastrado no catálogo.
 function buildScopeTag(keys, catalogArr, allLabel) {
-  if (!keys || !keys.length) return `<span class="tag scope-tag scope-tag-empty">${allLabel}</span>`;
+  if (!keys || !keys.length) return `<span class="scope-tag scope-tag-empty">${allLabel}</span>`;
   const items = keys.map(k => scopeLabelColor(catalogArr, k));
   const label = items.map(it => it.label).join(', ');
-  return `<span class="tag scope-tag"><span class="sb-pip" style="background:${items[0].color}"></span>${label}</span>`;
+  return `<span class="scope-tag"><span class="sb-pip" style="background:${items[0].color}"></span>${label}</span>`;
 }
 
 // As 4 tags de escopo (Vendor/Sistema/Versão/Ambiente) exibidas logo após o nome do
@@ -412,9 +412,8 @@ function scopeTagsHtml(scope) {
   return `<span class="scope-tags">${vd}${sy}${ve}${en}</span>`;
 }
 
-function card({ id, name, desc, about, tags = [], lines, diffs, folderIds = [], createdBy, modifiedBy, updatedAt, isSystem = false, vendors, systems, versions, environments }) {
+function card({ id, name, desc, about, lines, diffs, folderIds = [], createdBy, modifiedBy, updatedAt, isSystem = false, vendors, systems, versions, environments }) {
   const did = 'd' + (++_uid);
-  const tagHtml = tags.map(([cls, lbl]) => `<span class="tag ${cls}">${lbl}</span>`).join('');
   const scopeHtml = scopeTagsHtml({ vendors, systems, versions, environments });
   const inAnyFolder = !!(folderIds && folderIds.length);
   // O botão agora abre um dropdown de pastas (toggleFolderMenu, ver
@@ -479,7 +478,6 @@ function card({ id, name, desc, about, tags = [], lines, diffs, folderIds = [], 
       <span class="card-name">${name}</span>
       ${scopeHtml}
       <span class="card-desc">${desc || ''}</span>
-      ${tagHtml}
       <span class="card-actions">${favHtml}${duplicateHtml}${editHtml}</span>
     </div>
     ${aboutHtml}

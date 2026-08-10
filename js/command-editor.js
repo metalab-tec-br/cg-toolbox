@@ -4,12 +4,11 @@
 // /api/commands expect (see buildCommandColumns/insertChildren there) and
 // calls createCommand()/updateCommand()/deleteCommand() from api-client.js.
 //
-// The whole app (database + UI) is English-only now — name/desc/about/tags/
+// The whole app (database + UI) is English-only now — name/desc/about/
 // lines/diffs are all single-language fields, so a single fetchCommands()
 // call is enough to populate the form (no more PT/EN zipping).
 // ════════════════════════════════════════════════
 
-const CMD_EDITOR_TAG_COLORS = ['t-red', 't-blue', 't-teal', 't-yellow', 't-orange', 't-purple', 't-green'];
 const CMD_EDITOR_LINE_TYPES = ['cmd', 'note', 'warn', 'info', 'ok'];
 
 let CMD_EDITOR_MODE = 'create'; // 'create' | 'edit'
@@ -19,7 +18,7 @@ let CMD_EDITOR_RESOLVER = null; // placeholder_resolver of the row being edited 
 // ════════════════════════════════════════════════
 // WIZARD — 4 steps: 1) Identification, 2) Scope (Vendor/System/Version/
 // Environment/Topic), 3) Command lines, 4) Advanced (empty-state variant,
-// raw template, tags, diffs). Navigation is linear-with-validation: "Next"
+// raw template, diffs). Navigation is linear-with-validation: "Next"
 // only advances (and unlocks the step indicator button) once the CURRENT
 // step's required fields are filled; "Back" and clicking an already-unlocked
 // step in the indicator are always free. In edit/duplicate mode every step
@@ -280,30 +279,8 @@ function _ceHideError() {
 }
 
 // ════════════════════════════════════════════════
-// Repeatable list rows: tags / lines / diffs
+// Repeatable list rows: lines / diffs
 // ════════════════════════════════════════════════
-function _ceBuildTagRow(data) {
-  data = data || { css_class: 't-teal', label: '' };
-  const row = document.createElement('div');
-  row.className = 'tag-row';
-  const colorOptions = CMD_EDITOR_TAG_COLORS.map(c => `<option value="${c}"${c === data.css_class ? ' selected' : ''}>${c}</option>`).join('');
-  row.innerHTML = `
-    <select class="set-input tag-class" style="max-width:110px;">${colorOptions}</select>
-    <input class="set-input tag-label" placeholder="Label" value="${_ceEscAttr(data.label)}">
-    <button type="button" class="btn btn-ghost btn-sm row-remove-btn">✕ Remove</button>
-  `;
-  row.querySelector('.row-remove-btn').addEventListener('click', () => row.remove());
-  return row;
-}
-function cmdEditorAddTag(data) { _ce('cmdTagsList').appendChild(_ceBuildTagRow(data)); }
-function _ceReadTags() {
-  return [...document.querySelectorAll('#cmdTagsList .tag-row')].map((row, i) => ({
-    css_class: row.querySelector('.tag-class').value,
-    label: row.querySelector('.tag-label').value || '',
-    sort_order: i,
-  }));
-}
-
 // opts.allowImage (default true) controls whether the 'image' line type is
 // offered at all — used to keep it OFF inside version/platform diffs (see
 // _ceBuildDiffRow below), so command_diff_lines (which has no image_data
@@ -592,7 +569,6 @@ function _ceResetForm() {
   ['cmdName', 'cmdNameEmpty', 'cmdDesc', 'cmdDescEmpty',
    'cmdAboutPurpose', 'cmdAboutWhen', 'cmdAboutObs', 'cmdRawTemplate']
     .forEach(id => { _ce(id).value = ''; });
-  _ce('cmdTagsList').innerHTML = '';
   _ceSetSingleSeg('cmdVendorSeg', [], 'cmdVendorDDBtn');
   _ceSetSingleSeg('cmdSysSeg', [], 'cmdSysDDBtn');
   _ceSetMultiSeg('cmdVersionsSeg', [], 'cmdVersionsDDBtn', null, 'selected');
@@ -625,11 +601,6 @@ async function _cePopulateForm(id) {
   _ce('cmdAboutWhen').value = (row.about && row.about.when) || '';
   _ce('cmdAboutObs').value = (row.about && row.about.obs) || '';
   _ce('cmdRawTemplate').value = row.raw_template || '';
-
-  _ce('cmdTagsList').innerHTML = '';
-  (row.tags || []).forEach(tg => {
-    cmdEditorAddTag({ css_class: tg.css_class, label: tg.label || '' });
-  });
 
   _ceSetSingleSeg('cmdVendorSeg', row.vendors || [], 'cmdVendorDDBtn');
   _ceSetSingleSeg('cmdSysSeg', row.systems || [], 'cmdSysDDBtn');
@@ -810,7 +781,6 @@ async function cmdEditorSave() {
     about_purpose: _ce('cmdAboutPurpose').value || '',
     about_when: _ce('cmdAboutWhen').value || '',
     about_obs: _ce('cmdAboutObs').value || '',
-    tags: _ceReadTags(),
     vendors, systems, versions, environments,
     lines: [...defaultLines, ...emptyLines],
     diffs: _ceReadDiffs(),
