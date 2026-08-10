@@ -15,16 +15,15 @@
   border-radius: 12px; padding: 28px 26px 24px; box-shadow: 0 20px 60px rgba(0,0,0,.35);
   display: flex; flex-direction: column;
 }
-/* Mesma composição do logo "CG//Toolbox" do header do app (ver .hdr-logo em
-   css/layout.css) — reconstruída aqui em texto porque esta página não
-   carrega layout.css. */
-.login-brand {
-  display: flex; align-items: baseline; justify-content: center; gap: 4px;
-  font-family: var(--mono); font-weight: 800; font-size: 22px; letter-spacing: .3px;
-}
-.login-brand-slash { color: var(--brand-pink); }
-.login-brand-name { color: var(--brand-text); }
-.login-brand-toolbox { color: var(--muted); font-weight: 700; }
+/* Logo oficial (mesmos arquivos .png do header, ver .hdr-logo/.hdr-logo-img
+   em css/layout.css) — regras duplicadas aqui (em vez de carregar
+   layout.css inteiro, que traz a grade do app/sidebar que esta página não
+   usa) só para a troca automática claro/escuro via [data-theme] no <html>. */
+.login-brand { display: flex; justify-content: center; }
+.login-logo-img { width: 180px; height: auto; display: block; }
+.login-logo-img.for-light { display: none; }
+[data-theme="light"] .login-logo-img.for-dark { display: none; }
+[data-theme="light"] .login-logo-img.for-light { display: block; }
 .login-sub {
   margin: 4px 0 0; text-align: center; font-size: 11px; color: var(--muted);
 }

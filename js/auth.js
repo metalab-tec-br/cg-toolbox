@@ -4,7 +4,7 @@
 // authentication". O gate que força passar por lá primeiro é o script
 // inline no topo do <head> deste index.html; este arquivo cuida só do que
 // acontece DEPOIS de já estar dentro do app — o dropdown de conta no header
-// (role atual, Log out, "Log in as different user") e o próprio Log out.
+// (role atual + botão Log out, único botão do dropdown) e o próprio Log out.
 // Ver server/index.js: POST /api/auth/login (chamado a partir de login.html,
 // não mais daqui), POST /api/auth/logout, GET /api/me (devolve role/
 // isAdmin/authMethod), e users/sessions em server/schema.sql.
@@ -67,18 +67,6 @@ function applyAdminGating() {
     const el = document.getElementById(id);
     if (el) el.style.display = window.CG_IS_ADMIN ? '' : 'none';
   });
-}
-
-// "Log in as different user" (dropdown de conta) — antes abria um modal
-// aqui mesmo; agora manda pra login.html (mesma página usada no gate
-// inicial), que já sabe autenticar por usuário/senha ou Windows
-// authentication. Não precisa deslogar antes: POST /api/auth/login em
-// login.html sobrescreve o cookie cg_session normalmente, então entrar com
-// outra credencial local já substitui a sessão atual sozinho.
-function goToLoginPage() {
-  const dd = document.getElementById('hdrUserDD');
-  if (dd) dd.classList.remove('open');
-  location.href = 'login.html';
 }
 
 async function authLogout() {

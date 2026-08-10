@@ -48,12 +48,12 @@
   </div>
   <div class="hdr-gap"></div>
   <!-- Menu de conta — clicar no usuário identificado abre um dropdown com o
-       role atual e a opção de logar com uma credencial diferente em
-       login.html (ver js/auth.js::goToLoginPage()). "Log out" aparece pra
-       TODO usuário (pedido do usuário) — clicar nele apaga a sessão local
-       (se houver uma; é um no-op seguro do backend caso contrário) e manda
-       de volta pra login.html, a nova página inicial da aplicação (ver o
-       gate no topo do <head> deste arquivo e js/login.js). -->
+       role atual e o botão "Log out" (aparece pra TODO usuário, pedido do
+       usuário). Clicar nele apaga a sessão local (se houver uma; é um no-op
+       seguro do backend caso contrário) e manda de volta pra login.html, a
+       nova página inicial da aplicação (ver o gate no topo do <head> deste
+       arquivo e js/login.js) — de lá dá pra entrar com outra credencial
+       local ou via Windows authentication. -->
   <div class="dd hdr-user-dd" id="hdrUserDD">
     <button type="button" class="hdr-user" id="hdrUser" onclick="toggleDropdown('hdrUserDD')" title="Account">
       <svg class="hdr-user-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18.5a6 6 0 0 1 11 0"/></svg><span id="currentUserLabel"></span>
@@ -61,7 +61,6 @@
     <div class="dd-panel" id="hdrUserPanel" style="left:auto; right:0; min-width:210px;">
       <div class="set-hint" id="hdrUserRoleLine" style="padding:4px 8px 8px;"></div>
       <button type="button" class="seg-btn" id="hdrLogoutBtn" onclick="authLogout()">Log out</button>
-      <button type="button" class="seg-btn" onclick="goToLoginPage()">Log in as different user</button>
     </div>
   </div>
   <button class="theme-toggle" id="settingsBtn" onclick="openSettingsModal()" title="Settings" style="display:inline-flex;align-items:center;justify-content:center;">
