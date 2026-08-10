@@ -12,16 +12,19 @@ let _uid = 0;
 function termRender(lines, cmdId) {
   const rows = lines.map(l => {
     if (!l) return '';
-    // Prefixo "[Note]#" no mesmo padrão de "[Expert@FW]#" (comando) e
-    // "[Image]#" (imagem) — ver .ln-note-prompt em components.css. Ícone de
-    // nota (SVG de contorno) entre o prefixo e o texto, mesmo layout do
-    // badge de imagem (prompt + ícone + texto), mas SEM o fundo colorido
-    // (.ln-image tem background: var(--teal-bg); .ln-note continua sem
-    // fundo) — o texto da nota mantém o tamanho/estilo (itálico, cor muted)
-    // já existentes em .ln-note.
+    // Pedido do usuário: "ajustar note para ficar no padrão de warn, info e
+    // ok" — antes 'note' era uma linha solta no estilo prompt de terminal
+    // ("[Note]# " + ícone + texto itálico, sem fundo), destoando das outras
+    // 3 anotações (faixa colorida full-width com ícone + texto). Agora usa
+    // o mesmo layout de bloco colorido (.ln-warn/.ln-info/.ln-ok), com
+    // roxo (var(--purple)/--purple-bg) — cor fixa e livre, não usada por
+    // nenhuma das outras 3 nem pela cor de destaque configurável (--teal).
+    // Mantido o ícone de nota (SVG de contorno) em vez de um caractere
+    // Unicode solto, já que não existe um símbolo único óbvio para "nota"
+    // equivalente a ⚠/ℹ/✔.
     if (l.type === 'note') {
       const noteIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M8 13h8M8 17h5"/></svg>`;
-      return `<span class="ln-note"><span class="ln-note-prompt">[Note]#</span>${noteIcon}<span class="ln-note-text">${l.c}</span></span>`;
+      return `<span class="ln-note">${noteIcon}${l.c}</span>`;
     }
     if (l.type === 'warn') return `<span class="ln-warn">⚠ ${l.c}</span>`;
     if (l.type === 'info') return `<span class="ln-info">ℹ ${l.c}</span>`;
