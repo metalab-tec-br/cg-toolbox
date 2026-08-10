@@ -266,6 +266,21 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
   background: var(--surf); border: 1px solid var(--bdr); border-radius: 10px;
   padding: 3px 7px; flex-shrink: 0; white-space: nowrap;
 }
+/* Linha de cada item nas telas de Register (Vendors/Systems/Versions/
+   Environments/Topics/Parameters) — usada tanto pelas linhas existentes
+   (js/catalog-admin.js) quanto pela linha "+ Add ..." (index.html). Layout
+   em linha única (label -> cor -> ações), com cor/Delete empurrados pro
+   final via .cat-row-actions (margin-left:auto).
+   Antigamente reaproveitava a classe .tag-row, que foi removida junto com a
+   feature de Tags (badges de cabeçalho do card) por engano — .tag-row tinha
+   dois usos completamente diferentes com o mesmo nome, e só um deles foi de
+   fato removido. Isso fazia o campo de nome, a cor e o botão excluir
+   empilharem verticalmente em vez de ficarem numa única linha. Classe
+   renomeada para .cat-row (com CSS própria) pra não repetir a confusão. */
+.cat-row {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surf2); border: 1px solid var(--bdr); border-radius: 6px; padding: 7px 9px;
+}
 .cat-row-actions { display: flex; gap: 4px; flex-shrink: 0; margin-left: auto; }
 
 .list-editor { display: flex; flex-direction: column; gap: 8px; }
@@ -815,6 +830,11 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    pra diferenciar visualmente de clonar/editar (ações não-destrutivas). */
 .note-delete-btn { font-size: 10px; }
 .note-delete-btn:hover { border-color: var(--red); color: var(--red); }
+/* Excluir item nas telas de Register (Vendors/Systems/Versions/Environments/
+   Topics/Parameters, ver js/catalog-admin.js) — mesmo tratamento vermelho
+   de .note-delete-btn; o ícone em si trocou do emoji 🗑️ pra um SVG de
+   contorno (CAT_TRASH_SVG), igual aos outros ícones já modernizados no app. */
+.cat-delete-btn:hover { border-color: var(--red); color: var(--red); }
 
 /* ─── NOTES (campo único dentro de uma pasta) ─── */
 /* 2º redesign (pedido mais recente: "remova a palavra NOTE, permita o

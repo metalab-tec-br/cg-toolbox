@@ -40,6 +40,12 @@ const CAT_ADMIN_OVERLAY_IDS = {
 // (only one is visible at a time, so this is always harmless and simpler
 // than tracking "which screen is open now").
 const CAT_ADMIN_MSG_IDS = ['catAdminMsgVendors', 'catAdminMsgSystems', 'catAdminMsgVersions', 'catAdminMsgEnvironments', 'catAdminMsgTopics', 'catAdminMsgParameters'];
+// Ícone de exclusão (substitui o emoji 🗑️ por um SVG de contorno, no mesmo
+// padrão visual dos outros ícones já convertidos no app — ex.: lápis/copiar
+// em js/db-render-engine.js). Usado nos 6 botões "Delete" das telas de
+// Register — ver .cat-delete-btn em css/components.css para o hover
+// vermelho (ação destrutiva).
+const CAT_TRASH_SVG = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6.5 4V2.7c0-.4.3-.7.7-.7h1.6c.4 0 .7.3.7.7V4M4.5 4l.6 9c.05.6.5 1 1.1 1h3.6c.6 0 1.05-.4 1.1-1l.6-9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.7 7v4M9.3 7v4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>';
 // Preenche um <select> de catálogo (Vendor/Sistema) com as opções atuais,
 // preservando/aplicando o valor selecionado — usado pelos formulários de
 // Sistema (vendor) e Versão (sistema), que agora são FK obrigatória e direta
@@ -309,11 +315,11 @@ function renderCatAdminVendors() {
   const list = _cat('catVendorsList');
   if (!list) return;
   list.innerHTML = (CATALOGS.vendors || []).map(v => `
-    <div class="tag-row" data-cat-search="${_catEscAttr((v.key + ' ' + v.label).toLowerCase())}">
+    <div class="cat-row" data-cat-search="${_catEscAttr((v.key + ' ' + v.label).toLowerCase())}">
       <input class="set-input" id="catVd_label_${_catEscAttr(v.key)}" value="${_catEscAttr(v.label)}" style="flex:1;min-width:80px;" oninput="catAdminMarkDirty('vendors')">
       <input type="color" class="cat-color-input" id="catVd_color_${_catEscAttr(v.key)}" value="${_catEscAttr(v.color || '#8B949E')}" oninput="catAdminMarkDirty('vendors')">
       <div class="cat-row-actions">
-        <button type="button" class="edit-btn" onclick="catAdminDeleteVendor('${_catEscAttr(v.key)}')" title="Delete">🗑️</button>
+        <button type="button" class="edit-btn cat-delete-btn" onclick="catAdminDeleteVendor('${_catEscAttr(v.key)}')" title="Delete">${CAT_TRASH_SVG}</button>
       </div>
     </div>`).join('');
   catAdminApplyFilter('vendors');
@@ -353,12 +359,12 @@ function renderCatAdminSystems() {
   if (!list) return;
   const systems = CATALOGS.systems || [];
   list.innerHTML = systems.map(s => `
-    <div class="tag-row" data-cat-search="${_catEscAttr((s.key + ' ' + s.label).toLowerCase())}">
+    <div class="cat-row" data-cat-search="${_catEscAttr((s.key + ' ' + s.label).toLowerCase())}">
       <select class="set-input" id="catSys_vendor_${_catEscAttr(s.key)}" style="max-width:140px;" onchange="catAdminMarkDirty('systems')"></select>
       <input class="set-input" id="catSys_label_${_catEscAttr(s.key)}" value="${_catEscAttr(s.label)}" style="flex:1;min-width:80px;" oninput="catAdminMarkDirty('systems')">
       <input type="color" class="cat-color-input" id="catSys_color_${_catEscAttr(s.key)}" value="${_catEscAttr(s.color || '#8B949E')}" oninput="catAdminMarkDirty('systems')">
       <div class="cat-row-actions">
-        <button type="button" class="edit-btn" onclick="catAdminDeleteSystem('${_catEscAttr(s.key)}')" title="Delete">🗑️</button>
+        <button type="button" class="edit-btn cat-delete-btn" onclick="catAdminDeleteSystem('${_catEscAttr(s.key)}')" title="Delete">${CAT_TRASH_SVG}</button>
       </div>
     </div>`).join('');
   systems.forEach(s => _catPopulateSelect('catSys_vendor_' + s.key, CATALOGS.vendors, s.vendor, 'Vendor'));
@@ -406,12 +412,12 @@ function renderCatAdminVersions() {
   list.innerHTML = versions.map(v => {
     const rid = _catEscAttr(v.system) + '::' + _catEscAttr(v.key);
     return `
-    <div class="tag-row" data-cat-search="${_catEscAttr((v.system + ' ' + v.key + ' ' + v.label).toLowerCase())}">
+    <div class="cat-row" data-cat-search="${_catEscAttr((v.system + ' ' + v.key + ' ' + v.label).toLowerCase())}">
       <select class="set-input" id="catV_system_${rid}" style="max-width:130px;" onchange="catAdminMarkDirty('versions')"></select>
       <input class="set-input" id="catV_label_${rid}" value="${_catEscAttr(v.label)}" style="flex:1;min-width:80px;" oninput="catAdminMarkDirty('versions')">
       <input type="color" class="cat-color-input" id="catV_color_${rid}" value="${_catEscAttr(v.color || '#8B949E')}" oninput="catAdminMarkDirty('versions')">
       <div class="cat-row-actions">
-        <button type="button" class="edit-btn" onclick="catAdminDeleteVersion('${_catEscAttr(v.system)}','${_catEscAttr(v.key)}')" title="Delete">🗑️</button>
+        <button type="button" class="edit-btn cat-delete-btn" onclick="catAdminDeleteVersion('${_catEscAttr(v.system)}','${_catEscAttr(v.key)}')" title="Delete">${CAT_TRASH_SVG}</button>
       </div>
     </div>`;
   }).join('');
@@ -451,11 +457,11 @@ function renderCatAdminEnvironments() {
   const list = _cat('catEnvironmentsList');
   if (!list) return;
   list.innerHTML = (CATALOGS.environments || []).map(e => `
-    <div class="tag-row" data-cat-search="${_catEscAttr((e.key + ' ' + e.label).toLowerCase())}">
+    <div class="cat-row" data-cat-search="${_catEscAttr((e.key + ' ' + e.label).toLowerCase())}">
       <input class="set-input" id="catE_label_${_catEscAttr(e.key)}" value="${_catEscAttr(e.label)}" style="flex:1;min-width:120px;" oninput="catAdminMarkDirty('environments')">
       <input type="color" class="cat-color-input" id="catE_color_${_catEscAttr(e.key)}" value="${_catEscAttr(e.color || '#8B949E')}" oninput="catAdminMarkDirty('environments')">
       <div class="cat-row-actions">
-        <button type="button" class="edit-btn" onclick="catAdminDeleteEnvironment('${_catEscAttr(e.key)}')" title="Delete">🗑️</button>
+        <button type="button" class="edit-btn cat-delete-btn" onclick="catAdminDeleteEnvironment('${_catEscAttr(e.key)}')" title="Delete">${CAT_TRASH_SVG}</button>
       </div>
     </div>`).join('');
   catAdminApplyFilter('environments');
@@ -493,12 +499,12 @@ function renderCatAdminTopics() {
   const list = _cat('catTopicsList');
   if (!list) return;
   list.innerHTML = (CATALOGS.topics || []).map(tp => `
-    <div class="tag-row" data-cat-search="${_catEscAttr((tp.key + ' ' + tp.label).toLowerCase())}">
+    <div class="cat-row" data-cat-search="${_catEscAttr((tp.key + ' ' + tp.label).toLowerCase())}">
       ${tp.is_protected ? `<span class="cat-protected-badge">${_catEscHtml('protected')}</span>` : ''}
       <input class="set-input" id="catT_label_${_catEscAttr(tp.key)}" value="${_catEscAttr(tp.label)}" style="flex:1;min-width:120px;" oninput="catAdminMarkDirty('topics')">
       <input type="color" class="cat-color-input" id="catT_color_${_catEscAttr(tp.key)}" value="${_catEscAttr(tp.color || '#8B949E')}" oninput="catAdminMarkDirty('topics')">
       <div class="cat-row-actions">
-        ${tp.is_protected ? '' : `<button type="button" class="edit-btn" onclick="catAdminDeleteTopic('${_catEscAttr(tp.key)}')" title="Delete">🗑️</button>`}
+        ${tp.is_protected ? '' : `<button type="button" class="edit-btn cat-delete-btn" onclick="catAdminDeleteTopic('${_catEscAttr(tp.key)}')" title="Delete">${CAT_TRASH_SVG}</button>`}
       </div>
     </div>`).join('');
   catAdminApplyFilter('topics');
@@ -531,18 +537,18 @@ async function catAdminAddTopic() {
 
 // ── Parameters (unified query bar + "Insert variable") ──
 // Row layout: Order / Parameter (key, immutable) / Description — same
-// in-line style (.tag-row) used for Versions/Environments/Topics. Single
+// in-line style (.cat-row) used for Versions/Environments/Topics. Single
 // `label` field (no more PT/EN pair) — the whole app is English-only now.
 function renderCatAdminParameters() {
   const list = _cat('catParametersList');
   if (!list) return;
   list.innerHTML = (CATALOGS.parameters || []).map(p => `
-    <div class="tag-row" data-cat-search="${_catEscAttr((p.key + ' ' + p.label).toLowerCase())}">
+    <div class="cat-row" data-cat-search="${_catEscAttr((p.key + ' ' + p.label).toLowerCase())}">
       <input class="set-input" type="number" id="catP_order_${_catEscAttr(p.key)}" value="${_catEscAttr(p.sort_order)}" style="max-width:56px;" title="Order" oninput="catAdminMarkDirty('parameters')">
       <span class="cat-key-badge" title="{{${_catEscAttr(p.key)}}}">${_catEscHtml(p.key)}</span>
       <input class="set-input" id="catP_label_${_catEscAttr(p.key)}" value="${_catEscAttr(p.label)}" style="flex:1;min-width:140px;" oninput="catAdminMarkDirty('parameters')">
       <div class="cat-row-actions">
-        <button type="button" class="edit-btn" onclick="catAdminDeleteParameter('${_catEscAttr(p.key)}')" title="Delete">🗑️</button>
+        <button type="button" class="edit-btn cat-delete-btn" onclick="catAdminDeleteParameter('${_catEscAttr(p.key)}')" title="Delete">${CAT_TRASH_SVG}</button>
       </div>
     </div>`).join('');
   catAdminApplyFilter('parameters');
