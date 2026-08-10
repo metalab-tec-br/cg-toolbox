@@ -146,6 +146,23 @@ function saveSettingsModal() {
   if (typeof ccRefreshCascade === 'function') ccRefreshCascade();
   gvSet('f-log', s.logFile);
   VIEW_FOLDERS_HOME = s.home === 'folders';
+  // Bug reportado: "configurei para pagina inicial ser a folders, mas
+  // quando usuario loga esta indo para pagina de comandos". Causa:
+  // resolveFoldersHome() (js/settings.js) prioriza a ultima visao memorizada
+  // ('cpa-last-view', gravada por viewAllFolders()/goHome() em
+  // js/folders.js) sobre a preferencia "Home page" (s.home) — pensado pra um
+  // F5 nao "chutar" o usuario de volta pra fora de Folders so porque ele
+  // entrou la manualmente numa sessao (ver comentario em LAST_VIEW_KEY).
+  // Mas isso tambem significa que, se essa chave ja guardava 'menu' de uma
+  // navegacao anterior, salvar aqui uma NOVA preferencia "Home page" =
+  // Folders no modal de Configuracoes nunca revertia esse valor — a troca
+  // parecia funcionar na hora (VIEW_FOLDERS_HOME muda em memoria, ver
+  // abaixo), mas um F5 ou um login novo (que roda essa mesma leitura do
+  // zero) sempre voltava pra tela de comandos. Salvar essa preferencia no
+  // modal e uma acao tao deliberada quanto clicar em "Folders" ou no
+  // logo/nome do app — por isso tambem grava aqui, mantendo a visao
+  // memorizada em dia com o que o usuario acabou de escolher como padrao.
+  if (typeof persistLastView === 'function') persistLastView(VIEW_FOLDERS_HOME);
   const foldersNav = document.getElementById('foldersNavRow');
   if (foldersNav) foldersNav.classList.toggle('on', VIEW_FOLDERS_HOME);
   closeSettingsModal();
