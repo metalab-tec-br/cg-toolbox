@@ -333,11 +333,16 @@
 }
 .cpq-panel.open { display: block; }
 .cpq-panel-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--dim); margin-bottom: 7px; }
-.cpq-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Coluna vertical única, em ordem alfabética (ver ccBuildQueryChips/
+   renderCatalogUI em js/catalogs.js) — antes era um grid horizontal
+   (flex-wrap) na ordem de cadastro/sort_order, difícil de escanear com
+   dezenas de parâmetros. max-height+scroll evita que a lista estoure o
+   painel quando há muitos parâmetros cadastrados. */
+.cpq-chips { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-height: 260px; overflow-y: auto; }
 .cpq-chip {
   padding: 4px 9px; border-radius: 5px; border: 1px solid var(--bdr); background: var(--surf2);
   color: var(--muted); font-size: 11px; font-family: var(--mono); cursor: pointer;
-  transition: border-color .12s, color .12s;
+  transition: border-color .12s, color .12s; width: 100%; text-align: left;
 }
 .cpq-chip:hover { border-color: var(--teal); color: var(--teal); }
 .cpq-empty-note { font-size: 11px; color: var(--dim); display: none; }

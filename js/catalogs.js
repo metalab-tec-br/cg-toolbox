@@ -267,7 +267,13 @@ function renderCatalogUI() {
   const environments = CATALOGS.environments || [];
   const topicsAll = CATALOGS.topics || [];
   const topicsForFilter = topicsAll.filter(tp => !tp.is_protected);
-  const parameters = CATALOGS.parameters || [];
+  // Sem mais coluna de Ordem manual no admin de Parameters (removida — ver
+  // js/catalog-admin.js) — a lista de chips "Command parameter" (#cpqChips)
+  // é sempre alfabética por label/key, independente da ordem devolvida por
+  // GET /api/catalogs (que ainda é sort_order/key no banco, mas não é mais
+  // editável pela UI).
+  const parameters = (CATALOGS.parameters || []).slice()
+    .sort((a, b) => (a.label || a.key).localeCompare(b.label || b.key, undefined, { sensitivity: 'base' }));
 
   ccSet('vendorList', ccBuildSidebarPanel('vd', vendors, x => x.label, 'vendorList', 'vendorDD'), 'data-vd');
   ccSet('sysList', ccBuildSidebarPanel('sys', systems, x => x.label, 'sysList', 'sysDD'), 'data-sys');

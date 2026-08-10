@@ -1314,11 +1314,10 @@
     <div class="modal-body">
       <div class="cat-panel" id="catPanelParameters">
         <div class="cat-admin-msg" id="catAdminMsgParameters"></div>
-        <span class="set-hint">The key (used as {{key}} in commands) can never be changed after creation. Order sets the display position on the main commands screen.</span>
+        <span class="set-hint">The key (used as {{key}} in commands) can never be changed after creation.</span>
         <input type="text" class="set-input" id="catPSearchInput" placeholder="Search parameters…" oninput="catAdminSearchInput('parameters', this.value)">
         <div class="list-editor" id="catParametersList" style="max-height:38vh;overflow-y:auto;"></div>
         <div class="cat-row" id="catParameterNewRow">
-          <input class="set-input" type="number" id="catPNewOrder" style="max-width:56px;" placeholder="Order">
           <input class="set-input" id="catPNewKey" style="max-width:110px;" placeholder="Key (used as {{key}})">
           <input class="set-input" id="catPNewLabel" style="flex:1;min-width:180px;" placeholder="Description">
         </div>

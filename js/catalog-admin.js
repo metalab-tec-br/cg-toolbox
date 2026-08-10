@@ -275,11 +275,8 @@ const CAT_ADMIN_BULK = {
   parameters: {
     items: () => CATALOGS.parameters || [],
     rowId: p => p.key,
-    readRow: key => {
-      const orderRaw = _cat('catP_order_' + key).value;
-      return { label: _cat('catP_label_' + key).value.trim(), sort_order: orderRaw === '' ? 0 : parseInt(orderRaw, 10) };
-    },
-    original: p => ({ label: p.label, sort_order: p.sort_order }),
+    readRow: key => ({ label: _cat('catP_label_' + key).value.trim() }),
+    original: p => ({ label: p.label }),
     url: key => '/api/parameters/' + encodeURIComponent(key),
     validate: b => b.label ? null : 'Fill in the required label(s).',
     name: p => p.label || p.key,
@@ -548,15 +545,17 @@ async function catAdminAddTopic() {
 }
 
 // ── Parameters (unified query bar + "Insert variable") ──
-// Row layout: Order / Parameter (key, immutable) / Description — same
-// in-line style (.cat-row) used for Versions/Environments/Topics. Single
-// `label` field (no more PT/EN pair) — the whole app is English-only now.
+// Row layout: Parameter (key, immutable) / Description — same in-line style
+// (.cat-row) used for Versions/Environments/Topics. Single `label` field (no
+// more PT/EN pair) — the whole app is English-only now. Sem coluna de Ordem
+// (removida a pedido do usuário — a listagem de exibição no "Command
+// parameter" (js/catalogs.js: ccBuildQueryChips) agora é sempre alfabética,
+// então não fazia mais sentido manter uma ordem manual aqui).
 function renderCatAdminParameters() {
   const list = _cat('catParametersList');
   if (!list) return;
   list.innerHTML = (CATALOGS.parameters || []).map(p => `
     <div class="cat-row" data-cat-search="${_catEscAttr((p.key + ' ' + p.label).toLowerCase())}">
-      <input class="set-input" type="number" id="catP_order_${_catEscAttr(p.key)}" value="${_catEscAttr(p.sort_order)}" style="max-width:56px;" title="Order" oninput="catAdminMarkDirty('parameters')">
       <span class="cat-key-badge" title="{{${_catEscAttr(p.key)}}}">${_catEscHtml(p.key)}</span>
       <input class="set-input" id="catP_label_${_catEscAttr(p.key)}" value="${_catEscAttr(p.label)}" style="flex:1;min-width:140px;" oninput="catAdminMarkDirty('parameters')">
       <div class="cat-row-actions">
@@ -578,17 +577,15 @@ async function catAdminDeleteParameter(key) {
 async function catAdminAddParameter() {
   const key = _cat('catPNewKey').value.trim();
   const label = _cat('catPNewLabel').value.trim();
-  const orderRaw = _cat('catPNewOrder').value;
-  const sort_order = orderRaw === '' ? undefined : parseInt(orderRaw, 10);
   if (!key || !/^[A-Za-z0-9._-]{1,40}$/.test(key)) { catAdminMsg('Enter a valid key (letters, numbers, dot, hyphen).', 'err'); return; }
   if (!label) { catAdminMsg('Fill in the required label(s).', 'err'); return; }
   try {
     const res = await fetch('/api/parameters', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, label, sort_order }),
+      body: JSON.stringify({ key, label }),
     });
     if (!res.ok) return catAdminHandleError(res);
-    _cat('catPNewKey').value = ''; _cat('catPNewLabel').value = ''; _cat('catPNewOrder').value = '';
+    _cat('catPNewKey').value = ''; _cat('catPNewLabel').value = '';
     catAdminMsg('Added.', 'ok');
     catAdminRefreshCatalogs();
   } catch (e) { catAdminMsg('Something went wrong. Please try again.', 'err'); }
