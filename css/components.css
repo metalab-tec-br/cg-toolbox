@@ -74,8 +74,15 @@
    nas colunas home page e export igual entre as linhas. faça o mesmo na
    linha dark mode e alinhe as cores a esquerda" — regra genérica, vale
    pras 3 linhas fundidas (Home page/Group by, Export/Export to, Dark
-   mode/cor de destaque). */
-.set-row-half + .set-row-half { border-left: 1px solid var(--bdr); padding-left: 10px; }
+   mode/cor de destaque). Espaço em branco IGUAL dos dois lados da linha
+   (pedido seguinte: "deixe a divisão das colunas igual entre as linhas,
+   com pequeno espaço em branco") — o gap do próprio flex pai varia
+   (.set-group-row usa 10px, .sb-toggle usa 8px), então cada seletor abaixo
+   compensa com margin-left pra sempre sobrar 8px antes da linha, iguais
+   aos 8px de padding-left depois dela. */
+.set-row-half + .set-row-half { border-left: 1px solid var(--bdr); padding-left: 8px; }
+.set-group-row > .set-row-half + .set-row-half { margin-left: -2px; }
+.sb-toggle > .set-row-half + .set-row-half { margin-left: 0; }
 /* Grupo compacto: o toggle não estica para preencher a linha inteira, fica só
    do tamanho do próprio conteúdo (ex.: Admin mode, no final do modal). */
 .set-group-compact { align-items: flex-start; }
