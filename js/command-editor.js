@@ -10,6 +10,13 @@
 // ════════════════════════════════════════════════
 
 const CMD_EDITOR_LINE_TYPES = ['cmd', 'note', 'warn', 'info', 'ok'];
+// note/warn/info/ok são todas "linhas de texto" (sem prompt, sem export) que só
+// diferem na cor/ícone de exibição (ver termRender() em terminal-renderer.js).
+// Em vez de poluir o dropdown principal com 4 opções quase idênticas, elas são
+// agrupadas visualmente sob um único tipo "Text" no editor; a categoria real
+// (que é o line_type de fato salvo no banco — nenhuma mudança de schema) é
+// escolhida num segundo dropdown que só aparece quando "Text" está selecionado.
+const CMD_EDITOR_TEXT_CATEGORIES = ['info', 'note', 'ok', 'warn'];
 
 let CMD_EDITOR_MODE = 'create'; // 'create' | 'edit'
 let CMD_EDITOR_ORIGINAL_ID = null;
@@ -288,16 +295,23 @@ function _ceHideError() {
 function _ceBuildLineRow(data, opts) {
   data = data || { line_type: 'cmd', prompt: '[Expert@FW]#', content: '', supports_export: false, image_data: '' };
   const allowImage = !opts || opts.allowImage !== false;
-  const availableTypes = allowImage ? CMD_EDITOR_LINE_TYPES.concat('image') : CMD_EDITOR_LINE_TYPES;
+  // O dropdown principal só oferece cmd / text / image — note/warn/info/ok viram
+  // categorias do tipo "text" (ver comentário em CMD_EDITOR_TEXT_CATEGORIES).
+  const availableTypes = allowImage ? ['cmd', 'text', 'image'] : ['cmd', 'text'];
+  const isTextCategory = CMD_EDITOR_TEXT_CATEGORIES.includes(data.line_type);
+  const displayType = isTextCategory ? 'text' : data.line_type;
+  const selectedCategory = isTextCategory ? data.line_type : CMD_EDITOR_TEXT_CATEGORIES[0];
   const row = document.createElement('div');
   row.className = 'line-row';
-  const typeOptions = availableTypes.map(lt => `<option value="${lt}"${lt === data.line_type ? ' selected' : ''}>${lt}</option>`).join('');
+  const typeOptions = availableTypes.map(lt => `<option value="${lt}"${lt === displayType ? ' selected' : ''}>${lt}</option>`).join('');
+  const categoryOptions = CMD_EDITOR_TEXT_CATEGORIES.map(c => `<option value="${c}"${c === selectedCategory ? ' selected' : ''}>${c}</option>`).join('');
   row.innerHTML = `
     <div class="row-head">
       <span class="ln-drag-handle" title="Drag to reorder" onmousedown="_ceArmLineDrag(this)">
         <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.4"/><circle cx="7.5" cy="2.5" r="1.4"/><circle cx="2.5" cy="8" r="1.4"/><circle cx="7.5" cy="8" r="1.4"/><circle cx="2.5" cy="13.5" r="1.4"/><circle cx="7.5" cy="13.5" r="1.4"/></svg>
       </span>
       <select class="set-input ln-type" style="max-width:100px;">${typeOptions}</select>
+      <select class="set-input ln-text-category" style="max-width:90px;display:none;">${categoryOptions}</select>
       <input class="set-input ln-prompt" style="max-width:180px;" placeholder="[Expert@FW]#" value="${_ceEscAttr(data.prompt)}">
       <div class="dd ln-var-dd">
         <button type="button" class="dd-btn btn btn-ghost btn-sm" onclick="_ceToggleVarDropdown(this)">
@@ -342,6 +356,7 @@ function _ceBuildLineRow(data, opts) {
   `;
   row.querySelector('.row-remove-btn').addEventListener('click', () => row.remove());
   const typeSel = row.querySelector('.ln-type');
+  const categorySel = row.querySelector('.ln-text-category');
   const promptInput = row.querySelector('.ln-prompt');
   const exportLabel = row.querySelector('.ln-export-label');
   const varDD = row.querySelector('.ln-var-dd');
@@ -351,10 +366,12 @@ function _ceBuildLineRow(data, opts) {
   const syncPromptVisibility = () => {
     const isCmd = typeSel.value === 'cmd';
     const isImage = typeSel.value === 'image';
+    const isText = typeSel.value === 'text';
     promptInput.style.display = isCmd ? '' : 'none';
     exportLabel.style.display = isCmd ? '' : 'none';
     varDD.style.display = isCmd ? '' : 'none';
     imageControls.style.display = isImage ? '' : 'none';
+    categorySel.style.display = isText ? '' : 'none';
     contentLabel.textContent = isImage ? 'Name' : 'Content';
     contentTextarea.placeholder = isImage ? 'Name shown instead of the command, e.g. "VPN tunnel configuration"' : '';
   };
@@ -513,7 +530,11 @@ document.addEventListener('dragend', ev => {
 
 function _ceReadLinesFrom(containerEl) {
   return [...containerEl.querySelectorAll('.line-row')].map((row, i) => {
-    const lineType = row.querySelector('.ln-type').value;
+    const rawType = row.querySelector('.ln-type').value;
+    // "text" não é um line_type de verdade — é só o rótulo do dropdown principal
+    // que agrupa note/warn/info/ok; o valor real salvo vem do dropdown de categoria.
+    const categorySel = row.querySelector('.ln-text-category');
+    const lineType = rawType === 'text' && categorySel ? categorySel.value : rawType;
     const imageDataInput = row.querySelector('.ln-image-data'); // ausente nas linhas de diff (allowImage:false)
     return {
       sort_order: i,
