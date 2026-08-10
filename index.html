@@ -511,8 +511,13 @@
         </div>
       </div>
       <div class="set-group set-group-row">
-        <span class="set-label">Path — file export</span>
-        <input class="set-input" id="mLogFile" placeholder="/tmp/fw_export.txt">
+        <span class="set-label">Export to</span>
+        <!-- Texto livre, sem validação de extensão nem de formato — pode
+             conter substituições de shell como $(hostname), resolvidas pelo
+             próprio gateway Check Point ao rodar o comando exportado (não
+             pelo app). Placeholder ilustra os dois casos (caminho fixo com
+             extensão, ou usando $(hostname) sem extensão nenhuma). -->
+        <input class="set-input" id="mLogFile" placeholder="/tmp/fw_export.txt ou /tmp/$(hostname)_export">
       </div>
       <div class="set-group set-group-row">
         <span class="set-label">Vendor</span>
