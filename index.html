@@ -458,9 +458,23 @@
         </div>
         <!-- Mesma preferência pessoal do toggle "Export" da sidebar (Options)
              — só um espelho aqui no modal, igual ao par tog-details/mDescToggle
-             acima (ver syncExportToggleUI em js/settings.js). -->
+             acima (ver syncExportToggleUI em js/settings.js). O caminho de
+             exportação (Export to / mLogFile) mora na MESMA linha, à direita
+             (pedido do usuário: "divida a linha do Export e coloque o Export
+             to na mesma linha do lado direito") — antes era uma linha
+             set-group-row própria, logo abaixo do grupo de toggles.
+             stopPropagation no wrapper E no input evita que clicar/digitar
+             ali dispare o onclick da linha inteira (toggleModalExport()). -->
         <div class="sb-toggle" id="mExportToggle" onclick="toggleModalExport()">
           <div class="tog-track"><div class="tog-knob"></div></div><span>Export</span>
+          <div class="sb-toggle-inline-field" onclick="event.stopPropagation()">
+            <span class="set-label">Export to</span>
+            <!-- Texto livre, sem validação de extensão nem de formato — pode
+                 conter substituições de shell como $(hostname), resolvidas
+                 pelo próprio gateway Check Point ao rodar o comando
+                 exportado (não pelo app). -->
+            <input class="set-input" id="mLogFile" placeholder="/tmp/$(hostname).txt" onclick="event.stopPropagation()">
+          </div>
         </div>
         <!-- Mesma preferência pessoal do toggle "Show images" da sidebar
              (tog-show-images, seção Options) — só um espelho aqui no
@@ -509,15 +523,6 @@
             <button type="button" class="seg-btn" data-val="version">Version</button>
           </div>
         </div>
-      </div>
-      <div class="set-group set-group-row">
-        <span class="set-label">Export to</span>
-        <!-- Texto livre, sem validação de extensão nem de formato — pode
-             conter substituições de shell como $(hostname), resolvidas pelo
-             próprio gateway Check Point ao rodar o comando exportado (não
-             pelo app). Placeholder ilustra os dois casos (caminho fixo com
-             extensão, ou usando $(hostname) sem extensão nenhuma). -->
-        <input class="set-input" id="mLogFile" placeholder="/tmp/$(hostname).txt">
       </div>
       <div class="set-group set-group-row">
         <span class="set-label">Vendor</span>

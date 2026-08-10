@@ -61,6 +61,23 @@
 .accent-swatches { display: flex; gap: 6px; flex: 0 0 auto; }
 /* Dentro do toggle "Dark mode": empurra os swatches para a direita, na mesma linha. */
 .sb-toggle .accent-swatches { margin-left: auto; }
+/* Dentro do toggle "Export": campo "Export to" (mLogFile) na mesma linha,
+   empurrado para a direita (mesmo padrão de .accent-swatches acima) —
+   pedido do usuário: "divida a linha do Export e coloque o Export to na
+   mesma linha do lado direito". O input tem fundo/borda PRÓPRIOS (var(--surf)
+   contra o var(--surf2) do toggle), mesmo tratamento visual dos dropdowns em
+   .set-group-row. onclick="event.stopPropagation()" no wrapper e no input
+   (ver index.html) evita que interagir com o campo dispare o
+   toggleModalExport() do elemento pai. */
+.sb-toggle-inline-field {
+  margin-left: auto; display: flex; align-items: center; gap: 8px; min-width: 0;
+}
+.sb-toggle-inline-field > .set-label { flex-shrink: 0; margin-bottom: 0; }
+.sb-toggle-inline-field > .set-input {
+  background: var(--surf); border: 1px solid var(--bdr); text-align: left;
+  padding: 4px 8px; width: 200px; max-width: 45vw;
+}
+.sb-toggle-inline-field > .set-input:focus { border-color: var(--teal); }
 .accent-swatch {
   width: 20px; height: 20px; border-radius: 50%; padding: 0; cursor: pointer;
   border: 2px solid transparent; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15);
@@ -151,6 +168,18 @@
   padding: 16px; display: flex; flex-direction: column; gap: 15px;
 }
 .settings-pane { display: flex; flex-direction: column; gap: 8px; }
+/* User preferences: espaço entre as linhas de dropdown/input (Home page,
+   Group by, Vendor...) igual ao espaço entre as linhas de toggle logo acima
+   (Dark mode, Details...) — pedido do usuário ("ajuste o espaço entre as
+   linhas, deixe igual as primeiras linhas"). O gap padrão de 8px acima
+   (compartilhado com as abas Register/System/Users, que não devem mudar)
+   ficava visivelmente maior que o gap real entre os toggles, 4px — ver
+   "#settingsOverlay .set-group { gap: 4px; }" alguns seletores abaixo, que
+   tem especificidade maior que "#settingsToggleGroup { gap: 6px; }" e por
+   isso é quem realmente vale ali. Seletor escopado só à aba "prefs" para não
+   comprimir o espaçamento entre os grupos (Commands/Database/API access)
+   das outras abas. */
+.settings-pane[data-pane="prefs"] { gap: 4px; }
 /* Antes um grid 3x2 de blocos quadrados; virou uma lista de barras
    horizontais (ícone + nome lado a lado, ocupando a largura toda) — mais
    fácil de escanear numa lista de 6 itens. */
