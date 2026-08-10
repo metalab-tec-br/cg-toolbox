@@ -222,7 +222,8 @@
    a mesma altura e o mesmo estilo de "chip" com contorno, então a barra
    horizontal ficava redundante como separador. */
 #settingsToggleGroup { gap: 6px; }
-#settingsToggleGroup .sb-toggle { margin-bottom: 0; }
+#settingsToggleGroup .sb-toggle,
+#settingsToggleGroup2 .sb-toggle { margin-bottom: 0; }
 
 
 /* ─── SELETOR DE COLUNAS (exportar comandos) ─── */

@@ -435,6 +435,13 @@
       </nav>
       <div class="settings-content">
       <div class="settings-pane" data-pane="prefs">
+      <!-- Ordem completa da aba (pedido do usuário): Dark mode; Home page +
+           Group by; Vendor; System; Version; Environment; Topic; Details;
+           Export (+ Export to); Show images; System commands. Dark mode
+           ficou sozinho aqui no topo — os outros 4 toggles (Details/Export/
+           Show images/System commands) moraram no mesmo #settingsToggleGroup
+           antes desta mudança; agora formam um 2º grupo, no fim da lista
+           (ver depois da linha Topic, mais abaixo). -->
       <div class="set-group" id="settingsToggleGroup">
         <span class="set-label">Default settings</span>
         <div class="sb-toggle" id="mThemeToggle" onclick="toggleModalTheme()">
@@ -452,50 +459,6 @@
             <button type="button" class="accent-swatch" data-accent="orange" style="background:#FB923C" onclick="setAccentColor('orange')" title="Orange"></button>
             <button type="button" class="accent-swatch" data-accent="red" style="background:#F87171" onclick="setAccentColor('red')" title="Red"></button>
           </div>
-        </div>
-        <div class="sb-toggle" id="mDescToggle" onclick="toggleModalDesc()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>Details</span>
-        </div>
-        <!-- Mesma preferência pessoal do toggle "Export" da sidebar (Options)
-             — só um espelho aqui no modal, igual ao par tog-details/mDescToggle
-             acima (ver syncExportToggleUI em js/settings.js). O caminho de
-             exportação (Export to / mLogFile) mora na MESMA linha, à direita
-             (pedido do usuário: "divida a linha do Export e coloque o Export
-             to na mesma linha do lado direito") — antes era uma linha
-             set-group-row própria, logo abaixo do grupo de toggles.
-             stopPropagation no wrapper E no input evita que clicar/digitar
-             ali dispare o onclick da linha inteira (toggleModalExport()). -->
-        <div class="sb-toggle" id="mExportToggle" onclick="toggleModalExport()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>Export</span>
-          <div class="sb-toggle-inline-field" onclick="event.stopPropagation()">
-            <span class="set-label">Export to</span>
-            <!-- Texto livre, sem validação de extensão nem de formato — pode
-                 conter substituições de shell como $(hostname), resolvidas
-                 pelo próprio gateway Check Point ao rodar o comando
-                 exportado (não pelo app). -->
-            <input class="set-input" id="mLogFile" placeholder="/tmp/$(hostname).txt" onclick="event.stopPropagation()">
-          </div>
-        </div>
-        <!-- Mesma preferência pessoal do toggle "Show images" da sidebar
-             (tog-show-images, seção Options) — só um espelho aqui no
-             modal, igual ao par tog-details/mDescToggle acima. Quando
-             ligada, as linhas do tipo 'image' de cada comando mostram a
-             miniatura da imagem direto no card, sem precisar clicar no
-             badge "[Image]# ..." para abrir o lightbox (ver SHOW_IMAGES /
-             applyShowImagesSetting em js/settings.js e a renderização
-             condicional em termRender(), js/terminal-renderer.js). -->
-        <div class="sb-toggle" id="mShowImagesToggle" onclick="toggleModalShowImages()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>Show images</span>
-        </div>
-        <!-- Mesma preferência pessoal do toggle "System commands" da sidebar
-             (Options) — só um espelho aqui no modal, igual ao par
-             tog-details/mDescToggle acima (ver syncShowSystemCommandsToggleUI
-             em js/settings.js). Não confundir com o "Admin default" abaixo,
-             que é o valor herdado por quem ainda não mexeu neste toggle.
-             Ordem alfabética (Details, Export, Show images, System
-             commands). -->
-        <div class="sb-toggle" id="mSystemCommandsToggle" onclick="toggleModalSystemCommands()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>System commands</span>
         </div>
       </div>
       <!-- Home page + Group by na mesma linha (pedido do usuário: "divida a
@@ -611,6 +574,53 @@
             <button type="button" class="seg-btn" data-val="vpn">VPN</button>
             <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mTypeDD')">Close</button></div>
           </div>
+        </div>
+      </div>
+      <!-- 2º grupo de toggles (Details/Export/Show images/System commands) —
+           ver comentário junto de #settingsToggleGroup, lá em cima, sobre a
+           divisão em dois grupos pra caber a ordem pedida pelo usuário.
+           Ordem alfabética entre os 4, como já era antes desta mudança. -->
+      <div class="set-group" id="settingsToggleGroup2">
+        <div class="sb-toggle" id="mDescToggle" onclick="toggleModalDesc()">
+          <div class="tog-track"><div class="tog-knob"></div></div><span>Details</span>
+        </div>
+        <!-- Mesma preferência pessoal do toggle "Export" da sidebar (Options)
+             — só um espelho aqui no modal, igual ao par tog-details/mDescToggle
+             acima (ver syncExportToggleUI em js/settings.js). O caminho de
+             exportação (Export to / mLogFile) mora na MESMA linha, à direita
+             (pedido do usuário: "divida a linha do Export e coloque o Export
+             to na mesma linha do lado direito"). stopPropagation no wrapper
+             E no input evita que clicar/digitar ali dispare o onclick da
+             linha inteira (toggleModalExport()). -->
+        <div class="sb-toggle" id="mExportToggle" onclick="toggleModalExport()">
+          <div class="tog-track"><div class="tog-knob"></div></div><span>Export</span>
+          <div class="sb-toggle-inline-field" onclick="event.stopPropagation()">
+            <span class="set-label">Export to</span>
+            <!-- Texto livre, sem validação de extensão nem de formato — pode
+                 conter substituições de shell como $(hostname), resolvidas
+                 pelo próprio gateway Check Point ao rodar o comando
+                 exportado (não pelo app). -->
+            <input class="set-input" id="mLogFile" placeholder="/tmp/$(hostname).txt" onclick="event.stopPropagation()">
+          </div>
+        </div>
+        <!-- Mesma preferência pessoal do toggle "Show images" da sidebar
+             (tog-show-images, seção Options) — só um espelho aqui no
+             modal, igual ao par tog-details/mDescToggle acima. Quando
+             ligada, as linhas do tipo 'image' de cada comando mostram a
+             miniatura da imagem direto no card, sem precisar clicar no
+             badge "[Image]# ..." para abrir o lightbox (ver SHOW_IMAGES /
+             applyShowImagesSetting em js/settings.js e a renderização
+             condicional em termRender(), js/terminal-renderer.js). -->
+        <div class="sb-toggle" id="mShowImagesToggle" onclick="toggleModalShowImages()">
+          <div class="tog-track"><div class="tog-knob"></div></div><span>Show images</span>
+        </div>
+        <!-- Mesma preferência pessoal do toggle "System commands" da sidebar
+             (Options) — só um espelho aqui no modal, igual ao par
+             tog-details/mDescToggle acima (ver syncShowSystemCommandsToggleUI
+             em js/settings.js). Não confundir com o "Admin default" abaixo,
+             que é o valor herdado por quem ainda não mexeu neste toggle. -->
+        <div class="sb-toggle" id="mSystemCommandsToggle" onclick="toggleModalSystemCommands()">
+          <div class="tog-track"><div class="tog-knob"></div></div><span>System commands</span>
         </div>
       </div>
       </div><!-- /.settings-pane[prefs] -->
