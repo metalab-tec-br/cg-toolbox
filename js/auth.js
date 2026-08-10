@@ -61,6 +61,16 @@ function updateAccountUI(me) {
 // escopo do pedido original). Exceção dentro do próprio Import: o checkbox
 // "Import as System commands" (importAsSystemRow) — ver js/csv-import.js —
 // que aparece só para admins.
+//
+// FAIL CLOSED: os 4 elementos abaixo já nascem com style="display:none" no
+// próprio index.html (não só escondidos por esta função em runtime) — bug
+// relatado pelo usuário (com screenshots): um usuário não-admin via essas
+// seções completas por um instante (ou indefinidamente, se GET /api/me
+// falhar e cair no catch de initUserSync() em js/user-sync.js, que nunca
+// chega a chamar updateAccountUI()/applyAdminGating()). Antes disso, o HTML
+// estático não tinha nenhum display:none — ficava visível "por padrão" até
+// prova de admin ("fail open"). Agora só fica visível depois que
+// applyAdminGating() confirma isAdmin:true — nunca visível por omissão.
 const ADMIN_ONLY_SETTINGS_GROUP_IDS = ['sysGroupDatabase', 'sysGroupApiAccess', 'usersNavBtn', 'importAsSystemRow'];
 function applyAdminGating() {
   ADMIN_ONLY_SETTINGS_GROUP_IDS.forEach(id => {
