@@ -1,0 +1,44 @@
+/* ════════════════════════════════════════════════
+   LOGIN PAGE (login.html) — página inicial da aplicação (pedido do
+   usuário). Só o layout específico desta página; cores/tipografia/campos
+   vêm de css/theme.css e css/components.css (mesmas variáveis e classes
+   .btn/.set-input/.set-label/.set-hint usadas nos modais do app, pra manter
+   a identidade visual sem duplicar regras).
+   ════════════════════════════════════════════════ */
+.login-body {
+  margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+  font-family: var(--sans);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.login-card {
+  width: min(360px, 100%); background: var(--surf); border: 1px solid var(--bdr);
+  border-radius: 12px; padding: 28px 26px 24px; box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  display: flex; flex-direction: column;
+}
+/* Mesma composição do logo "CG//Toolbox" do header do app (ver .hdr-logo em
+   css/layout.css) — reconstruída aqui em texto porque esta página não
+   carrega layout.css. */
+.login-brand {
+  display: flex; align-items: baseline; justify-content: center; gap: 4px;
+  font-family: var(--mono); font-weight: 800; font-size: 22px; letter-spacing: .3px;
+}
+.login-brand-slash { color: var(--brand-pink); }
+.login-brand-name { color: var(--brand-text); }
+.login-brand-toolbox { color: var(--muted); font-weight: 700; }
+.login-sub {
+  margin: 4px 0 0; text-align: center; font-size: 11px; color: var(--muted);
+}
+.login-card .set-group { margin-top: 14px; }
+.login-submit-btn { margin-top: 16px; width: 100%; text-align: center; padding: 9px 14px; }
+.login-error { text-align: center; }
+.login-divider {
+  display: flex; align-items: center; gap: 10px; margin: 18px 0 2px;
+  color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: .6px;
+}
+.login-divider::before, .login-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--bdr);
+}
+.login-windows-btn {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 9px 14px;
+}

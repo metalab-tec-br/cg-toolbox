@@ -14,6 +14,10 @@ FROM nginx:1.27-alpine
 
 COPY frontend/nginx.conf /etc/nginx/nginx.conf
 COPY index.html /usr/share/nginx/html/index.html
+# login.html — nova página inicial de login (usuário/senha ou Windows
+# authentication), ver js/login.js e css/login.css (já cobertos pelos COPY
+# de diretório abaixo, só o .html avulso precisa de linha própria).
+COPY login.html /usr/share/nginx/html/login.html
 COPY css /usr/share/nginx/html/css
 COPY js /usr/share/nginx/html/js
 COPY img /usr/share/nginx/html/img

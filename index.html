@@ -2,6 +2,25 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- ══ GATE DE LOGIN — pedido do usuário: "criar uma página para login...
+     essa deve ser a página inicial". Roda ANTES de qualquer outra coisa
+     (primeiro <script> do <head>, antes até dos <link> de CSS) pra
+     redirecionar o quanto antes, minimizando o "flash" do app aparecendo
+     antes do redirect. 'cpa-authenticated' é gravado em login.html
+     (js/login.js) depois de um login local (usuário/senha) OU de confirmar
+     "Continue with Windows authentication", e apagado por
+     js/auth.js::authLogout() — enquanto não existir, sempre volta pra
+     login.html primeiro. Ver server/index.js: GET /api/me (authMethod) para
+     o que realmente conta como "autenticado via Windows". -->
+<script>
+  (function () {
+    try {
+      if (localStorage.getItem('cpa-authenticated') !== '1') {
+        location.replace('login.html');
+      }
+    } catch (e) { /* localStorage indisponível (ex.: modo privado restrito) — deixa passar, sem gate */ }
+  })();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CG Toolbox</title>
 <!-- Favicon: mesmo ícone (.ico) usado na intranet da empresa, a pedido do
@@ -29,13 +48,12 @@
   </div>
   <div class="hdr-gap"></div>
   <!-- Menu de conta — clicar no usuário identificado abre um dropdown com o
-       role atual e a opção de logar com uma credencial local diferente (ver
-       js/auth.js). "Log out" aparece pra TODO usuário (pedido do usuário) —
-       antes ficava escondido (ver hdrLogoutBtn) fora de sessão local; clicar
-       nele fora de uma sessão local é um no-op seguro no backend (só apaga
-       sessão local se houver uma) e simplesmente recarrega a página, voltando
-       a identificar pelo login do Windows (NTLM)/API key, nunca deixa a
-       aplicação sem usuário. -->
+       role atual e a opção de logar com uma credencial diferente em
+       login.html (ver js/auth.js::goToLoginPage()). "Log out" aparece pra
+       TODO usuário (pedido do usuário) — clicar nele apaga a sessão local
+       (se houver uma; é um no-op seguro do backend caso contrário) e manda
+       de volta pra login.html, a nova página inicial da aplicação (ver o
+       gate no topo do <head> deste arquivo e js/login.js). -->
   <div class="dd hdr-user-dd" id="hdrUserDD">
     <button type="button" class="hdr-user" id="hdrUser" onclick="toggleDropdown('hdrUserDD')" title="Account">
       <svg class="hdr-user-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18.5a6 6 0 0 1 11 0"/></svg><span id="currentUserLabel"></span>
@@ -43,7 +61,7 @@
     <div class="dd-panel" id="hdrUserPanel" style="left:auto; right:0; min-width:210px;">
       <div class="set-hint" id="hdrUserRoleLine" style="padding:4px 8px 8px;"></div>
       <button type="button" class="seg-btn" id="hdrLogoutBtn" onclick="authLogout()">Log out</button>
-      <button type="button" class="seg-btn" onclick="openLoginModal()">Log in as different user</button>
+      <button type="button" class="seg-btn" onclick="goToLoginPage()">Log in as different user</button>
     </div>
   </div>
   <button class="theme-toggle" id="settingsBtn" onclick="openSettingsModal()" title="Settings" style="display:inline-flex;align-items:center;justify-content:center;">
@@ -1373,34 +1391,6 @@
     </div>
     <div class="modal-foot" style="justify-content:flex-end;">
       <button class="btn btn-primary" onclick="closeApiKeyRevealModal()">Done</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══ LOGIN LOCAL — login com uma conta local (usuário/senha), no lugar da
-     identificação automática por login do Windows (NTLM). Ver js/auth.js e
-     server/index.js: POST /api/auth/login. ══ -->
-<div class="modal-overlay" id="loginOverlay">
-  <div class="modal-box">
-    <div class="modal-head">
-      <span class="modal-title">Log in</span>
-      <button class="modal-close" onclick="closeLoginModal()">✕</button>
-    </div>
-    <div class="modal-body">
-      <span class="set-hint">Log in with a local account instead of your Windows-identified user. This only affects this browser session — logging out reverts to your Windows login.</span>
-      <div class="set-group" style="margin-top:10px;">
-        <span class="set-label">Username</span>
-        <input class="set-input" type="text" id="loginUsernameInput" autocomplete="username" placeholder="e.g. admin">
-      </div>
-      <div class="set-group">
-        <span class="set-label">Password</span>
-        <input class="set-input" type="password" id="loginPasswordInput" autocomplete="current-password">
-      </div>
-      <div class="set-hint" id="loginErrorMsg" style="color:var(--red); display:none;"></div>
-    </div>
-    <div class="modal-foot" style="justify-content:flex-end;">
-      <button class="btn" onclick="closeLoginModal()">Cancel</button>
-      <button class="btn btn-primary" id="loginSubmitBtn" onclick="submitLogin()">Log in</button>
     </div>
   </div>
 </div>

@@ -1,18 +1,28 @@
 // ════════════════════════════════════════════════
-// LOGIN LOCAL — permite trocar a identificação automática por login do
-// Windows (NTLM) por uma conta local (usuário/senha), sem fechar o
-// navegador. Ver server/index.js: POST /api/auth/login, POST /api/auth/logout,
-// GET /api/me (agora devolve também role/isAdmin/authMethod), e users/sessions
-// em server/schema.sql.
+// LOGIN — a partir de agora, a página inicial de verdade é login.html (ver
+// js/login.js): campos usuário/senha OU "Continue with Windows
+// authentication". O gate que força passar por lá primeiro é o script
+// inline no topo do <head> deste index.html; este arquivo cuida só do que
+// acontece DEPOIS de já estar dentro do app — o dropdown de conta no header
+// (role atual, Log out, "Log in as different user") e o próprio Log out.
+// Ver server/index.js: POST /api/auth/login (chamado a partir de login.html,
+// não mais daqui), POST /api/auth/logout, GET /api/me (devolve role/
+// isAdmin/authMethod), e users/sessions em server/schema.sql.
 //
 // window.CG_IS_ADMIN / window.CG_AUTH_METHOD são preenchidos por
 // updateAccountUI(), chamada a partir de js/user-sync.js assim que /api/me
-// responde (e de novo depois de login/logout bem-sucedidos) — outros
-// arquivos (js/command-editor.js, js/settings-modal.js) leem
-// window.CG_IS_ADMIN para decidir o que mostrar/esconder.
+// responde (e de novo depois de logout) — outros arquivos
+// (js/command-editor.js, js/settings-modal.js) leem window.CG_IS_ADMIN para
+// decidir o que mostrar/esconder.
+//
+// A marca 'cpa-authenticated' no localStorage (mesma chave usada em
+// login.html/js/login.js e no gate inline de index.html) é o que decide se
+// o app abre direto ou volta pra login.html — authLogout() abaixo é quem a
+// limpa.
 // ════════════════════════════════════════════════
 window.CG_IS_ADMIN = false;
 window.CG_AUTH_METHOD = 'ntlm';
+const CG_LOGIN_FLAG_KEY = 'cpa-authenticated';
 
 // Atualiza o rótulo do usuário no header, o texto do dropdown de conta
 // (role atual + botão Log out só quando a sessão ativa é local) e dispara a
@@ -25,7 +35,8 @@ function updateAccountUI(me) {
   const roleLine = document.getElementById('hdrUserRoleLine');
   if (roleLine) {
     const roleLabel = me.isAdmin ? 'Admin' : 'User';
-    const methodLabel = me.authMethod === 'local' ? 'local account' : (me.authMethod === 'api_key' ? 'API key' : 'Windows login');
+    const methodLabels = { local: 'local account', api_key: 'API key', ntlm: 'Windows login', anonymous: 'unidentified session' };
+    const methodLabel = methodLabels[me.authMethod] || 'Windows login';
     roleLine.textContent = `${roleLabel} — signed in via ${methodLabel}`;
   }
   // Log out sempre visível pra todo mundo (pedido do usuário) — antes só
@@ -58,58 +69,16 @@ function applyAdminGating() {
   });
 }
 
-// ── Dropdown de conta (header) — abre/fecha via toggleDropdown('hdrUserDD'),
-// já genérico (ver js/state.js). Só precisamos fechar o dropdown ao abrir o
-// modal de login, para não ficarem os dois sobrepostos. ──
-function openLoginModal() {
+// "Log in as different user" (dropdown de conta) — antes abria um modal
+// aqui mesmo; agora manda pra login.html (mesma página usada no gate
+// inicial), que já sabe autenticar por usuário/senha ou Windows
+// authentication. Não precisa deslogar antes: POST /api/auth/login em
+// login.html sobrescreve o cookie cg_session normalmente, então entrar com
+// outra credencial local já substitui a sessão atual sozinho.
+function goToLoginPage() {
   const dd = document.getElementById('hdrUserDD');
   if (dd) dd.classList.remove('open');
-  const userInput = document.getElementById('loginUsernameInput');
-  const passInput = document.getElementById('loginPasswordInput');
-  const errBox = document.getElementById('loginErrorMsg');
-  if (userInput) userInput.value = '';
-  if (passInput) passInput.value = '';
-  if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
-  const overlay = document.getElementById('loginOverlay');
-  if (overlay) overlay.classList.add('show');
-  if (userInput) setTimeout(() => userInput.focus(), 0);
-}
-function closeLoginModal() {
-  const overlay = document.getElementById('loginOverlay');
-  if (overlay) overlay.classList.remove('show');
-}
-
-async function submitLogin() {
-  const username = (document.getElementById('loginUsernameInput') || {}).value || '';
-  const password = (document.getElementById('loginPasswordInput') || {}).value || '';
-  const errBox = document.getElementById('loginErrorMsg');
-  const btn = document.getElementById('loginSubmitBtn');
-  if (!username.trim() || !password) {
-    if (errBox) { errBox.textContent = 'Enter both username and password.'; errBox.style.display = ''; }
-    return;
-  }
-  if (btn) btn.disabled = true;
-  try {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: username.trim(), password }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.message || 'Invalid username or password.');
-    }
-    closeLoginModal();
-    // Recarrega a página inteira — mais simples e seguro do que tentar
-    // re-hidratar favoritos/preferências/gate de admin ao vivo para o usuário
-    // novo, e garante que tudo (inclusive o front-end sync de user-data)
-    // parte do zero para a identidade certa.
-    location.reload();
-  } catch (err) {
-    if (errBox) { errBox.textContent = err.message || 'Login failed. Please try again.'; errBox.style.display = ''; }
-  } finally {
-    if (btn) btn.disabled = false;
-  }
+  location.href = 'login.html';
 }
 
 async function authLogout() {
@@ -118,19 +87,13 @@ async function authLogout() {
   try {
     await fetch('/api/auth/logout', { method: 'POST' });
   } catch (e) {
-    console.error('Logout failed (continuing to reload anyway):', e);
+    console.error('Logout failed (continuing to redirect anyway):', e);
   }
-  location.reload();
+  // Limpa a marca de "já passou pelo login" (ver js/login.js e o gate
+  // inline no <head> de index.html) — sem isso, o próximo boot do app
+  // pularia direto pra dentro de novo, sem passar pela página de login
+  // (pedido do usuário: "quando o usuário fizer logout deverá ser
+  // direcionado para essa página").
+  try { localStorage.removeItem(CG_LOGIN_FLAG_KEY); } catch (e) {}
+  location.href = 'login.html';
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-  const overlay = document.getElementById('loginOverlay');
-  if (overlay) overlay.addEventListener('click', ev => { if (ev.target.id === 'loginOverlay') closeLoginModal(); });
-  const passInput = document.getElementById('loginPasswordInput');
-  if (passInput) passInput.addEventListener('keydown', ev => { if (ev.key === 'Enter') submitLogin(); });
-});
-document.addEventListener('keydown', ev => {
-  if (ev.key !== 'Escape') return;
-  const overlay = document.getElementById('loginOverlay');
-  if (overlay && overlay.classList.contains('show')) closeLoginModal();
-});

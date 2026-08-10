@@ -586,6 +586,24 @@ app.get('/api/commands/:id', async (req, res) => {
   }
 });
 
+// `authMethod` distingue como esta requisição foi identificada — usado pela
+// página de login (login.html/js/login.js) pra saber se o botão "Continue
+// with Windows authentication" realmente funcionou: 'ntlm' só quando o
+// handshake NTLM de verdade aconteceu (req.ntlm.UserName preenchido pelo
+// middleware express-ntlm). Antes desta função existir, tudo que não fosse
+// api_key/local caía em 'ntlm' por padrão — inclusive o fallback dev
+// (x-dev-user/__user/usuário do SO, usado quando NTLM_DISABLED=1 ou roda
+// fora de domínio Windows), o que fazia login.html achar que a autenticação
+// Windows tinha funcionado quando na verdade só caiu no fallback. Não muda
+// getCurrentUsername() nem nenhuma outra regra de identificação/permissão —
+// só refina o que /api/me REPORTA sobre o método usado.
+function getAuthMethod(req) {
+  if (req.apiKey) return 'api_key';
+  if (req.authMethod === 'local') return 'local';
+  if (req.ntlm && req.ntlm.UserName) return 'ntlm';
+  return 'anonymous';
+}
+
 // ════════════════════════════════════════════════
 // GET /api/me — usuário identificado (login do Windows via NTLM, API key, ou fallback dev)
 // ════════════════════════════════════════════════
@@ -600,7 +618,7 @@ app.get('/api/me', async (req, res) => {
     upn: upn || username,
     role,
     isAdmin: role === 'admin',
-    authMethod: req.apiKey ? 'api_key' : (req.authMethod === 'local' ? 'local' : 'ntlm'),
+    authMethod: getAuthMethod(req),
   });
 });
 
