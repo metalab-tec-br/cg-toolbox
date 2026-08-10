@@ -64,6 +64,25 @@ async function submitLocalLogin() {
       const data = await res.json().catch(() => ({}));
       throw new Error(data.message || 'Invalid username or password.');
     }
+    // Confirma que a sessão recém-criada já é reconhecida ANTES de navegar
+    // pra index.html — bug reportado: "continuo com problema de exibição do
+    // menu de admin. tenho que ficar atualizando a página várias vezes para
+    // aparecer" (usuário admin local). O login em si já está correto (cookie
+    // gravado antes desta resposta voltar — ver POST /api/auth/login em
+    // server/index.js), mas essa checagem é uma rede de segurança extra:
+    // até 3 tentativas rápidas de GET /api/me confirmando authMethod==='local'
+    // antes de entrar, em vez de confiar cegamente que a 1ª leitura em
+    // index.html (js/user-sync.js) vai bater com o cookie recém-gravado.
+    // Melhor esperar ~1s aqui do que o usuário ver o menu de admin faltando
+    // e precisar dar F5 manualmente.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const meRes = await fetch('/api/me');
+        const me = await meRes.json();
+        if (me.authMethod === 'local') break; // sessão confirmada, pode entrar
+      } catch (e) { /* ignora e tenta de novo, ou desiste no último attempt */ }
+      if (attempt < 3) await new Promise(r => setTimeout(r, 300));
+    }
     _lpMarkAuthenticatedAndEnter();
   } catch (err) {
     _lpShowError(err.message || 'Login failed. Please try again.');

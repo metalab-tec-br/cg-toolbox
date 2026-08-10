@@ -117,17 +117,41 @@ async function reapplyAfterUserSync() {
 // (initDb() tenta reconectar ao Postgres por até ~60s). Uma única
 // retentativa aqui, com um pequeno atraso, cobre esse caso sem precisar de
 // reload manual da página.
+// Estende a rede de segurança acima: além de repetir em caso de erro de
+// rede/HTTP (502/503 pós-rebuild, comentário original), agora TAMBÉM repete
+// quando a resposta vem OK (200) mas com authMethod==='anonymous' — bug
+// reportado: "continuo com problema de exibição do menu de admin. tenho que
+// ficar atualizando a página várias vezes para aparecer" (usuário admin
+// LOCAL, ou seja, não é o caso já conhecido de instabilidade do NTLM atrás
+// do proxy). Uma resposta "anonymous" bem-sucedida não lança exceção, então
+// sem isto o loop acima aceitava esse resultado de primeira e nunca tentava
+// de novo — se essa 1ª leitura pegar a sessão local ainda não plenamente
+// reconhecida (mesma janela de corrida que js/login.js agora também cobre
+// antes de navegar pra cá), o usuário ficava com o menu de admin faltando
+// pelo resto daquele carregamento de página, só resolvendo com F5 manual
+// (uma nova leitura de /api/me). Um usuário DE FATO deslogado só recebe
+// 'anonymous' consistentemente em todas as tentativas — o pior caso pra ele
+// é um atraso extra de ~1.5s antes do gate de login (index.html) atuar.
 async function fetchMeWithRetry() {
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  const MAX_ATTEMPTS = 4;
+  let lastAnonymous = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const meRes = await fetch('/api/me');
       if (!meRes.ok) throw new Error(`/api/me respondeu ${meRes.status}`);
-      return await meRes.json();
+      const data = await meRes.json();
+      if (data.authMethod === 'anonymous' && attempt < MAX_ATTEMPTS) {
+        lastAnonymous = data;
+        await new Promise(r => setTimeout(r, 400));
+        continue;
+      }
+      return data;
     } catch (e) {
-      if (attempt === 2) throw e;
+      if (attempt === MAX_ATTEMPTS) throw e;
       await new Promise(r => setTimeout(r, 1200));
     }
   }
+  return lastAnonymous; // esgotou as tentativas ainda "anonymous" — resultado final genuíno
 }
 async function initUserSync() {
   try {
