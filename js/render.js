@@ -107,7 +107,19 @@ async function render() {
     const values = allKeysOrdered.filter(k => sel.includes(k));
     return { values, isAllMode: false };
   }
-  const versionSel = resolveMultiSelection(v, VERSION_KEYS, FALLBACK_VERSION);
+  // Group by "Version" pede uma seção por versão com os tópicos dentro (ver
+  // branch GROUP_BY === 'version' mais abaixo) — mas resolveMultiSelection()
+  // sozinha, sem NENHUMA versão marcada no filtro da sidebar (o estado mais
+  // comum), colapsa pro comportamento padrão de sempre: um único combo com
+  // FALLBACK_VERSION ('R82'), então só aparecia UMA seção de versão com tudo
+  // dentro — visualmente indistinguível de "sem agrupamento" (bug relatado
+  // pelo usuário, com screenshot: "a ordem por versão não está sendo
+  // exibida"). Enquanto agrupando por versão, tratamos "nada marcado" como
+  // "todas marcadas" (mesmo efeito de marcar uma por uma ou clicar em 'All'
+  // no rodapé do filtro), gerando um combo por versão de verdade.
+  const versionSel = (GROUP_BY === 'version' && v.length === 0)
+    ? { values: VERSION_KEYS, isAllMode: false }
+    : resolveMultiSelection(v, VERSION_KEYS, FALLBACK_VERSION);
   const envSel = resolveMultiSelection(e, ENV_KEYS, FALLBACK_ENV);
   AUTO_EXPAND_DIFFS = versionSel.isAllMode;
 
