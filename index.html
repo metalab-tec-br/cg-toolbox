@@ -634,6 +634,10 @@
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
             <span>Parameters</span>
           </button>
+          <button type="button" class="settings-tile" onclick="openCatalogAdmin('prompts')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
+            <span>Prompts</span>
+          </button>
         </div>
       </div><!-- /.settings-pane[catalog] -->
 
@@ -1279,6 +1283,36 @@
       <div style="display:flex;gap:8px;">
         <button class="btn" id="catAdminCancelParameters" onclick="catAdminCancel('parameters')" disabled>Cancel</button>
         <button class="btn btn-primary" id="catAdminSaveParameters" onclick="catAdminSaveAll('parameters')" disabled>Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="catalogAdminPromptsOverlay">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <span class="modal-title">➡️ Manage Prompts</span>
+      <button class="modal-close" onclick="closeCatalogAdmin('prompts')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="cat-panel" id="catPanelPrompts">
+        <div class="cat-admin-msg" id="catAdminMsgPrompts"></div>
+        <span class="set-hint">Reusable values for the "Prompt" field of each command line (used instead of typing free text every time).</span>
+        <input type="text" class="set-input" id="catPrSearchInput" placeholder="Search prompts…" oninput="catAdminSearchInput('prompts', this.value)">
+        <div class="list-editor" id="catPromptsList" style="max-height:40vh;overflow-y:auto;"></div>
+        <div class="cat-row" id="catPromptNewRow">
+          <input class="set-input" id="catPrNewLabel" style="flex:1;" placeholder="e.g. [Expert@FW]#">
+        </div>
+        <div class="cat-add-actions">
+          <button type="button" class="btn btn-sm" onclick="catAdminAddPrompt()">+ Add prompt</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" id="catAdminCancelPrompts" onclick="catAdminCancel('prompts')" disabled>Cancel</button>
+        <button class="btn btn-primary" id="catAdminSavePrompts" onclick="catAdminSaveAll('prompts')" disabled>Save changes</button>
       </div>
     </div>
   </div>

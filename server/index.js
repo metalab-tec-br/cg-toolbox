@@ -1798,13 +1798,14 @@ async function countUsage(table, column, key) {
 // front-end e para recarregar a UI depois de qualquer criação/edição/exclusão).
 app.get('/api/catalogs', async (req, res) => {
   try {
-    const [vendors, systems, versions, environments, topics, parameters, versionEnvironments, environmentTopics] = await Promise.all([
+    const [vendors, systems, versions, environments, topics, parameters, prompts, versionEnvironments, environmentTopics] = await Promise.all([
       pool.query('SELECT * FROM vendors ORDER BY sort_order, key'),
       pool.query('SELECT * FROM systems ORDER BY sort_order, key'),
       pool.query('SELECT * FROM versions ORDER BY sort_order, key'),
       pool.query('SELECT * FROM environments ORDER BY sort_order, key'),
       pool.query('SELECT * FROM topics ORDER BY sort_order, key'),
       pool.query('SELECT * FROM parameters ORDER BY sort_order, key'),
+      pool.query('SELECT * FROM prompts ORDER BY sort_order, key'),
       pool.query('SELECT version, environment FROM version_environments'),
       pool.query('SELECT environment, topic FROM environment_topics'),
     ]);
@@ -1815,6 +1816,7 @@ app.get('/api/catalogs', async (req, res) => {
       environments: environments.rows,
       topics: topics.rows,
       parameters: parameters.rows,
+      prompts: prompts.rows,
       version_environments: versionEnvironments.rows,
       environment_topics: environmentTopics.rows,
     });
@@ -2242,6 +2244,63 @@ app.delete('/api/parameters/:key', async (req, res) => {
     if (usage > 0) return res.status(409).json({ error: 'in_use', message: `Parameter '${key}' is used by ${usage} command(s)`, count: usage });
     await pool.query('DELETE FROM parameters WHERE key = $1', [key]);
     await logAudit(getCurrentUsername(req), 'delete', 'parameter', key, existingRows[0].label);
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// ── Prompts (campo "Prompt" de cada linha tipo 'cmd' no editor de comandos —
+// antes texto livre, ver comentário em server/schema.sql) ──
+// `key` é sempre gerado no servidor a partir do `label` (mesmo padrão de
+// vendors/environments/topics, ver slugifyCatalogKey acima) — o usuário só
+// digita o texto do prompt em si (ex.: "[Expert@FW]#"), nunca uma chave
+// separada. Sem contagem de uso no DELETE: command_lines.prompt é só texto
+// solto (não uma FK) — excluir um prompt do catálogo nunca altera comandos
+// já salvos, só tira a opção do <select> do editor dali em diante.
+app.post('/api/prompts', async (req, res) => {
+  const { label } = req.body || {};
+  if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
+  try {
+    const key = await uniqueCatalogKey(slugifyCatalogKey(label), k => keyExists('prompts', k));
+    const maxRes = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS m FROM prompts');
+    await pool.query('INSERT INTO prompts (key, label, sort_order) VALUES ($1, $2, $3)', [key, label, maxRes.rows[0].m + 1]);
+    const { rows } = await pool.query('SELECT * FROM prompts WHERE key = $1', [key]);
+    await logAudit(getCurrentUsername(req), 'create', 'prompt', key, label);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+app.put('/api/prompts/:key', async (req, res) => {
+  const key = req.params.key;
+  try {
+    const { rows: existingRows } = await pool.query('SELECT * FROM prompts WHERE key = $1', [key]);
+    const existing = existingRows[0];
+    if (!existing) return res.status(404).json({ error: 'not_found', message: `Prompt '${key}' not found` });
+    const label = req.body.label != null ? req.body.label : existing.label;
+    const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : existing.sort_order;
+    if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
+    // `key` nunca é alterável por esta API (mesma regra de parameters/vendors/etc.).
+    await pool.query('UPDATE prompts SET label = $1, sort_order = $2 WHERE key = $3', [label, sortOrder, key]);
+    const { rows } = await pool.query('SELECT * FROM prompts WHERE key = $1', [key]);
+    const details = summarizeChangedFields(existing, { label, sort_order: sortOrder }, { label: 'label', sort_order: 'order' });
+    await logAudit(getCurrentUsername(req), 'update', 'prompt', key, label, details);
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+app.delete('/api/prompts/:key', async (req, res) => {
+  const key = req.params.key;
+  try {
+    const { rows: existingRows } = await pool.query('SELECT * FROM prompts WHERE key = $1', [key]);
+    if (!existingRows.length) return res.status(404).json({ error: 'not_found', message: `Prompt '${key}' not found` });
+    await pool.query('DELETE FROM prompts WHERE key = $1', [key]);
+    await logAudit(getCurrentUsername(req), 'delete', 'prompt', key, existingRows[0].label);
     res.status(204).end();
   } catch (err) {
     console.error(err);

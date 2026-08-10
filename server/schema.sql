@@ -196,6 +196,25 @@ CREATE TABLE IF NOT EXISTS parameters (
   sort_order     INTEGER NOT NULL DEFAULT 0
 );
 
+-- Prompts reutilizáveis (ex.: "[Expert@FW]#", "[Clish]>") usados no campo
+-- "Prompt" de cada linha de comando tipo 'cmd' no editor (js/command-editor.js,
+-- .ln-prompt) — pedido do usuário: "crie a variável Prompt para ser utilizada
+-- nos comandos que atualmente é um texto livre". Mesmo formato de `parameters`
+-- acima (key auto-gerada a partir do label — ver slugifyCatalogKey em
+-- server/index.js — em vez de digitada, como em vendors/environments/topics),
+-- só que sem `color`: o prompt nunca é exibido como badge/tag em lugar
+-- nenhum, só popula um <select>. Sem contagem de uso no DELETE: diferente de
+-- vendors/versions/etc., command_lines.prompt é só texto solto (não uma FK),
+-- então excluir um prompt do catálogo nunca altera comandos já salvos — só
+-- tira a opção da lista de sugestões dali em diante. Seed inicial (valores já
+-- em uso pelos ~1300 comandos importados via CSV) em seedDefaultPrompts()
+-- (server/db.js).
+CREATE TABLE IF NOT EXISTS prompts (
+  key            TEXT PRIMARY KEY,
+  label          TEXT NOT NULL,
+  sort_order     INTEGER NOT NULL DEFAULT 0
+);
+
 -- Linhas de terminal do card. `variant` distingue o bloco normal do bloco
 -- "placeholder" mostrado quando requires_ips=1 e SRC/DST (ou requires_ip_port=1 e IP/Porta) ainda não foram preenchidos.
 CREATE TABLE IF NOT EXISTS command_lines (

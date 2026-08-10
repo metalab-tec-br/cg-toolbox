@@ -18,6 +18,21 @@ const CMD_EDITOR_LINE_TYPES = ['cmd', 'note', 'warn', 'info', 'ok'];
 // escolhida num segundo dropdown que só aparece quando "Text" está selecionado.
 const CMD_EDITOR_TEXT_CATEGORIES = ['info', 'note', 'ok', 'warn'];
 
+// O campo "Prompt" de cada linha tipo 'cmd' (ex.: "[Expert@FW]#") era texto
+// livre; agora vem do catálogo Prompts (Settings → Register → Prompts, ver
+// js/catalog-admin.js + server/schema.sql), igual a Vendor/System/etc. Se o
+// valor atual da linha (vindo do banco) ainda não estiver cadastrado no
+// catálogo — dado legado de antes desta mudança, ou um valor que o
+// administrador removeu do catálogo depois — ele é preservado como uma opção
+// extra no topo da lista, para nunca "sumir"/trocar sozinho o texto de um
+// comando já salvo.
+function _ceBuildPromptOptions(currentValue) {
+  const prompts = (typeof CATALOGS !== 'undefined' && CATALOGS.prompts) || [];
+  let values = prompts.map(p => p.label);
+  if (currentValue && !values.includes(currentValue)) values = [currentValue, ...values];
+  return values.map(v => `<option value="${_ceEscAttr(v)}"${v === currentValue ? ' selected' : ''}>${_ceEscHtml(v)}</option>`).join('');
+}
+
 let CMD_EDITOR_MODE = 'create'; // 'create' | 'edit'
 let CMD_EDITOR_ORIGINAL_ID = null;
 let CMD_EDITOR_RESOLVER = null; // placeholder_resolver of the row being edited (preserved as-is, never set by this UI)
@@ -305,6 +320,7 @@ function _ceBuildLineRow(data, opts) {
   row.className = 'line-row';
   const typeOptions = availableTypes.map(lt => `<option value="${lt}"${lt === displayType ? ' selected' : ''}>${lt}</option>`).join('');
   const categoryOptions = CMD_EDITOR_TEXT_CATEGORIES.map(c => `<option value="${c}"${c === selectedCategory ? ' selected' : ''}>${c}</option>`).join('');
+  const promptOptions = _ceBuildPromptOptions(data.prompt);
   row.innerHTML = `
     <div class="row-head">
       <span class="ln-drag-handle" title="Drag to reorder" onmousedown="_ceArmLineDrag(this)">
@@ -312,7 +328,7 @@ function _ceBuildLineRow(data, opts) {
       </span>
       <select class="set-input ln-type" style="max-width:100px;">${typeOptions}</select>
       <select class="set-input ln-text-category" style="max-width:90px;display:none;">${categoryOptions}</select>
-      <input class="set-input ln-prompt" style="max-width:180px;" placeholder="[Expert@FW]#" value="${_ceEscAttr(data.prompt)}">
+      <select class="set-input ln-prompt" style="max-width:180px;">${promptOptions}</select>
       <div class="dd ln-var-dd">
         <button type="button" class="dd-btn btn btn-ghost btn-sm" onclick="_ceToggleVarDropdown(this)">
           <span class="dd-label">Insert variable</span><span class="dd-arrow">▾</span>

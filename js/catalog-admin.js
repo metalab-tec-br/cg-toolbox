@@ -35,11 +35,12 @@ const CAT_ADMIN_OVERLAY_IDS = {
   environments: 'catalogAdminEnvironmentsOverlay',
   topics: 'catalogAdminTopicsOverlay',
   parameters: 'catalogAdminParametersOverlay',
+  prompts: 'catalogAdminPromptsOverlay',
 };
 // One message box per screen — catAdminMsg() below writes to all at once
 // (only one is visible at a time, so this is always harmless and simpler
 // than tracking "which screen is open now").
-const CAT_ADMIN_MSG_IDS = ['catAdminMsgVendors', 'catAdminMsgSystems', 'catAdminMsgVersions', 'catAdminMsgEnvironments', 'catAdminMsgTopics', 'catAdminMsgParameters'];
+const CAT_ADMIN_MSG_IDS = ['catAdminMsgVendors', 'catAdminMsgSystems', 'catAdminMsgVersions', 'catAdminMsgEnvironments', 'catAdminMsgTopics', 'catAdminMsgParameters', 'catAdminMsgPrompts'];
 // Ícone de exclusão (substitui o emoji 🗑️ por um SVG de contorno, no mesmo
 // padrão visual dos outros ícones já convertidos no app — ex.: lápis/copiar
 // em js/db-render-engine.js). Usado nos 6 botões "Delete" das telas de
@@ -120,7 +121,7 @@ async function catAdminRefreshCatalogs() {
       const data = await res.json();
       if (data && Array.isArray(data.versions)) {
       CATALOGS = Object.assign(
-        { vendors: [], systems: [], version_environments: [], environment_topics: [] },
+        { vendors: [], systems: [], prompts: [], version_environments: [], environment_topics: [] },
         data
       );
     }
@@ -140,6 +141,7 @@ function renderCatAdminAll() {
   renderCatAdminEnvironments();
   renderCatAdminTopics();
   renderCatAdminParameters();
+  renderCatAdminPrompts();
 }
 
 // ── Busca (filtro client-side, por tela) ──────────
@@ -150,10 +152,10 @@ function renderCatAdminAll() {
 // descartar edições ainda não salvas enquanto o usuário digita na busca (o
 // Save em lote abaixo depende dos <input> de cada linha continuarem com o
 // valor que o usuário digitou).
-const CAT_ADMIN_SEARCH = { vendors: '', systems: '', versions: '', environments: '', topics: '', parameters: '' };
+const CAT_ADMIN_SEARCH = { vendors: '', systems: '', versions: '', environments: '', topics: '', parameters: '', prompts: '' };
 const CAT_ADMIN_LIST_IDS = {
   vendors: 'catVendorsList', systems: 'catSysList', versions: 'catVersionsList',
-  environments: 'catEnvironmentsList', topics: 'catTopicsList', parameters: 'catParametersList',
+  environments: 'catEnvironmentsList', topics: 'catTopicsList', parameters: 'catParametersList', prompts: 'catPromptsList',
 };
 function catAdminSearchInput(kind, value) {
   CAT_ADMIN_SEARCH[kind] = (value || '').trim().toLowerCase();
@@ -186,6 +188,7 @@ const CAT_ADMIN_FOOT_IDS = {
   environments: { save: 'catAdminSaveEnvironments', cancel: 'catAdminCancelEnvironments' },
   topics: { save: 'catAdminSaveTopics', cancel: 'catAdminCancelTopics' },
   parameters: { save: 'catAdminSaveParameters', cancel: 'catAdminCancelParameters' },
+  prompts: { save: 'catAdminSavePrompts', cancel: 'catAdminCancelPrompts' },
 };
 const CAT_ADMIN_DIRTY = {};
 function catAdminMarkDirty(kind) {
@@ -278,6 +281,15 @@ const CAT_ADMIN_BULK = {
     },
     original: p => ({ label: p.label, sort_order: p.sort_order }),
     url: key => '/api/parameters/' + encodeURIComponent(key),
+    validate: b => b.label ? null : 'Fill in the required label(s).',
+    name: p => p.label || p.key,
+  },
+  prompts: {
+    items: () => CATALOGS.prompts || [],
+    rowId: p => p.key,
+    readRow: key => ({ label: _cat('catPr_label_' + key).value.trim() }),
+    original: p => ({ label: p.label }),
+    url: key => '/api/prompts/' + encodeURIComponent(key),
     validate: b => b.label ? null : 'Fill in the required label(s).',
     name: p => p.label || p.key,
   },
@@ -582,8 +594,51 @@ async function catAdminAddParameter() {
   } catch (e) { catAdminMsg('Something went wrong. Please try again.', 'err'); }
 }
 
+// ── Prompts ──────────────────────────────────────
+// Lista de valores reutilizáveis para o campo "Prompt" de cada linha tipo
+// 'cmd' no editor de comandos (js/command-editor.js, .ln-prompt) — antes
+// texto livre, agora um catálogo. Mesmo padrão de Vendors/Environments (key
+// auto-gerada a partir do label), só que sem cor: o prompt nunca é exibido
+// como badge/tag em lugar nenhum, só popula um <select>.
+function renderCatAdminPrompts() {
+  const list = _cat('catPromptsList');
+  if (!list) return;
+  list.innerHTML = (CATALOGS.prompts || []).map(p => `
+    <div class="cat-row" data-cat-search="${_catEscAttr((p.key + ' ' + p.label).toLowerCase())}">
+      <input class="set-input" id="catPr_label_${_catEscAttr(p.key)}" value="${_catEscAttr(p.label)}" style="flex:1;min-width:140px;" oninput="catAdminMarkDirty('prompts')">
+      <div class="cat-row-actions">
+        <button type="button" class="edit-btn cat-delete-btn" onclick="catAdminDeletePrompt('${_catEscAttr(p.key)}')" title="Delete">${CAT_TRASH_SVG}</button>
+      </div>
+    </div>`).join('');
+  catAdminApplyFilter('prompts');
+}
+async function catAdminDeletePrompt(key) {
+  const ok = await openConfirmModal(`Delete "${key}"? This action cannot be undone.`);
+  if (!ok) return;
+  try {
+    const res = await fetch('/api/prompts/' + encodeURIComponent(key), { method: 'DELETE' });
+    if (!res.ok) return catAdminHandleError(res);
+    catAdminMsg('Deleted.', 'ok');
+    catAdminRefreshCatalogs();
+  } catch (e) { catAdminMsg('Something went wrong. Please try again.', 'err'); }
+}
+async function catAdminAddPrompt() {
+  const label = _cat('catPrNewLabel').value.trim();
+  if (!label) { catAdminMsg('Fill in the required label(s).', 'err'); return; }
+  try {
+    const res = await fetch('/api/prompts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label }),
+    });
+    if (!res.ok) return catAdminHandleError(res);
+    _cat('catPrNewLabel').value = '';
+    catAdminMsg('Added.', 'ok');
+    catAdminRefreshCatalogs();
+  } catch (e) { catAdminMsg('Something went wrong. Please try again.', 'err'); }
+}
+
 // Precisa vir depois de todas as renderCatAdminX() acima estarem declaradas.
 Object.assign(CAT_ADMIN_RENDER_FN, {
   vendors: renderCatAdminVendors, systems: renderCatAdminSystems, versions: renderCatAdminVersions,
   environments: renderCatAdminEnvironments, topics: renderCatAdminTopics, parameters: renderCatAdminParameters,
+  prompts: renderCatAdminPrompts,
 });

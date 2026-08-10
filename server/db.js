@@ -60,6 +60,7 @@ async function initDb({ retries = 30, delayMs = 2000 } = {}) {
       await runMigrations();
       await seedDefaultAdmin();
       await seedDefaultFolders();
+      await seedDefaultPrompts();
       return;
     } catch (err) {
       if (attempt === retries) throw err;
@@ -217,6 +218,40 @@ async function seedDefaultFolders() {
     );
   } catch (err) {
     console.error('[db] Falha ao semear pasta Favorites padrão para usuários existentes:', err.message);
+  }
+}
+
+// Semeia o catálogo de Prompts (task: "crie a variável Prompt para ser
+// utilizada nos comandos que atualmente é um texto livre") com os valores já
+// em uso pelos ~1300 comandos importados via CSV (import-templates/
+// check-point.csv e fortinet.csv — levantado via grep na coluna "Prompt" de
+// cada um). Só roda numa instalação nova (tabela vazia): se o usuário já
+// cadastrou/editou/excluiu prompts pelo Register, isto nunca mexe de novo —
+// diferente de seedDefaultFolders acima (que é ON CONFLICT DO NOTHING e
+// sempre "reafirma" a mesma coisa), aqui um `DELETE` intencional do usuário
+// não pode "voltar" a cada boot. Keys fixas (não geradas por slugifyCatalogKey,
+// que vive em server/index.js) — evita depender de outro módulo só para isto.
+async function seedDefaultPrompts() {
+  const DEFAULTS = [
+    { key: 'expert-fw', label: '[Expert@FW]#' },
+    { key: 'expert-mgmt', label: '[Expert@MGMT]#' },
+    { key: 'expert-mds', label: '[Expert@MDS]#' },
+    { key: 'expert-sg', label: '[Expert@SG]#' },
+    { key: 'expert-host', label: '[Expert@Host]#' },
+    { key: 'clish', label: '[Clish]>' },
+    { key: 'gclish', label: '[gClish]>' },
+    { key: 'hash', label: '#' },
+    { key: 'config-hash', label: '(config)#' },
+  ];
+  try {
+    const { rows } = await pool.query('SELECT COUNT(*) AS n FROM prompts');
+    if (Number(rows[0].n) > 0) return; // instalação já tem prompts (seed anterior ou cadastrados manualmente)
+    for (let i = 0; i < DEFAULTS.length; i++) {
+      const { key, label } = DEFAULTS[i];
+      await pool.query('INSERT INTO prompts (key, label, sort_order) VALUES ($1, $2, $3) ON CONFLICT (key) DO NOTHING', [key, label, i]);
+    }
+  } catch (err) {
+    console.error('[db] Falha ao semear catálogo de Prompts padrão:', err.message);
   }
 }
 
