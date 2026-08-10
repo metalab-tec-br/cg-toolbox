@@ -32,6 +32,23 @@ let FOLDERS = [];
 let VIEW_FOLDERS_HOME = resolveFoldersHome(loadSettings());
 (() => { const row = document.getElementById('foldersNavRow'); if (row) row.classList.toggle('on', VIEW_FOLDERS_HOME); })();
 
+// FOLDER_SCOPE precisa existir ANTES de updateGroupByOptionsForFoldersScope()
+// ser definida/chamada mais abaixo — bug reportado: "atualizo a tela em
+// Folders e pastas/comandos somem, e alternar não volta a mostrar". Causa:
+// updateGroupByOptionsForFoldersScope() é chamada uma vez, incondicionalmente,
+// no carregamento do script (ver mais abaixo); com VIEW_FOLDERS_HOME já true
+// no boot (ver resolveFoldersHome()/'cpa-last-view' acima), ela entra no `if
+// (VIEW_FOLDERS_HOME)` e chama renderFolderScopeOptions() de forma SÍNCRONA
+// — que lê `FOLDER_SCOPE` diretamente. Como esse `let` estava declarado
+// bem mais abaixo no arquivo (dead zone temporal até sua própria linha
+// rodar), isso lançava "ReferenceError: Cannot access 'FOLDER_SCOPE' before
+// initialization" e abortava o resto da execução do script — deixando toda
+// função declarada depois (viewAllFolders, toggleCommandInFolder, editor de
+// notas/comandos etc.) indefinida pro resto da sessão, até um F5 sem
+// VIEW_FOLDERS_HOME=true no boot rodar o arquivo inteiro de novo sem cair
+// nesse ramo. Declarar aqui, antes de qualquer função que a use, resolve.
+let FOLDER_SCOPE = 'mine';
+
 // Busca as pastas reais do usuário atual no servidor e substitui FOLDERS —
 // chamado uma vez no boot (via user-sync.js) depois que o usuário é
 // identificado; pode ser chamado de novo a qualquer momento para
@@ -147,7 +164,7 @@ updateGroupByOptionsForFoldersScope();
 // FOLDER_SCOPE: 'mine' (padrão) | 'all' | 'user:<username>'. Só em memória
 // (não persistido) de propósito, mesma decisão já tomada para
 // FOLDER_EDIT_MODE — não precisa sobreviver a um reload da página.
-let FOLDER_SCOPE = 'mine';
+// (declarada mais acima, junto de VIEW_FOLDERS_HOME — ver comentário lá.)
 function folderScopeLabel(scope) {
   if (scope === 'all') return 'All';
   if (scope && scope.startsWith('user:')) return scope.slice('user:'.length);
