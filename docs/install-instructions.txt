@@ -94,26 +94,29 @@ A key completa só aparece nessa resposta (uma vez) — guarde-a com cuidado;
 depois disso só o hash fica no banco.
 
 
-6) HTTPS COM CERTIFICADO (opcional)
+6) HTTPS COM CERTIFICADO
 ---------------------------------------
-TLS é terminado no cg-toolbox-frontend (nginx), não mais no backend. Para
-habilitar:
-
-    sudo mkdir -p ./tls
-    sudo openssl req -x509 -nodes -newkey rsa:2048 -days 365 \
-      -keyout ./tls/key.pem -out ./tls/cert.pem \
-      -subj "/CN=<ip-ou-hostname-do-servidor>"
-
-Depois:
-  1. Descomente o bloco "server { listen 443 ssl; ... }" em
-     frontend/nginx.conf (já vem pronto, só comentado).
-  2. Descomente o volume "./tls:/etc/nginx/tls:ro" e a porta "443:443" no
-     serviço cg-toolbox-frontend em docker-compose.yml.
-  3. Reconstrua: sudo docker compose up -d --build cg-toolbox-frontend
-
+HTTPS já vem habilitado por padrão, sem nenhum passo manual: no primeiro
+boot, o cg-toolbox-backend gera automaticamente um certificado autoassinado
+(ensureTlsBootstrap(), ver server/index.js) e o grava num volume Docker
+compartilhado ("cg-toolbox-tls") com o cg-toolbox-frontend, que o serve em
+https://<ip-do-servidor> (porta 443) junto com o HTTP de sempre na porta 80.
 O navegador vai mostrar aviso de segurança enquanto o certificado for
-autoassinado — normal. Substitua pelos arquivos definitivos (CA da empresa
-ou Let's Encrypt) em ./tls/ e rode "docker compose restart cg-toolbox-frontend".
+autoassinado — normal.
+
+Para trocar por um certificado de verdade (CA da empresa ou Let's Encrypt),
+não é mais preciso mexer em arquivo nenhum no servidor: use a própria UI,
+em Configurações → System → SSL Certificate → "Manage certificate" (só
+admin). Cole (ou envie o arquivo) do certificado e da chave privada em PEM
+(sem senha) — um "chain"/intermediários é opcional — e clique em "Save
+certificate". Em poucos segundos o nginx do frontend recarrega sozinho com
+o novo certificado (um watcher com inotifywait dentro do container dele —
+ver frontend/docker-entrypoint.sh — detecta a mudança no volume
+compartilhado e dá "nginx -s reload"), sem reiniciar nenhum container e sem
+derrubar conexões em andamento.
+
+O botão "Remove custom certificate" na mesma tela reverte para um
+autoassinado novo, a qualquer momento.
 
 
 7) BACKUP & RESTORE

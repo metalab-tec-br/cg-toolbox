@@ -48,6 +48,14 @@ const PORT = process.env.PORT || process.env.HTTP_PORT || 3000;
 // dentro do JSON, ~33% maior que o arquivo original.
 app.use(express.json({ limit: '15mb' }));
 
+// Healthcheck simples e público (sem auth) — usado pelo HEALTHCHECK do
+// Dockerfile/docker-compose.yml para o cg-toolbox-frontend só iniciar
+// (depends_on condition:service_healthy) depois que este processo já
+// terminou o boot (initDb() + ensureTlsBootstrap(), ver o final deste
+// arquivo) — sem isso, o frontend podia tentar escutar na porta 443 antes
+// do certificado autoassinado default existir no volume compartilhado.
+app.get('/api/health', (req, res) => res.json({ ok: true }));
+
 // ════════════════════════════════════════════════
 // API keys — autenticação para acesso programático externo (ver api_keys em
 // schema.sql e a seção CRUD mais abaixo). Verificado ANTES do NTLM: uma
@@ -2506,16 +2514,165 @@ function checkScheduledBackup() {
   })();
 }
 // ════════════════════════════════════════════════
+// Certificado SSL/TLS (Settings → System → SSL Certificate) — pedido do
+// usuário: "crie um menu que permita importar, substituir ou excluir um
+// certificado ssl para ser utilizado na aplicação em HTTPS". Quem realmente
+// TERMINA o TLS é o cg-toolbox-frontend (nginx, ver frontend/nginx.conf,
+// bloco "listen 443 ssl") — este backend só possui/valida os arquivos, que
+// moram num volume Docker COMPARTILHADO entre os dois containers (TLS_DIR,
+// por padrão /app/tls aqui e /etc/nginx/tls no frontend — ver
+// docker-compose.yml). Salvar aqui já basta pro nginx enxergar o arquivo
+// novo: o container do frontend tem um vigia de arquivos (inotifywait, ver
+// frontend/docker-entrypoint.sh) que detecta a mudança e roda
+// "nginx -s reload" sozinho — nenhum container precisa de acesso ao Docker
+// (/var/run/docker.sock) pra isso (o antigo serviço "updater" que tinha
+// esse acesso foi removido na migração pra Postgres, por incompatibilidade
+// de arquitetura — ver git log).
+//
+// O bloco 443 do nginx não SOBE se o arquivo de certificado não existir
+// (diretiva ssl_certificate exige o arquivo já lá) — por isso
+// ensureTlsBootstrap() abaixo gera um certificado autoassinado na primeira
+// vez que o backend sobe, ANTES de aceitar conexões (ver app.listen no
+// final deste arquivo), garantindo que o volume compartilhado nunca fica
+// vazio. DELETE reverte para esse mesmo autoassinado (não desliga o HTTPS).
+// ════════════════════════════════════════════════
+const TLS_DIR = process.env.TLS_DIR || path.join(__dirname, 'tls');
+const TLS_CERT_PATH = path.join(TLS_DIR, 'cert.pem');
+const TLS_KEY_PATH = path.join(TLS_DIR, 'key.pem');
+const TLS_BACKUP_DIR = path.join(TLS_DIR, 'backup');
+
+async function generateSelfSignedCert() {
+  fs.mkdirSync(TLS_DIR, { recursive: true });
+  await runCli('openssl', [
+    'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+    '-keyout', TLS_KEY_PATH, '-out', TLS_CERT_PATH,
+    '-days', '825', '-subj', '/CN=cg-toolbox',
+  ]);
+}
+
+async function ensureTlsBootstrap() {
+  fs.mkdirSync(TLS_DIR, { recursive: true });
+  if (!fs.existsSync(TLS_CERT_PATH) || !fs.existsSync(TLS_KEY_PATH)) {
+    console.log('[tls] No SSL certificate found — generating a default self-signed certificate...');
+    await generateSelfSignedCert();
+  }
+}
+
+// Guarda uma cópia com timestamp do certificado ATUAL antes de sobrescrever
+// (mesmo espírito do backup automático antes de restaurar o banco, ver
+// performBackup acima) — não aparece na UI nem é baixável; é só uma rede de
+// segurança manual (recuperável via acesso ao volume/host, se precisar).
+function backupCurrentTlsFiles() {
+  if (!fs.existsSync(TLS_CERT_PATH) && !fs.existsSync(TLS_KEY_PATH)) return;
+  const dir = path.join(TLS_BACKUP_DIR, backupTimestamp());
+  fs.mkdirSync(dir, { recursive: true });
+  if (fs.existsSync(TLS_CERT_PATH)) fs.copyFileSync(TLS_CERT_PATH, path.join(dir, 'cert.pem'));
+  if (fs.existsSync(TLS_KEY_PATH)) fs.copyFileSync(TLS_KEY_PATH, path.join(dir, 'key.pem'));
+}
+
+function readCertInfo() {
+  const pem = fs.readFileSync(TLS_CERT_PATH, 'utf8');
+  const x509 = new crypto.X509Certificate(pem);
+  return {
+    subject: x509.subject,
+    issuer: x509.issuer,
+    validFrom: x509.validFrom,
+    validTo: x509.validTo,
+    fingerprint256: x509.fingerprint256,
+    serialNumber: x509.serialNumber,
+    isSelfSigned: x509.subject === x509.issuer,
+    isExpired: new Date(x509.validTo) < new Date(),
+  };
+}
+
+// Confere se a chave privada enviada realmente forma um par com o
+// certificado enviado — compara as chaves PÚBLICAS (formato SPKI/DER) em
+// vez de assinar/verificar um payload de teste; funciona igual pra RSA/EC
+// sem precisar de lógica específica por algoritmo.
+function certKeyMatch(certPem, keyPem) {
+  const certPub = new crypto.X509Certificate(certPem).publicKey;
+  const derivedPub = crypto.createPublicKey(crypto.createPrivateKey(keyPem));
+  return certPub.export({ type: 'spki', format: 'der' }).equals(derivedPub.export({ type: 'spki', format: 'der' }));
+}
+
+app.get('/api/system/ssl-certificate', requireAdmin, (req, res) => {
+  try {
+    res.json(readCertInfo());
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+app.post('/api/system/ssl-certificate', requireAdmin, async (req, res) => {
+  const { cert, key, chain } = req.body || {};
+  if (!cert || !key || typeof cert !== 'string' || typeof key !== 'string') {
+    return res.status(400).json({ error: 'validation_error', message: '"cert" and "key" (PEM text) are required' });
+  }
+  let x509;
+  try {
+    x509 = new crypto.X509Certificate(cert);
+  } catch (e) {
+    return res.status(400).json({ error: 'invalid_cert', message: 'Could not parse the certificate — make sure it is a valid PEM-encoded X.509 certificate.' });
+  }
+  try {
+    crypto.createPrivateKey(key);
+  } catch (e) {
+    return res.status(400).json({ error: 'invalid_key', message: 'Could not parse the private key — make sure it is a valid, UNENCRYPTED PEM-encoded private key (no passphrase).' });
+  }
+  let matches = false;
+  try { matches = certKeyMatch(cert, key); } catch (e) { matches = false; }
+  if (!matches) {
+    return res.status(400).json({ error: 'mismatch', message: 'This certificate and private key do not match each other.' });
+  }
+  if (new Date(x509.validTo) < new Date()) {
+    return res.status(400).json({ error: 'expired', message: `This certificate already expired on ${x509.validTo}.` });
+  }
+  try {
+    backupCurrentTlsFiles();
+    fs.mkdirSync(TLS_DIR, { recursive: true });
+    const fullChain = chain && typeof chain === 'string' && chain.trim()
+      ? `${cert.trim()}\n${chain.trim()}\n`
+      : `${cert.trim()}\n`;
+    fs.writeFileSync(TLS_CERT_PATH, fullChain, { mode: 0o644 });
+    fs.writeFileSync(TLS_KEY_PATH, key.trim() + '\n', { mode: 0o600 });
+    await logAudit(getCurrentUsername(req), 'import', 'ssl_certificate', null, x509.subject, `Imported SSL certificate, valid until ${x509.validTo}`);
+    res.json(readCertInfo());
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+app.delete('/api/system/ssl-certificate', requireAdmin, async (req, res) => {
+  try {
+    backupCurrentTlsFiles();
+    await generateSelfSignedCert();
+    await logAudit(getCurrentUsername(req), 'delete', 'ssl_certificate', null, null, 'Removed custom SSL certificate — reverted to a self-signed default');
+    res.json(readCertInfo());
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// ════════════════════════════════════════════════
 // Startup — aguarda o Postgres (cg-toolbox-db) responder e o schema ser
 // aplicado antes de começar a aceitar requisições HTTP. O agendamento de
 // backup (setInterval) só é registrado DEPOIS disso — chamá-lo antes faria
 // checkScheduledBackup() consultar `user_data` numa corrida contra o CREATE
 // TABLE do initDb() (mesmo processo, mesma tabela), gerando um erro
 // "relation does not exist" inofensivo mas ruidoso no primeiro boot.
+// ensureTlsBootstrap() (ver seção "Certificado SSL/TLS" acima) também
+// precisa rodar ANTES do app.listen — só depois disso GET /api/health
+// responde 200, e só depois disso o cg-toolbox-frontend (que depende deste
+// healthcheck, ver docker-compose.yml) sobe seu bloco 443 sabendo que o
+// volume compartilhado de certificados já tem um arquivo válido.
 // ════════════════════════════════════════════════
 (async () => {
   try {
     await initDb();
+    await ensureTlsBootstrap();
     setInterval(checkScheduledBackup, 60 * 1000);
     checkScheduledBackup();
     app.listen(PORT, () => {

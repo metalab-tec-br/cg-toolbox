@@ -730,6 +730,22 @@
             </button>
           </div>
         </div>
+        <!-- SSL Certificate — importar/substituir/excluir o certificado usado
+             pelo nginx do frontend para servir HTTPS (ver frontend/nginx.conf,
+             docker-compose.yml: volume cg-toolbox-tls compartilhado). Sem
+             certificado próprio, a aplicação já serve HTTPS com um
+             autoassinado gerado no primeiro boot (ensureTlsBootstrap() em
+             server/index.js) — este botão é só para quem quiser trocar por um
+             emitido por uma CA de verdade. Ver js/ssl-certificate.js. -->
+        <div class="set-group" id="sysGroupSslCertificate" style="display:none;">
+          <span class="set-label">SSL Certificate</span>
+          <div class="settings-action-row">
+            <button type="button" class="btn btn-ghost" id="sslCertificateBtn" onclick="openSslCertificateModal()">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><rect x="3.5" y="7" width="9" height="6.5" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="10.2" r=".9" fill="currentColor"/></svg>
+              <span>Manage certificate</span>
+            </button>
+          </div>
+        </div>
         <!-- API access — chaves para integrações externas autenticarem via
              header X-API-Key (ver api_keys em server/schema.sql e o
              middleware de autenticação em server/index.js). A key em texto
@@ -919,6 +935,77 @@
     <div class="modal-foot">
       <div></div>
       <button class="btn" onclick="closeBackupManagerModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SSL CERTIFICATE MODAL ══ — ver js/ssl-certificate.js e
+     GET/POST/DELETE /api/system/ssl-certificate em server/index.js. -->
+<div class="modal-overlay" id="sslCertificateOverlay">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <span class="modal-title" style="display:flex;align-items:center;gap:6px;">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="3.5" y="7" width="9" height="6.5" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="10.2" r=".9" fill="currentColor"/></svg>
+        <span>SSL Certificate</span>
+      </span>
+      <button class="modal-close" onclick="closeSslCertificateModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="set-group">
+        <span class="set-label">Current certificate</span>
+        <div class="audit-log-wrap" id="sslCertInfoWrap" style="padding:10px 12px;">
+          <div id="sslCertInfo" style="font-size:12.5px;line-height:1.7;">Loading…</div>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <span class="set-label">Import / replace certificate</span>
+        <span class="set-hint">Paste (or upload) the certificate and its private key as PEM text — both are required, unencrypted (no passphrase). An optional chain/intermediate bundle can be appended after the certificate.</span>
+
+        <span class="set-label" style="margin-top:6px;">Certificate (PEM)</span>
+        <textarea class="set-input" id="sslCertPemInput" rows="5" spellcheck="false" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" style="font-family:var(--mono);font-size:11.5px;width:100%;resize:vertical;"></textarea>
+        <div class="settings-action-row" style="margin-top:4px;">
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
+            📄 Upload file
+            <input type="file" id="sslCertFileInput" accept=".pem,.crt,.cer,.txt" style="display:none;" onchange="_sslReadFileIntoTextarea(this, 'sslCertPemInput')">
+          </label>
+        </div>
+
+        <span class="set-label" style="margin-top:10px;">Private key (PEM)</span>
+        <textarea class="set-input" id="sslKeyPemInput" rows="5" spellcheck="false" placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----" style="font-family:var(--mono);font-size:11.5px;width:100%;resize:vertical;"></textarea>
+        <div class="settings-action-row" style="margin-top:4px;">
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
+            📄 Upload file
+            <input type="file" id="sslKeyFileInput" accept=".pem,.key,.txt" style="display:none;" onchange="_sslReadFileIntoTextarea(this, 'sslKeyPemInput')">
+          </label>
+        </div>
+
+        <span class="set-label" style="margin-top:10px;">Chain / intermediates (PEM, optional)</span>
+        <textarea class="set-input" id="sslChainPemInput" rows="3" spellcheck="false" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" style="font-family:var(--mono);font-size:11.5px;width:100%;resize:vertical;"></textarea>
+        <div class="settings-action-row" style="margin-top:4px;">
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
+            📄 Upload file
+            <input type="file" id="sslChainFileInput" accept=".pem,.crt,.cer,.txt" style="display:none;" onchange="_sslReadFileIntoTextarea(this, 'sslChainPemInput')">
+          </label>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+          <button type="button" class="btn btn-primary" id="sslSaveBtn" onclick="saveSslCertificate()">Save certificate</button>
+          <span class="set-hint" id="sslSaveStatus"></span>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <span class="set-label">Danger zone</span>
+        <span class="set-hint">Removes the custom certificate and reverts to a freshly generated self-signed one. Browsers will show a trust warning again until a new certificate is imported.</span>
+        <div>
+          <button type="button" class="btn btn-ghost" style="color:var(--danger,#e5484d);" onclick="deleteSslCertificate()">🗑️ Remove custom certificate</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div></div>
+      <button class="btn" onclick="closeSslCertificateModal()">Close</button>
     </div>
   </div>
 </div>
@@ -1706,6 +1793,7 @@
 <script src="js/audit-log.js"></script>
 <script src="js/backup.js"></script>
 <script src="js/api-keys.js"></script>
+<script src="js/ssl-certificate.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/users-admin.js"></script>
 </body>

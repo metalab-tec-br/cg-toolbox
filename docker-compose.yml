@@ -40,6 +40,17 @@ services:
     depends_on:
       cg-toolbox-db:
         condition: service_healthy
+    # GET /api/health só responde depois de initDb() E ensureTlsBootstrap()
+    # (ver server/index.js) — ou seja, "healthy" aqui também garante que o
+    # volume de certificados (cg-toolbox-tls) já tem um cert.pem/key.pem
+    # válidos, o que o cg-toolbox-frontend abaixo depende para poder subir
+    # seu bloco "listen 443 ssl" sem erro.
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
     environment:
       PGHOST: cg-toolbox-db
       PGPORT: "5432"
@@ -64,6 +75,12 @@ services:
       # pg_restore, fora do volume de dados do Postgres, sobrevive a
       # rebuild/restart deste container.
       - cg-toolbox-backups:/app/backups
+      # Certificado/chave TLS (Settings → System → SSL Certificate) —
+      # ensureTlsBootstrap()/generateSelfSignedCert() em server/index.js
+      # escrevem aqui; COMPARTILHADO (rw aqui, ro no cg-toolbox-frontend
+      # abaixo) porque quem realmente termina HTTPS é o nginx do frontend,
+      # não este container — ver frontend/nginx.conf.
+      - cg-toolbox-tls:/app/tls
 
   # ── FRONTEND ──
   # nginx: serve os arquivos estáticos (index.html/css/js/img) e faz proxy
@@ -83,18 +100,26 @@ services:
     container_name: cg-toolbox-frontend
     restart: unless-stopped
     depends_on:
-      - cg-toolbox-backend
+      # "service_healthy" (não só "started") — o healthcheck do backend só
+      # fica healthy depois de ensureTlsBootstrap() gerar cert.pem/key.pem
+      # (ver comentário no serviço acima), garantindo que eles já existem no
+      # volume compartilhado quando o nginx aqui sobe e lê o bloco "listen
+      # 443 ssl" de frontend/nginx.conf — sem isso, o nginx falharia ao
+      # iniciar (arquivo inexistente) numa primeira subida "do zero".
+      cg-toolbox-backend:
+        condition: service_healthy
     ports:
       # Host:container — único ponto de entrada da aplicação, em
-      # http://<ip-do-servidor> (sem porta na URL).
+      # http://<ip-do-servidor> ou https://<ip-do-servidor>.
       - "80:80"
-      # Para HTTPS de verdade, veja o bloco comentado em frontend/nginx.conf
-      # (monte um certificado e descomente o server block "listen 443 ssl"),
-      # depois publique a porta aqui também:
-      # - "443:443"
-      # volumes:
-      #   - ./tls:/etc/nginx/tls:ro
+      - "443:443"
+    volumes:
+      # Somente leitura — quem escreve é o cg-toolbox-backend (ver volume
+      # acima); docker-entrypoint.sh observa esta pasta com inotifywait e dá
+      # `nginx -s reload` sempre que o certificado mudar.
+      - cg-toolbox-tls:/etc/nginx/tls:ro
 
 volumes:
   cg-toolbox-db-data:
   cg-toolbox-backups:
+  cg-toolbox-tls:

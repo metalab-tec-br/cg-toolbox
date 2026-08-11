@@ -71,7 +71,7 @@ function updateAccountUI(me) {
 // estático não tinha nenhum display:none — ficava visível "por padrão" até
 // prova de admin ("fail open"). Agora só fica visível depois que
 // applyAdminGating() confirma isAdmin:true — nunca visível por omissão.
-const ADMIN_ONLY_SETTINGS_GROUP_IDS = ['sysGroupDatabase', 'sysGroupApiAccess', 'usersNavBtn', 'importAsSystemRow'];
+const ADMIN_ONLY_SETTINGS_GROUP_IDS = ['sysGroupDatabase', 'sysGroupSslCertificate', 'sysGroupApiAccess', 'usersNavBtn', 'importAsSystemRow'];
 function applyAdminGating() {
   ADMIN_ONLY_SETTINGS_GROUP_IDS.forEach(id => {
     const el = document.getElementById(id);

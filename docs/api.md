@@ -40,8 +40,9 @@ prioridade:
 Todo `username` identificado (por NTLM ou sessão local) tem um `role` — `user` ou
 `admin` — guardado na tabela `users` e provisionado automaticamente (`role: "user"`) na
 primeira vez que é visto. `role: "admin"` é exigido para: excluir comando (`DELETE
-/api/commands/:id`), Backup & Restore (todos os endpoints `/api/backups*`), ver o audit
-log (`GET /api/audit-log`), gerenciar API keys (`/api/api-keys*`) e gerenciar usuários
+/api/commands/:id`), Backup & Restore (todos os endpoints `/api/backups*`), gerenciar o
+certificado SSL (`/api/system/ssl-certificate*`), ver o audit log (`GET
+/api/audit-log`), gerenciar API keys (`/api/api-keys*`) e gerenciar usuários
 (`/api/users*`) — endpoints marcados **(admin)** abaixo. Toda outra operação (criar/
 editar comando, favoritos, preferências, catálogos) continua liberada para qualquer
 usuário identificado. Uma chamada sem `role: admin` para um endpoint **(admin)** recebe
@@ -500,6 +501,38 @@ Dumps do PostgreSQL via `pg_dump`/`pg_restore` (formato "custom"), guardados no 
   ```
   Checado a cada minuto pelo backend (`checkScheduledBackup`); `backupScheduleLastRunDate`
   evita rodar duas vezes no mesmo dia.
+
+---
+
+## SSL Certificate (`/api/system/ssl-certificate`) — **(admin)**
+Certificado/chave usados pelo nginx do `cg-toolbox-frontend` para servir HTTPS (porta
+443) — guardados no volume `cg-toolbox-tls`, compartilhado (rw aqui, ro no frontend). No
+primeiro boot (e sempre que não houver certificado customizado), o backend gera um
+autoassinado sozinho (`ensureTlsBootstrap()`/`generateSelfSignedCert()` em
+`server/index.js`, via `openssl req`) — estes endpoints só entram em cena para
+importar/remover um certificado próprio. Alterar o volume não exige reiniciar o
+frontend: um watcher com `inotifywait` dentro do container dele (ver
+`frontend/docker-entrypoint.sh`) dá `nginx -s reload` sozinho assim que os arquivos
+mudam.
+
+- `GET /api/system/ssl-certificate` → informações do certificado atual (nunca expõe a
+  chave privada):
+  ```json
+  {
+    "subject": "CN=cg-toolbox", "issuer": "CN=cg-toolbox",
+    "validFrom": "...", "validTo": "...",
+    "fingerprint256": "AA:BB:...", "serialNumber": "...",
+    "isSelfSigned": true, "isExpired": false
+  }
+  ```
+- `POST /api/system/ssl-certificate` — corpo `{ "cert": "-----BEGIN CERTIFICATE-----...", "key": "-----BEGIN PRIVATE KEY-----...", "chain": "..." }`
+  (`chain` opcional, anexada após `cert`). Valida que `cert` é um X.509 parseável, que
+  `key` é uma chave privada PEM sem senha, que a chave realmente corresponde ao
+  certificado, e que o certificado não está expirado — rejeita com `400` caso
+  contrário. Faz backup dos arquivos anteriores antes de sobrescrever
+  (`TLS_BACKUP_DIR`) → `200` com o mesmo formato do `GET` acima.
+- `DELETE /api/system/ssl-certificate` → remove o certificado customizado e gera um
+  novo autoassinado (mesmo backup automático antes) → `200` com o novo status.
 
 ---
 
