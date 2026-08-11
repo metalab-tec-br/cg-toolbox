@@ -923,10 +923,26 @@ document.getElementById('noteBodyEditor') && document.getElementById('noteBodyEd
 // Filtra os cards pelo texto digitado no campo de pesquisa (nome, descrição, tags e o
 // próprio texto dos comandos). Roda depois do filtro de pastas, então só esconde
 // mais — nunca reexibe um card que o filtro de pastas já escondeu.
-// Chamado a cada tecla digitada no campo de pesquisa: re-renderiza e mostra/esconde o "x" de limpar.
+// Chamado a cada tecla digitada no campo de pesquisa: mostra/esconde o "x" de limpar
+// na hora (feedback imediato) e reaplica o filtro de texto com um pequeno debounce.
+//
+// Antes chamava render() completo a cada tecla — que reconstrói TODO o #out
+// (innerHTML com o HTML de cada card, de novo, do zero) mesmo sem nenhum dado
+// ter mudado, só porque render() também chama applySearchFilter() no final
+// (ver js/render.js). Mas applySearchFilter() é um filtro 100% em cima do DOM
+// já existente (mostra/esconde .card via textContent, não usa nada que só um
+// render() novo produziria) — então bastava chamar só ela. Ficou muito
+// perceptível depois do import de 1452 comandos: cada tecla digitada
+// disparava um rebuild de ~1452 cards de HTML só para no fim aplicar um
+// filtro que nem olha pro HTML novo.
+let _cmdSearchDebounceTimer = null;
 function onSearchInput() {
   updateSearchClearBtn();
-  render();
+  if (_cmdSearchDebounceTimer) clearTimeout(_cmdSearchDebounceTimer);
+  _cmdSearchDebounceTimer = setTimeout(() => {
+    _cmdSearchDebounceTimer = null;
+    applySearchFilter();
+  }, 120);
 }
 function updateSearchClearBtn() {
   const btn = document.getElementById('cmdSearchClear');
@@ -940,7 +956,8 @@ function clearCommandSearch() {
   saveCmdSearchHistoryEntry(input.value); // preserva o texto no histórico antes de limpar
   input.value = '';
   updateSearchClearBtn();
-  render();
+  if (_cmdSearchDebounceTimer) { clearTimeout(_cmdSearchDebounceTimer); _cmdSearchDebounceTimer = null; }
+  applySearchFilter(); // mesmo motivo de onSearchInput() — não precisa de um render() completo
   input.focus();
 }
 

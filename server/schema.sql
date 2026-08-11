@@ -461,3 +461,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_commands_topic ON commands(topic);
 CREATE INDEX IF NOT EXISTS idx_command_lines_command ON command_lines(command_id);
 CREATE INDEX IF NOT EXISTS idx_command_diffs_command ON command_diffs(command_id);
+-- command_diff_lines só tinha PK em `id` — toda busca por diff_id (ver
+-- shapeCommand()/shapeCommandsBatch() em server/index.js) fazia sequential
+-- scan; ficou perceptível depois do import de 1452 comandos.
+CREATE INDEX IF NOT EXISTS idx_command_diff_lines_diff ON command_diff_lines(diff_id);

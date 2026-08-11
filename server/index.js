@@ -510,6 +510,133 @@ async function shapeCommand(row, username) {
   };
 }
 
+// Agrupa `rows` (cada um com uma coluna `keyField`) num Map<valor, array de
+// linhas> — usado por shapeCommandsBatch() abaixo para distribuir o
+// resultado de UMA query batched entre os N comandos que ela cobre, sem
+// precisar de uma query por comando.
+function _groupRowsBy(rows, keyField) {
+  const map = new Map();
+  for (const r of rows) {
+    const key = r[keyField];
+    let arr = map.get(key);
+    if (!arr) { arr = []; map.set(key, arr); }
+    arr.push(r);
+  }
+  return map;
+}
+
+// Versão em lote de shapeCommand() — usada só por GET /api/commands (a
+// listagem completa). shapeCommand() faz 8+ queries (uma por comando) para
+// vendors/systems/versions/environments/topics/pastas/lines/diffs, mais uma
+// query extra por diff (command_diff_lines) — ótimo para 1 comando (GET/POST/
+// PUT /api/commands/:id, que continuam usando shapeCommand() normalmente),
+// péssimo para a lista inteira: com N comandos vira ~8N+ round-trips ao
+// Postgres (N=1452 → mais de 11 mil), competindo pelo pool de conexões
+// (server/db.js: max=10) e serializando o que deveria ser meia dúzia de
+// queries. Aqui cada tabela relacionada é buscada UMA vez para TODOS os
+// comandos de uma vez (`WHERE command_id = ANY($1)`) e distribuída em
+// memória — mesmo formato de saída de shapeCommand(), só que O(1) queries
+// por tabela em vez de O(N).
+async function shapeCommandsBatch(rows, username) {
+  if (!rows.length) return [];
+  const ids = rows.map(r => r.id);
+
+  const [vendorsQ, systemsQ, versionsQ, envQ, topicsQ, folderQ, linesQ, diffsQ] = await Promise.all([
+    pool.query('SELECT command_id, vendor FROM command_vendors WHERE command_id = ANY($1) ORDER BY command_id, vendor', [ids]),
+    pool.query('SELECT command_id, system FROM command_systems WHERE command_id = ANY($1) ORDER BY command_id, system', [ids]),
+    pool.query('SELECT command_id, version FROM command_versions WHERE command_id = ANY($1) ORDER BY command_id, version', [ids]),
+    pool.query('SELECT command_id, environment FROM command_environments WHERE command_id = ANY($1) ORDER BY command_id, environment', [ids]),
+    pool.query('SELECT command_id, topic FROM command_topics WHERE command_id = ANY($1) ORDER BY command_id, topic', [ids]),
+    username
+      ? pool.query(
+          `SELECT fc.command_id, fc.folder_id FROM folder_commands fc
+           JOIN folders f ON f.id = fc.folder_id
+           WHERE fc.command_id = ANY($1) AND f.username = $2
+           ORDER BY fc.command_id, fc.folder_id`,
+          [ids, username]
+        )
+      : Promise.resolve({ rows: [] }),
+    pool.query('SELECT command_id, variant, sort_order, line_type, prompt, content, supports_export, image_data FROM command_lines WHERE command_id = ANY($1) ORDER BY command_id, variant, sort_order, id', [ids]),
+    pool.query('SELECT id, command_id, version, note, sort_order FROM command_diffs WHERE command_id = ANY($1) ORDER BY command_id, sort_order, id', [ids]),
+  ]);
+
+  const diffIds = diffsQ.rows.map(d => d.id);
+  const diffLinesQ = diffIds.length
+    ? await pool.query('SELECT diff_id, sort_order, line_type, prompt, content FROM command_diff_lines WHERE diff_id = ANY($1) ORDER BY diff_id, sort_order, id', [diffIds])
+    : { rows: [] };
+
+  const vendorsBy = _groupRowsBy(vendorsQ.rows, 'command_id');
+  const systemsBy = _groupRowsBy(systemsQ.rows, 'command_id');
+  const versionsBy = _groupRowsBy(versionsQ.rows, 'command_id');
+  const envBy = _groupRowsBy(envQ.rows, 'command_id');
+  const topicsBy = _groupRowsBy(topicsQ.rows, 'command_id');
+  const folderBy = _groupRowsBy(folderQ.rows, 'command_id');
+  const linesBy = _groupRowsBy(linesQ.rows, 'command_id');
+  const diffsBy = _groupRowsBy(diffsQ.rows, 'command_id');
+  const diffLinesBy = _groupRowsBy(diffLinesQ.rows, 'diff_id');
+
+  const shapeLine = l => ({
+    line_type: l.line_type,
+    prompt: l.prompt,
+    content: l.content,
+    supports_export: !!l.supports_export,
+    image_data: l.image_data || null,
+  });
+
+  return rows.map(row => {
+    const vendors = (vendorsBy.get(row.id) || []).map(v => v.vendor);
+    const systemList = (systemsBy.get(row.id) || []).map(s => s.system);
+    const versions = (versionsBy.get(row.id) || []).map(v => v.version);
+    const environments = (envBy.get(row.id) || []).map(e => e.environment);
+    const topics = (topicsBy.get(row.id) || []).map(t => t.topic);
+    const folderIds = (folderBy.get(row.id) || []).map(f => f.folder_id);
+    const rowLines = linesBy.get(row.id) || [];
+    const lines = {
+      default: rowLines.filter(l => l.variant === 'default').map(shapeLine),
+      empty: rowLines.filter(l => l.variant === 'empty').map(shapeLine),
+    };
+    const diffs = (diffsBy.get(row.id) || []).map(d => ({
+      version: d.version,
+      note: d.note,
+      lines: (diffLinesBy.get(d.id) || []).map(shapeLine),
+    }));
+
+    return {
+      id: row.id,
+      topic: row.topic,
+      topics: topics.length ? topics : [row.topic],
+      folder_ids: folderIds,
+      icon: row.icon,
+      sort_order: row.sort_order,
+      requires_ips: !!row.requires_ips,
+      requires_ip_port: !!row.requires_ip_port,
+      placeholder_resolver: row.placeholder_resolver,
+      raw_template: row.raw_template,
+      name: row.name,
+      name_empty: row.name_empty,
+      desc: row.desc,
+      desc_empty: row.desc_empty,
+      about: {
+        icon: row.about_icon,
+        purpose: row.about_purpose,
+        when: row.about_when,
+        obs: row.about_obs,
+      },
+      vendors,
+      systems: systemList,
+      versions,
+      environments,
+      lines,
+      diffs,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      created_by: row.created_by || null,
+      modified_by: row.modified_by || row.created_by || null,
+      is_system: row.created_by === 'System',
+    };
+  });
+}
+
 async function findCommand(id) {
   const { rows } = await pool.query('SELECT * FROM commands WHERE id = $1', [id]);
   return rows[0] || null;
@@ -569,7 +696,11 @@ app.get('/api/commands', async (req, res) => {
 
     const { rows } = await pool.query(sql, params);
     const username = getCurrentUsername(req);
-    const shaped = await Promise.all(rows.map(r => shapeCommand(r, username)));
+    // shapeCommandsBatch() em vez de Promise.all(rows.map(shapeCommand)) — ver
+    // comentário na função: evita ~8 queries POR COMANDO (N+1) nesta listagem
+    // completa, que ficou perceptivelmente lenta depois do import de 1452
+    // comandos.
+    const shaped = await shapeCommandsBatch(rows, username);
     res.json(shaped);
   } catch (err) {
     console.error(err);

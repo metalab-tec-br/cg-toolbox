@@ -187,9 +187,24 @@ async function render() {
     const sections = [];
     const envCards = buildEnvCards(rows, ce, values);
     if (envCards.length) sections.push(section('🏗️', `Environment: ${envLabel(ce)}`, envCards, keyPrefix + 'environment'));
+    // Agrupa `rows` por tópico UMA VEZ (Map<topic, rows[]>) em vez de deixar
+    // buildTopicSection (js/db-render-engine.js) escanear o array `rows`
+    // INTEIRO de novo a cada tópico do catálogo — combos (Versão×Ambiente) ×
+    // tópicos passadas completas sobre 1452 comandos ficou perceptível
+    // depois do import grande. buildTopicSection ainda re-filtra o
+    // subconjunto recebido (agora já pequeno) por segurança — comportamento
+    // idêntico, só que sem repetir o scan caro sobre o array completo.
+    const rowsByTopic = new Map();
+    rows.forEach(r => {
+      (r.topics || [r.topic]).forEach(tp => {
+        let arr = rowsByTopic.get(tp);
+        if (!arr) { arr = []; rowsByTopic.set(tp, arr); }
+        arr.push(r);
+      });
+    });
     topicsSorted.forEach(tp => {
       if (show(tp.key)) {
-        sections.push(buildTopicSection(rows, tp.key, '', tp.label, values, hasIPs, keyPrefix + tp.key));
+        sections.push(buildTopicSection(rowsByTopic.get(tp.key) || [], tp.key, '', tp.label, values, hasIPs, keyPrefix + tp.key));
       }
     });
     return sections.join('');
@@ -221,9 +236,22 @@ async function render() {
       // pastas a partir de commands.folder_ids sozinho.
       const myFolders = (typeof FOLDERS !== 'undefined' ? FOLDERS : []).slice()
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      // Mesma otimização de buildSections() acima: agrupa `commands` por
+      // pasta UMA VEZ (Map<folderId, rows[]>) em vez de deixar
+      // buildFolderSection escanear o array inteiro de novo a cada pasta do
+      // usuário — um comando pode estar em mais de uma pasta (folder_ids),
+      // então entra na lista de cada uma.
+      const commandsByFolder = new Map();
+      commands.forEach(c => {
+        (c.folder_ids || []).forEach(fid => {
+          let arr = commandsByFolder.get(fid);
+          if (!arr) { arr = []; commandsByFolder.set(fid, arr); }
+          arr.push(c);
+        });
+      });
       folderGroups = myFolders.map(folder => {
         const editMode = typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(folder.id);
-        return buildFolderSection(commands, folder.id, folder.name, values, hasIPs, `${kp}folder${folder.id}`, folder.notes, folder.order, editMode);
+        return buildFolderSection(commandsByFolder.get(folder.id) || [], folder.id, folder.name, values, hasIPs, `${kp}folder${folder.id}`, folder.notes, folder.order, editMode);
       }).join('');
     } else {
       const allFolders = typeof ALL_USERS_FOLDERS !== 'undefined' ? ALL_USERS_FOLDERS : [];
@@ -294,11 +322,21 @@ async function render() {
   // daquele autor. Autores em ordem alfabética (comparação sem caixa); "—"
   // agrupa comandos sem created_by (registros antigos/sem autoria).
   if (GROUP_BY === 'creator') {
-    const creators = [...new Set(commands.map(c => c.created_by || '—'))].sort((a, b) =>
+    // Mesma otimização de buildSections()/pastas acima: agrupa `commands`
+    // por autor UMA VEZ em vez de filtrar o array inteiro de novo a cada
+    // autor da lista.
+    const commandsByCreator = new Map();
+    commands.forEach(c => {
+      const key = c.created_by || '—';
+      let arr = commandsByCreator.get(key);
+      if (!arr) { arr = []; commandsByCreator.set(key, arr); }
+      arr.push(c);
+    });
+    const creators = [...commandsByCreator.keys()].sort((a, b) =>
       a.localeCompare(b, undefined, { sensitivity: 'base' })
     );
     const creatorGroups = creators.map(creator => {
-      const subset = commands.filter(c => (c.created_by || '—') === creator);
+      const subset = commandsByCreator.get(creator) || [];
       // Chave da seção precisa ser um identificador "seguro" (sem \, ', etc.) —
       // usernames vêm no formato "DOMÍNIO\usuario" (ver NTLM em server/index.js),
       // e um backslash dentro do onclick="toggleSection('...')" gerado por
