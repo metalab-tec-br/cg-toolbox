@@ -2,6 +2,20 @@
 // RENDER — now backed by /api/commands (api-client.js + db-render-engine.js)
 // instead of the hardcoded buildStatic()/buildCmds() in commands.js.
 // ════════════════════════════════════════════════
+
+// Debounce de 120ms para o campo "Export to" (id="f-log", index.html) — mesmo
+// motivo do debounce em onQueryInput() (js/query-bar.js): oninput="render()"
+// direto disparava uma reconstrução completa do DOM a cada tecla digitada no
+// caminho do arquivo, o que ficou lento com o catálogo grande de comandos.
+let _exportPathDebounceTimer = null;
+function onExportPathInput() {
+  if (_exportPathDebounceTimer) clearTimeout(_exportPathDebounceTimer);
+  _exportPathDebounceTimer = setTimeout(() => {
+    _exportPathDebounceTimer = null;
+    render();
+  }, 120);
+}
+
 async function render() {
   const src  = gv('src_ip'), dst = gv('dst_ip');
   const sp   = gv('src_port') || '0', dp = gv('dst_port') || '0';

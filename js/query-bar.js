@@ -116,10 +116,22 @@ function updateQueryClearBtn() {
   btn.style.display = (queryTags.length || (gv('cpQuery') || '').length) ? 'flex' : 'none';
 }
 
+// Debounce de 120ms (mesmo padrão de onSearchInput em js/folders.js) — sem
+// isso, cada tecla digitada em "Command parameter" (ex.: um IP inteiro)
+// disparava um render() completo (reconstrói o innerHTML de TODOS os
+// comandos), o que ficou perceptível como lentidão de digitação depois do
+// import de 1452 comandos. applyQueryToHiddenInputs/updateQueryClearBtn
+// continuam síncronos (baratos, só refletem o texto/tags na tela); só o
+// render() em si (caro, cresce com o total de comandos) é postergado.
+let _queryInputDebounceTimer = null;
 function onQueryInput() {
   applyQueryToHiddenInputs(getComposedQuery());
   updateQueryClearBtn();
-  render();
+  if (_queryInputDebounceTimer) clearTimeout(_queryInputDebounceTimer);
+  _queryInputDebounceTimer = setTimeout(() => {
+    _queryInputDebounceTimer = null;
+    render();
+  }, 120);
 }
 
 // Enter confirma o texto digitado como uma label separada; Backspace com o
@@ -334,6 +346,9 @@ function clearQuery() {
   renderQueryTagsUI();
   applyQueryToHiddenInputs('');
   updateQueryClearBtn();
+  // Ação discreta (clique no X) — cancela qualquer render() de digitação
+  // ainda pendente no debounce e renderiza já, sem esperar 120ms.
+  if (_queryInputDebounceTimer) { clearTimeout(_queryInputDebounceTimer); _queryInputDebounceTimer = null; }
   render();
   if (input) input.focus();
 }
