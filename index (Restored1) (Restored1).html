@@ -226,7 +226,7 @@
          miniatura das linhas do tipo 'image' aparece direto no card, sem
          precisar clicar no badge "[Image]# ...". -->
     <div class="sb-toggle" id="tog-show-images" onclick="toggleShowImages()">
-      <div class="tog-track"><div class="tog-knob"></div></div><span>Images</span>
+      <div class="tog-track"><div class="tog-knob"></div></div><span>Show images</span>
     </div>
     <!-- Ordem alfabética (Details, Export, Show images, System commands). -->
     <div class="sb-toggle" id="tog-system-commands" onclick="toggleShowSystemCommands()">
@@ -290,7 +290,7 @@
         </span>
         <div class="cpq-tags-box" id="cpqTagsBox" onclick="focusQueryInput()">
           <span class="cpq-tags" id="cpqTags"></span>
-          <input type="text" id="cpQuery" class="cpq-input" placeholder="Parameter" autocomplete="off" oninput="onQueryInput()" onkeydown="onQueryKeydown(event)" onfocus="openQueryPanel()" onblur="closeQueryPanel()">
+          <input type="text" id="cpQuery" class="cpq-input" placeholder="Command parameter" autocomplete="off" oninput="onQueryInput()" onkeydown="onQueryKeydown(event)" onfocus="openQueryPanel()" onblur="closeQueryPanel()">
         </div>
         <button type="button" class="cpq-clear" id="cpQueryClear" onclick="clearQuery()" title="Clear filters">✕</button>
       </div>
@@ -496,7 +496,7 @@
             </button>
             <div class="dd-panel seg" id="mHome">
               <button type="button" class="seg-btn" data-val="folders">Folders</button>
-              <button type="button" class="seg-btn" data-val="menu">Command</button>
+              <button type="button" class="seg-btn" data-val="menu">Command menu</button>
               <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mHomeDD')">Close</button></div>
             </div>
           </div>
@@ -641,7 +641,7 @@
              applyShowImagesSetting em js/settings.js e a renderização
              condicional em termRender(), js/terminal-renderer.js). -->
         <div class="sb-toggle" id="mShowImagesToggle" onclick="toggleModalShowImages()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>Images</span>
+          <div class="tog-track"><div class="tog-knob"></div></div><span>Show images</span>
         </div>
         <!-- Mesma preferência pessoal do toggle "System commands" da sidebar
              (Options) — só um espelho aqui no modal, igual ao par
