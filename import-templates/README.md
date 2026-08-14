@@ -22,7 +22,7 @@ template de lá — `Configurações → Cadastro → Import commands → Downlo
 template` — para conferir a lista atual e um exemplo preenchido):
 
 ```
-Name;Description;Vendor;System;Topics;Versions;Environments;Requires IP/Port;Prompt;Command;Note;Purpose;When to use;Notes
+Name;Description;Vendor;System;Topics;Versions;Environments;Prompt;Command;Note;Purpose;When to use;Notes
 ```
 
 - Sem coluna de ID — é um detalhe interno, sempre gerado automaticamente a

@@ -109,20 +109,14 @@ Cria um comando. Corpo (campos obrigatórios em **negrito**):
   "versions": ["r8110"],
   "environments": ["standalone"],
   "topics": ["troubleshooting"],
-  "requires_ips": true,
   "requires_ip_port": false,
   "placeholder_resolver": null,
-  "raw_template": "fw monitor -e \"accept src={{src_ip}};\" -o {{capFile}}",
   "about_icon": "ℹ️",
   "about_purpose": "...",
   "about_when": "...",
   "about_obs": "...",
   "lines": [
     { "variant": "default", "sort_order": 0, "line_type": "cmd", "prompt": "[Expert@FW]#", "content": "fw monitor -e \"...\"", "supports_export": true }
-  ],
-  "diffs": [
-    { "version": "R82+", "note": "Syntax changed in R82", "sort_order": 0,
-      "lines": [{ "line_type": "cmd", "prompt": "[Expert@FW]#", "content": "fw monitor -o {{capFile}} (R82+)" }] }
   ]
 }
 ```
@@ -139,18 +133,21 @@ usuário atual — usado hoje só pelo checkbox admin-only "Import as System com
 no import de CSV. O header é ignorado silenciosamente (sem erro) para não-admins;
 o comando é criado normalmente como próprio do usuário.
 
-**Guarda importante**: `requires_ips`/`requires_ip_port` só são persistidos como `true`
-se `lines` contiver pelo menos uma linha com `"variant": "empty"` e `content` não vazio
-— essas linhas são o que aparece no card quando SRC/DST (ou IP/Porta) ainda não foram
-preenchidos. Sem isso, a flag é rebaixada para `false` no servidor (em vez de deixar o
-comando entrar num estado "invisível" na UI — ver histórico do bug em
-`server/index.js`, `buildCommandColumns`).
+**Guarda importante**: `requires_ip_port` só é persistido como `true` se `lines`
+contiver pelo menos uma linha com `"variant": "empty"` e `content` não vazio — essas
+linhas são o que aparece no card quando IP/Porta ainda não foram preenchidos. Sem isso,
+a flag é rebaixada para `false` no servidor (em vez de deixar o comando entrar num
+estado "invisível" na UI — ver histórico do bug em `server/index.js`,
+`buildCommandColumns`). Não há mais controle de UI para essa flag no editor de
+comandos — ela só é definida via dados diretos no banco (ex.: o comando
+`tcpdumpipport`); as linhas `variant: "empty"` continuam sendo lidas/gravadas
+normalmente para não perder os dados desses comandos ao salvar uma edição.
 
 Retorna `201` com o **Command** criado. `400 validation_error` se faltar campo
 obrigatório. `409 conflict` se `id` já existir.
 
 ### `PUT /api/commands/:id`
-Mesmo corpo do `POST` (substitui TODOS os filhos — linhas/diffs/escopo). Se `id`
+Mesmo corpo do `POST` (substitui TODOS os filhos — linhas/escopo). Se `id`
 vier no corpo, precisa bater com o da URL. Sem restrição de dono entre usuários comuns
 — qualquer um edita qualquer comando de qualquer outro usuário. **Exceção**: comandos
 de referência (`created_by: "System"`) só podem ser editados por admins — usuário
@@ -159,7 +156,7 @@ comum recebe `403 forbidden` (a UI já esconde o botão Edit nesse caso e oferec
 usuário atual. `404 not_found` / `400 validation_error` / `403 forbidden`.
 
 ### `DELETE /api/commands/:id` — **(admin)**
-Remove o comando e (via `ON DELETE CASCADE`) todas as suas linhas/diffs/escopo/
+Remove o comando e (via `ON DELETE CASCADE`) todas as suas linhas/escopo/
 membership em pastas. `204` no sucesso, `404 not_found`, `403 forbidden` se o chamador
 não for admin.
 
@@ -172,10 +169,8 @@ não for admin.
   "folder_ids": [3, 7],
   "icon": "📄",
   "sort_order": 0,
-  "requires_ips": true,
   "requires_ip_port": false,
   "placeholder_resolver": null,
-  "raw_template": "fw monitor -e \"accept src={{src_ip}};\" -o {{capFile}}",
   "name": "fw monitor",
   "name_empty": "fw monitor (fill SRC/DST)",
   "desc": "Captures traffic at kernel level",
@@ -189,7 +184,6 @@ não for admin.
     "default": [{ "line_type": "cmd", "prompt": "[Expert@FW]#", "content": "...", "supports_export": true, "image_data": null }],
     "empty": [{ "line_type": "note", "prompt": null, "content": "Fill SRC/DST to see the full command", "supports_export": false, "image_data": null }]
   },
-  "diffs": [{ "version": "R82+", "note": "Syntax changed in R82", "lines": [{ "line_type": "cmd", "prompt": "[Expert@FW]#", "content": "..." }] }],
   "created_at": "2026-08-04T12:00:00.000Z",
   "updated_at": "2026-08-04T12:00:00.000Z",
   "created_by": "rsilva",
@@ -476,9 +470,8 @@ etc.), administrados na aba Parâmetros da tela de catálogo.
   `^[A-Za-z0-9._-]{1,40}$`. `409 conflict` se já existir.
 - `PUT /api/parameters/:key` — só `label`/`sort_order` (key imutável).
 - `DELETE /api/parameters/:key` — bloqueado com `409` se: (a) `{{key}}` aparece em
-  algum `raw_template`/linha/diff de algum comando (`error: "in_use"`); ou (b) é
-  `src_ip`/`dst_ip` e algum comando tem `requires_ips=true`, ou é `ip`/`port` e algum
-  comando tem `requires_ip_port=true` (`error: "structural_dependency"` — esses 4 são
+  alguma linha de algum comando (`error: "in_use"`); ou (b) é `ip`/`port` e algum
+  comando tem `requires_ip_port=true` (`error: "structural_dependency"` — esses 2 são
   lidos diretamente pela lógica de estado vazio do card, não só por substituição de
   template).
 

@@ -109,12 +109,11 @@ permite cadastrar, editar e excluir esses itens.
   `list_mode = 'list_range'` funciona como substituição simples de texto — o valor digitado
   entra literalmente no lugar de `{{key}}`.
 - Exclusão é bloqueada (409) quando o parâmetro está em uso — via texto genérico (`{{key}}`
-  aparece em algum comando) OU, especificamente para `src`, `dst`, `ip` e `port`, quando
-  algum comando depende deles de forma estrutural (flags `requires_ips`/`requires_ip_port`
-  usadas pelo motor de renderização para decidir o estado vazio "informe IP/Porta").
-  Essa segunda checagem é fixa no código (não é uma opção do admin) porque esses 4
-  parâmetros são lidos pelo nome diretamente na lógica do front-end, e não apenas via
-  substituição de template — um simples "está em uso" no texto não bastaria para detectar
-  o risco de quebra.
+  aparece em algum comando) OU, especificamente para `ip` e `port`, quando algum comando
+  depende deles de forma estrutural (flag `requires_ip_port`, usada pelo motor de
+  renderização para decidir o estado vazio "informe IP/Porta"). Essa segunda checagem é
+  fixa no código (não é uma opção do admin) porque esses 2 parâmetros são lidos pelo nome
+  diretamente na lógica do front-end, e não apenas via substituição de template — um
+  simples "está em uso" no texto não bastaria para detectar o risco de quebra.
 - API: `GET /api/catalogs` (inclui `parameters`) e `POST`/`PUT /:key`/`DELETE /:key` em
   `/api/parameters`.
