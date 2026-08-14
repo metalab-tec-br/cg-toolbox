@@ -178,6 +178,10 @@ let _queryInputDebounceTimer = null;
 function onQueryInput() {
   applyQueryToHiddenInputs(getComposedQuery());
   updateQueryClearBtn();
+  // Typeahead dos chips (ver applyQueryChipsFilter) é síncrono e barato (só
+  // mexe em display de elementos já existentes) — roda a cada tecla, sem
+  // debounce, diferente do render() completo mais abaixo.
+  if (typeof applyQueryChipsFilter === 'function') applyQueryChipsFilter();
   if (_queryInputDebounceTimer) clearTimeout(_queryInputDebounceTimer);
   _queryInputDebounceTimer = setTimeout(() => {
     _queryInputDebounceTimer = null;
@@ -433,6 +437,7 @@ function clearQuery() {
   renderQueryTagsUI();
   applyQueryToHiddenInputs('');
   updateQueryClearBtn();
+  if (typeof applyQueryChipsFilter === 'function') applyQueryChipsFilter(); // campo ficou vazio: chips voltam a mostrar tudo que é usado (sem filtro de texto)
   // Ação discreta (clique no X) — cancela qualquer render() de digitação
   // ainda pendente no debounce e renderiza já, sem esperar 120ms.
   if (_queryInputDebounceTimer) { clearTimeout(_queryInputDebounceTimer); _queryInputDebounceTimer = null; }
@@ -468,6 +473,7 @@ function openQueryPanel() {
   const panel = document.getElementById('cpqPanel');
   if (panel) panel.classList.add('open');
   renderQueryHistoryUI();
+  applyQueryChipsFilter(); // reflete o que já estiver digitado no campo, se o usuário reabrir o painel sem ter limpado o texto
 }
 function closeQueryPanel() {
   const panel = document.getElementById('cpqPanel');
@@ -482,8 +488,10 @@ document.addEventListener('click', ev => {
 });
 
 // ── Chips dinâmicos: só mostra o filtro de um campo se algum comando ATUALMENTE exibido
-// (respeitando Tópico/Ambiente selecionados) de fato usa aquele {{token}}. Chamado por
-// render.js a cada renderização, depois que a lista de comandos é buscada da API. ──
+// (respeitando Tópico/Ambiente selecionados) de fato usa aquele {{token}}, E (pedido do
+// usuário) se o campo casa com o texto que estiver sendo digitado no momento — ver
+// applyQueryChipsFilter mais abaixo, que combina os dois critérios. computeUsedQueryTokens
+// é chamado por render.js a cada renderização, depois que a lista de comandos é buscada da API. ──
 function computeUsedQueryTokens(commands, topicSel, envSel) {
   const topicsAll = topicSel.length === 0;
   const topics = topicsAll ? null : new Set(topicSel);
@@ -503,11 +511,48 @@ function computeUsedQueryTokens(commands, topicSel, envSel) {
   });
   return used;
 }
+// `usedTokens` (recalculado a cada render(), ver render.js) e o texto que o
+// usuário está digitando AGORA (typeahead, ver applyQueryChipsFilter abaixo)
+// são dois filtros INDEPENDENTES sobre os mesmos chips — um chip só aparece
+// se passar nos dois ao mesmo tempo. Guardamos o último usedTokens recebido
+// para poder reaplicar o filtro combinado a cada tecla digitada, sem
+// precisar esperar o próximo render() (que só é chamado, debounced, quando o
+// valor de um parâmetro muda — nunca só por causa do NOME do campo sendo
+// digitado antes do ':').
+let _cpqLastUsedTokens = null;
 function updateQueryChipsVisibility(usedTokens) {
+  _cpqLastUsedTokens = usedTokens;
+  applyQueryChipsFilter();
+}
+
+// Pedido do usuário: "quando o usuário começar a digitar vá exibindo os
+// parâmetros que contém as letras digitadas, exemplo: ao digitar src deve
+// trazer src_ip e src_port". Só filtra por texto enquanto o usuário ainda
+// está ESCOLHENDO o campo (a parte antes do ':') — assim que o texto já tem
+// um ':', ele já escolheu o campo e está digitando o VALOR; nesse ponto o
+// filtro de texto para de fazer sentido (nenhum chip teria ':' no meio do
+// nome) e a lista volta a mostrar todos os campos realmente usados pelos
+// comandos visíveis (usedTokens), como antes desta mudança.
+function currentTypedFieldFragment() {
+  const input = document.getElementById('cpQuery');
+  const raw = (input && input.value) || '';
+  if (raw.includes(':')) return '';
+  return raw.trim().toLowerCase();
+}
+function applyQueryChipsFilter() {
   const chips = document.querySelectorAll('#cpqChips .cpq-chip');
+  const usedTokens = _cpqLastUsedTokens;
+  const typed = currentTypedFieldFragment();
   let anyVisible = false;
   chips.forEach(chip => {
-    const show = usedTokens.has(chip.dataset.field);
+    const usedOk = !usedTokens || usedTokens.has(chip.dataset.field);
+    // Casa tanto pelo nome técnico do campo (data-field, ex.: "src_ip")
+    // quanto pelo rótulo amigável (title, ex.: "Source IP") — o usuário pode
+    // digitar qualquer um dos dois.
+    const typedOk = !typed
+      || chip.dataset.field.toLowerCase().includes(typed)
+      || (chip.title || '').toLowerCase().includes(typed);
+    const show = usedOk && typedOk;
     chip.style.display = show ? '' : 'none';
     if (show) anyVisible = true;
   });
