@@ -445,15 +445,34 @@ function clearQuery() {
   if (input) input.focus();
 }
 
-// Insere "campo:" no final do texto (com espaço antes, se já houver conteúdo) e devolve
-// o foco/cursor ao campo — o usuário só precisa digitar o valor em seguida. Mesma mecânica
-// do "Add a search filter" do Check Point.
+// Insere "campo:" no campo de busca e devolve o foco/cursor pra ele — o usuário só
+// precisa digitar o valor em seguida. Mesma mecânica do "Add a search filter" do
+// Check Point.
+//
+// Bug reportado: digitar "src" (fragmento usado pelo typeahead dos chips, ver
+// applyQueryChipsFilter) e clicar no chip "src_ip" resultava em "src src_ip:" —
+// o texto que ainda estava sendo digitado ficava do lado do token escolhido em
+// vez de ser substituído por ele. Fix: separa o texto atual em `prefix` (tudo
+// até o último espaço, incluindo ele) e `lastFragment` (a "palavra" sendo
+// digitada agora, sem espaço). Se essa palavra ainda NÃO tem ':' — é
+// exatamente o fragmento de nome de campo que o typeahead está casando —
+// o clique SUBSTITUI só ela pelo token escolhido. Se já tem ':' (o usuário já
+// escolheu um campo e está digitando o valor, ou já tem um token anterior
+// completo), mantém o comportamento antigo de ACRESCENTAR um novo token
+// depois, separado por espaço.
 function insertFieldToken(token) {
   const input = document.getElementById('cpQuery');
   if (!input) return;
   const cur = input.value;
-  const sep = cur.length && !/\s$/.test(cur) ? ' ' : '';
-  input.value = cur + sep + token + ':';
+  const m = cur.match(/^(.*[\s])?(\S*)$/);
+  const prefix = (m && m[1]) || '';
+  const lastFragment = (m && m[2]) || '';
+  if (lastFragment.includes(':')) {
+    const sep = cur.length && !/\s$/.test(cur) ? ' ' : '';
+    input.value = cur + sep + token + ':';
+  } else {
+    input.value = prefix + token + ':';
+  }
   input.focus();
   const end = input.value.length;
   input.setSelectionRange(end, end);
