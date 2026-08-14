@@ -818,7 +818,7 @@ app.get('/api/folders', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
     const { rows } = await pool.query(
-      `SELECT f.id, f.name, f.sort_order,
+      `SELECT f.id, f.name, f.sort_order, f.parent_id,
               COALESCE(array_agg(fc.command_id ORDER BY fc.sort_order, fc.created_at) FILTER (WHERE fc.command_id IS NOT NULL), '{}') AS command_ids
        FROM folders f
        LEFT JOIN folder_commands fc ON fc.folder_id = f.id
@@ -829,7 +829,7 @@ app.get('/api/folders', async (req, res) => {
     );
     const { orderByFolder, notesByFolder } = await loadFolderOrderAndNotes(rows.map(r => r.id));
     res.json(rows.map(r => ({
-      id: r.id, name: r.name, sort_order: r.sort_order, command_ids: r.command_ids,
+      id: r.id, name: r.name, sort_order: r.sort_order, parent_id: r.parent_id, command_ids: r.command_ids,
       notes: notesByFolder.get(r.id) || [],
       order: orderByFolder.get(r.id) || [],
     })));
@@ -852,7 +852,7 @@ app.get('/api/folders', async (req, res) => {
 app.get('/api/folders/all', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT f.id, f.username, f.name, f.sort_order,
+      `SELECT f.id, f.username, f.name, f.sort_order, f.parent_id,
               COALESCE(array_agg(fc.command_id ORDER BY fc.sort_order, fc.created_at) FILTER (WHERE fc.command_id IS NOT NULL), '{}') AS command_ids
        FROM folders f
        LEFT JOIN folder_commands fc ON fc.folder_id = f.id
@@ -861,7 +861,7 @@ app.get('/api/folders/all', async (req, res) => {
     );
     const { orderByFolder, notesByFolder } = await loadFolderOrderAndNotes(rows.map(r => r.id));
     res.json(rows.map(r => ({
-      id: r.id, username: r.username, name: r.name, sort_order: r.sort_order, command_ids: r.command_ids,
+      id: r.id, username: r.username, name: r.name, sort_order: r.sort_order, parent_id: r.parent_id, command_ids: r.command_ids,
       notes: notesByFolder.get(r.id) || [],
       order: orderByFolder.get(r.id) || [],
     })));
@@ -874,17 +874,35 @@ app.get('/api/folders/all', async (req, res) => {
 // Cria uma pasta nova para o usuário atual. 409 se ele já tiver uma pasta com
 // esse nome (UNIQUE(username, name), ver schema.sql — err.code 23505 é o
 // código padrão do Postgres para violação de constraint única).
+// `parent_id` (opcional, subpastas): quando informado, precisa apontar para
+// uma pasta que já existe E pertence ao MESMO usuário — uma FK sozinha (ver
+// schema.sql) não expressa "mesmo dono", então checamos aqui, com 404 se o id
+// não existir/for de outro usuário (mesma convenção "não vaza a distinção"
+// usada no resto destes endpoints). Aninhamento é ilimitado — a subpasta pode
+// por sua vez ganhar suas próprias subpastas, então não há checagem de
+// profundidade nem risco de ciclo aqui (um ciclo só seria possível trocando o
+// parent_id de uma pasta JÁ existente para um de seus próprios descendentes,
+// operação que este endpoint — só criação — não oferece).
 app.post('/api/folders', async (req, res) => {
   const name = String((req.body && req.body.name) || '').trim();
+  const parentIdRaw = req.body && req.body.parent_id;
+  const parentId = (parentIdRaw === undefined || parentIdRaw === null || parentIdRaw === '') ? null : Number(parentIdRaw);
   try {
     if (!name) return res.status(400).json({ error: 'validation_error', message: '"name" is required' });
+    if (parentIdRaw != null && parentIdRaw !== '' && !Number.isInteger(parentId)) {
+      return res.status(400).json({ error: 'validation_error', message: '"parent_id" must be an integer' });
+    }
     const username = getCurrentUsername(req);
+    if (parentId !== null) {
+      const parent = await pool.query('SELECT id FROM folders WHERE id = $1 AND username = $2', [parentId, username]);
+      if (!parent.rows.length) return res.status(404).json({ error: 'not_found', message: `Parent folder '${parentId}' not found` });
+    }
     const { rows } = await pool.query(
-      'INSERT INTO folders (username, name) VALUES ($1, $2) RETURNING id, name, sort_order',
-      [username, name]
+      'INSERT INTO folders (username, name, parent_id) VALUES ($1, $2, $3) RETURNING id, name, sort_order, parent_id',
+      [username, name, parentId]
     );
     await logAudit(username, 'create', 'folder', String(rows[0].id), name);
-    res.status(201).json({ id: rows[0].id, name: rows[0].name, sort_order: rows[0].sort_order, command_ids: [] });
+    res.status(201).json({ id: rows[0].id, name: rows[0].name, sort_order: rows[0].sort_order, parent_id: rows[0].parent_id, command_ids: [] });
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'conflict', message: `You already have a folder named "${name}"` });
     console.error(err);

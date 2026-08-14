@@ -96,6 +96,11 @@ async function runMigrations() {
     // ao aplicar esta migração; só passa a ser reordenável a partir daqui.
     // row_number() é 1-based; window function particionada por pasta.
     await pool.query(`ALTER TABLE folder_commands ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0`);
+    // folders.parent_id (subpastas) — ver comentário em schema.sql. NULL por
+    // padrão (toda pasta já existente vira pasta de topo, comportamento
+    // idêntico ao de antes desta coluna existir).
+    await pool.query(`ALTER TABLE folders ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES folders(id) ON DELETE CASCADE`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id)`);
     // audit_log: generalizado de "só comandos" (command_id/command_name)
     // para qualquer entidade organizacional (pastas, notas, catálogos,
     // usuários, API keys — ver comentário em schema.sql e logAudit() em

@@ -245,11 +245,6 @@ async function render() {
     const scope = (typeof FOLDER_SCOPE !== 'undefined' && FOLDER_SCOPE) || 'mine';
     let folderGroups = '';
     if (scope === 'mine') {
-      // Mesma regra de buildFolderSection: pasta com só notas (sem comando
-      // nenhum) também precisa aparecer — não dá pra derivar a lista de
-      // pastas a partir de commands.folder_ids sozinho.
-      const myFolders = (typeof FOLDERS !== 'undefined' ? FOLDERS : []).slice()
-        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
       // Mesma otimização de buildSections() acima: agrupa `commands` por
       // pasta UMA VEZ (Map<folderId, rows[]>) em vez de deixar
       // buildFolderSection escanear o array inteiro de novo a cada pasta do
@@ -263,10 +258,20 @@ async function render() {
           arr.push(c);
         });
       });
-      folderGroups = myFolders.map(folder => {
+      // Subpastas (aninhamento ilimitado, ver buildFolderTree em
+      // js/folders.js): monta a árvore a partir de FOLDERS (cada pasta com
+      // seu parent_id) e desenha só as RAÍZES aqui — cada nó desenha suas
+      // próprias subpastas recursivamente (renderFolderNode abaixo) e as
+      // embute no CORPO da própria seção (childrenHtml, ver
+      // buildFolderSection/buildFolderSectionFromCards em
+      // db-render-engine.js), em vez de uma lista plana de seções lado a lado.
+      const tree = buildFolderTree(typeof FOLDERS !== 'undefined' ? FOLDERS : []);
+      const renderFolderNode = (folder, depth) => {
         const editMode = typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(folder.id);
-        return buildFolderSection(commandsByFolder.get(folder.id) || [], folder.id, folder.name, values, hasIPs, `${kp}folder${folder.id}`, folder.notes, folder.order, editMode);
-      }).join('');
+        const childrenHtml = tree.childrenOf(folder.id).map(child => renderFolderNode(child, depth + 1)).join('');
+        return buildFolderSection(commandsByFolder.get(folder.id) || [], folder.id, folder.name, values, hasIPs, `${kp}folder${folder.id}`, folder.notes, folder.order, editMode, childrenHtml, depth);
+      };
+      folderGroups = tree.roots.map(folder => renderFolderNode(folder, 0)).join('');
     } else {
       const allFolders = typeof ALL_USERS_FOLDERS !== 'undefined' ? ALL_USERS_FOLDERS : [];
       const targetUsername = scope.startsWith('user:') ? scope.slice('user:'.length) : null;
@@ -289,21 +294,28 @@ async function render() {
           // quem pediu não é o dono, sem exceção de role).
           const canManage = isOwn;
           const userKey = username.replace(/[^a-zA-Z0-9_-]/g, '_');
-          const userFolders = byUser.get(username).slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-          const folderSections = userFolders.map(f => {
+          // Subpastas (aninhamento ilimitado) dentro do bloco de UM usuário —
+          // a árvore só faz sentido calculada por dono (parent_id nunca
+          // aponta pra pasta de outro usuário, ver POST /api/folders em
+          // server/index.js), então buildFolderTree roda sobre userFolders,
+          // não sobre `relevant`/`allFolders` inteiro.
+          const tree = buildFolderTree(byUser.get(username));
+          const renderFolderNode = (f, depth) => {
             const cmdById = new Map(commands.filter(c => f.command_ids.has(c.id)).map(c => [c.id, c]));
             const notesById = new Map((f.notes || []).map(n => [n.id, n]));
             const editMode = canManage && typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(f.id);
             const cards = buildFolderItemsCards(cmdById, notesById, f.order, values, hasIPs, isOwn);
-            return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}scope_${userKey}__folder${f.id}`, canManage, !isOwn, editMode);
-          }).join('');
+            const childrenHtml = tree.childrenOf(f.id).map(child => renderFolderNode(child, depth + 1)).join('');
+            return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}scope_${userKey}__folder${f.id}`, canManage, !isOwn, editMode, childrenHtml, depth);
+          };
+          const folderSections = tree.roots.map(f => renderFolderNode(f, 0)).join('');
           const cardCount = (folderSections.match(/<div class="card"/g) || []).length;
           // Mesma correção do bug "pasta vazia não aparece" (buildFolderSectionFromCards):
-          // uma pasta PRÓPRIA vazia ainda tem o botão "Add note" (só pastas
+          // uma pasta PRÓPRIA vazia ainda tem o botão "+ Add" (só pastas
           // próprias o têm) mesmo com cardCount=0 — sem essa checagem extra,
           // o bloco do usuário inteiro (👤 <nome>) desapareceria se a única
           // pasta dele visível aqui estivesse vazia.
-          const hasOwnEmptyFolder = folderSections.includes('sec-folder-add-note-btn');
+          const hasOwnEmptyFolder = folderSections.includes('sec-folder-add-btn');
           if (!cardCount && !hasOwnEmptyFolder) return '';
           return collapsibleGroup(`${cv}__${ce}__scopeuser${userKey}`, `👤 <strong>${escAttr(username)}</strong> <span class="sec-count">${cardCount}</span>`, folderSections, 'section-creator');
         }).join('');
@@ -314,14 +326,18 @@ async function render() {
         const isOwn = typeof CURRENT_USER !== 'undefined' && CURRENT_USER === targetUsername;
         // Mesma regra do ramo "all" acima: sem bypass de admin.
         const canManage = isOwn;
-        const sortedFolders = relevant.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-        folderGroups = sortedFolders.map(f => {
+        // Subpastas: mesma árvore por dono do ramo "all" acima — `relevant`
+        // já é só as pastas dessa pessoa (filtro logo no início do bloco).
+        const tree = buildFolderTree(relevant);
+        const renderFolderNode = (f, depth) => {
           const cmdById = new Map(commands.filter(c => f.command_ids.has(c.id)).map(c => [c.id, c]));
           const notesById = new Map((f.notes || []).map(n => [n.id, n]));
           const editMode = canManage && typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(f.id);
           const cards = buildFolderItemsCards(cmdById, notesById, f.order, values, hasIPs, isOwn);
-          return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}scopeuser__folder${f.id}`, canManage, !isOwn, editMode);
-        }).join('');
+          const childrenHtml = tree.childrenOf(f.id).map(child => renderFolderNode(child, depth + 1)).join('');
+          return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}scopeuser__folder${f.id}`, canManage, !isOwn, editMode, childrenHtml, depth);
+        };
+        folderGroups = tree.roots.map(f => renderFolderNode(f, 0)).join('');
       }
     }
     if (!folderGroups) return '';

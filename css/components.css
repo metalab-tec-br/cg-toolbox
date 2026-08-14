@@ -664,7 +664,7 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
    imperceptível como "fundo diferente"; branco sólido com borda/texto
    --teal destaca melhor o botão sem parecer um preenchimento sólido igual
    ao "Add" da toolbar. */
-.sec-folder-add-note-btn {
+.sec-folder-add-btn {
   /* -25% da largura (128px -> 96px), igual ao botão "Add" da toolbar
      (.ctb-cmd-actions .btn.ctb-cmd-btn.admin-highlight em layout.css), pra
      manterem o mesmo tamanho entre si. */
@@ -674,9 +674,30 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
   background: var(--teal-bg); border: 1px solid var(--teal);
   color: var(--teal); font-weight: 700; letter-spacing: .2px; cursor: pointer;
 }
-.sec-folder-add-note-btn:hover { filter: brightness(1.08); border-color: var(--teal); }
-[data-theme="light"] .sec-folder-add-note-btn { background: var(--surf); }
-[data-theme="light"] .sec-folder-add-note-btn:hover { background: var(--surf); }
+.sec-folder-add-btn:hover { filter: brightness(1.08); border-color: var(--teal); }
+[data-theme="light"] .sec-folder-add-btn { background: var(--surf); }
+[data-theme="light"] .sec-folder-add-btn:hover { background: var(--surf); }
+/* Botão some, dropdown assume o layout — mesma mecânica do .dd/.dd-btn
+   genérico (position:relative no wrapper), só que o "botão" visível
+   continua sendo o .sec-folder-add-btn de sempre (ver comentário acima) em
+   vez do .dd-btn padrão (que tem estilo de dropdown de filtro, não de ação). */
+.sec-folder-add-dd { position: relative; flex-shrink: 0; }
+/* .dd-panel padrão tem left:0;right:0 (largura igual ao pai) — bom pros
+   dropdowns de filtro (largura fixa da sidebar), ruim aqui: o "pai" (.dd) só
+   tem a largura do botão "Add" (96px), estreito demais pras opções "Note"/
+   "Subfolder" com ícone. Mesma correção já usada por .ln-var-dd (dropdown
+   "Inserir variável" do editor de comandos) — ancora pela direita (fica sob
+   a borda direita do cabeçalho, onde o botão "Add" já está encostado) e
+   larga o bastante pro conteúdo (width:max-content). */
+.sec-folder-add-dd .dd-panel { left: auto; right: 0; min-width: 130px; width: max-content; }
+/* Mesmo tratamento do #addDDPanel (dropdown "Add" da toolbar principal, ver
+   layout.css) — ícone na cor de destaque e um divisor fino entre as duas
+   opções — pra ficar visualmente idêntico, só menor (é um dropdown dentro do
+   cabeçalho de uma seção, não da toolbar). `.sb-row` em si (layout/padding/
+   hover) já vem do estilo genérico da sidebar, ver .sb-row em layout.css. */
+.sec-folder-add-dd .sb-row { font-size: 11.5px; }
+.sec-folder-add-dd .sb-row svg { color: var(--teal); flex-shrink: 0; }
+.sec-folder-add-dd .sb-row + .sb-row { border-top: 1px solid var(--bdr); margin-top: 2px; padding-top: 7px; }
 
 /* Aviso discreto quando uma pasta PRÓPRIA está vazia (0 comandos, 0 notas)
    — antes a pasta simplesmente não aparecia em lugar nenhum até o usuário

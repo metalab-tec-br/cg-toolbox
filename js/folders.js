@@ -18,6 +18,32 @@
 // ════════════════════════════════════════════════
 let FOLDERS = [];
 
+// Converte uma lista PLANA de pastas (cada uma com `parent_id`, ver
+// reloadFoldersFromServer/reloadAllUsersFoldersFromServer) numa árvore —
+// usada por render.js para desenhar cada subpasta ANINHADA dentro da seção
+// da sua pasta-mãe (aninhamento ilimitado, pedido do usuário), em vez de uma
+// lista plana onde só um campo escondido indicaria o pai. `roots` são as
+// pastas de topo (parent_id nulo OU cujo "pai" não está nesta mesma lista —
+// isso importa no ramo "user:<username>"/"all" de FOLDER_SCOPE, ver
+// render.js, onde `list` já vem filtrada para as pastas de UM dono: uma
+// subpasta cujo pai pertencesse a outro dono nunca deveria existir de
+// verdade — parent_id só é setado entre pastas do MESMO usuário, ver POST
+// /api/folders em server/index.js — mas a checagem aqui evita que a pasta
+// suma da tela por engano caso isso algum dia aconteça). `childrenOf(id)`
+// devolve os filhos diretos de uma pasta, já ordenados alfabeticamente,
+// prontos para a chamada recursiva de quem está montando a seção.
+function buildFolderTree(list) {
+  const ids = new Set((list || []).map(f => f.id));
+  const byParent = new Map();
+  (list || []).forEach(f => {
+    const pid = (f.parent_id && ids.has(f.parent_id)) ? f.parent_id : null;
+    if (!byParent.has(pid)) byParent.set(pid, []);
+    byParent.get(pid).push(f);
+  });
+  byParent.forEach(arr => arr.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })));
+  return { roots: byParent.get(null) || [], childrenOf: id => byParent.get(id) || [] };
+}
+
 // VIEW_FOLDERS_HOME = visão "Folders" ativa (home page ou clique em
 // #foldersNavRow) — mostra todo comando que esteja em QUALQUER pasta do
 // usuário, uma seção recolhível por pasta (ver buildFolderSection em
@@ -70,7 +96,7 @@ async function reloadFoldersFromServer() {
     // toda parte) — Sets não preservam posição, por isso `order` é mantido
     // separado.
     FOLDERS = (data || []).map(f => ({
-      id: f.id, name: f.name, sort_order: f.sort_order,
+      id: f.id, name: f.name, sort_order: f.sort_order, parent_id: f.parent_id || null,
       command_ids: new Set(f.command_ids || []),
       notes: f.notes || [],
       order: (f.order || []).slice(),
@@ -94,7 +120,7 @@ async function reloadAllUsersFoldersFromServer() {
     const res = await fetch('/api/folders/all');
     const data = await res.json();
     ALL_USERS_FOLDERS = (data || []).map(f => ({
-      id: f.id, username: f.username, name: f.name, sort_order: f.sort_order,
+      id: f.id, username: f.username, name: f.name, sort_order: f.sort_order, parent_id: f.parent_id || null,
       command_ids: new Set(f.command_ids || []),
       notes: f.notes || [],
       order: (f.order || []).slice(),
@@ -361,7 +387,7 @@ let _folderPromptResolve = null;
 function openFolderPromptModal(mode, currentName) {
   return new Promise(resolve => {
     _folderPromptResolve = resolve;
-    document.getElementById('folderPromptTitle').textContent = mode === 'rename' ? 'Rename folder' : 'New folder';
+    document.getElementById('folderPromptTitle').textContent = mode === 'rename' ? 'Rename folder' : (mode === 'subfolder' ? 'New subfolder' : 'New folder');
     document.getElementById('folderPromptOkBtn').textContent = mode === 'rename' ? 'Rename' : 'Create';
     const input = document.getElementById('folderPromptInput');
     input.value = currentName || '';
@@ -396,15 +422,34 @@ document.getElementById('folderPromptOverlay') && document.getElementById('folde
 // terminal-renderer.js), o comando já entra automaticamente na pasta nova,
 // sem precisar reabrir o dropdown e marcar de novo.
 async function promptCreateFolder(cmdIdToAddAfter) {
-  const name = await openFolderPromptModal('create');
+  return _createFolderInternal('create', null, cmdIdToAddAfter);
+}
+
+// ── Subpastas (aninhamento ilimitado) ──
+// Chamada a partir do dropdown "+ Add" no cabeçalho de uma seção de pasta
+// própria (ver rightAction em buildFolderSectionFromCards, db-render-engine.js)
+// — mesma mecânica de promptCreateFolder acima, só que gravando `parentId` na
+// nova pasta (POST /api/folders aceita `parent_id`, ver server/index.js).
+// Reaproveita o MESMO modal de nome (openFolderPromptModal) com o modo
+// 'subfolder' (título "New subfolder") em vez de duplicar toda a lógica de
+// criação — só muda o payload enviado e onde a pasta nova entra no array
+// FOLDERS local (ela some da tela até o próximo render() de qualquer forma,
+// que reconstrói a árvore a partir de FOLDERS/parent_id — ver render.js).
+async function promptCreateSubfolder(parentId) {
+  return _createFolderInternal('subfolder', parentId, null);
+}
+async function _createFolderInternal(mode, parentId, cmdIdToAddAfter) {
+  const name = await openFolderPromptModal(mode);
   if (!name) return;
   try {
+    const body = { name };
+    if (parentId) body.parent_id = parentId;
     const res = await fetch('/api/folders', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      alert(body.message || 'Failed to create folder.');
+      const errBody = await res.json().catch(() => ({}));
+      alert(errBody.message || 'Failed to create folder.');
       return;
     }
     const folder = await res.json();
@@ -417,8 +462,8 @@ async function promptCreateFolder(cmdIdToAddAfter) {
         console.warn('Falha ao adicionar o comando à nova pasta no servidor (mantido localmente)', e);
       });
     }
-    FOLDERS.push({ id: folder.id, name: folder.name, sort_order: folder.sort_order, command_ids: commandIds, notes: [], order });
-    render(); // reconstrói os cards para o dropdown de pastas (e a seção da pasta, se estiver em Folders) já refletirem a pasta nova
+    FOLDERS.push({ id: folder.id, name: folder.name, sort_order: folder.sort_order, parent_id: folder.parent_id || null, command_ids: commandIds, notes: [], order });
+    render(); // reconstrói os cards para o dropdown de pastas (e a seção da pasta/subpasta, se estiver em Folders) já refletirem a pasta nova
   } catch (e) {
     alert('Failed to create folder. Please try again.');
   }
@@ -470,12 +515,30 @@ async function _folderNameInputBlur(ev) {
     input.value = oldName;
   }
 }
+// Reúne o id da pasta + de TODA a árvore de subpastas abaixo dela (recursivo,
+// aninhamento ilimitado) — usado tanto pro texto de confirmação (avisar que
+// subpastas também somem) quanto pra limpar o estado local otimista sem
+// esperar o próximo reloadFoldersFromServer(). O servidor já cuida disso
+// sozinho via ON DELETE CASCADE em folders.parent_id (ver schema.sql); isto
+// aqui é só o espelho no array FOLDERS em memória.
+function _collectFolderAndDescendantIds(id, list) {
+  const ids = [id];
+  (list || FOLDERS).filter(f => f.parent_id === id).forEach(child => {
+    ids.push(..._collectFolderAndDescendantIds(child.id, list));
+  });
+  return ids;
+}
 function deleteFolderConfirm(id, name, ev) {
   if (ev) ev.stopPropagation();
-  openConfirmModal(`Delete folder "${name}"? Commands inside it are not deleted — they just leave this folder. Notes inside it ARE deleted along with the folder (notes only exist inside a folder). This action cannot be undone.`).then(ok => {
+  const descendantCount = _collectFolderAndDescendantIds(id).length - 1;
+  const subfolderWarning = descendantCount
+    ? ` This also deletes ${descendantCount} subfolder${descendantCount > 1 ? 's' : ''} inside it (and their notes).`
+    : '';
+  openConfirmModal(`Delete folder "${name}"? Commands inside it are not deleted — they just leave this folder. Notes inside it ARE deleted along with the folder (notes only exist inside a folder).${subfolderWarning} This action cannot be undone.`).then(ok => {
     if (!ok) return;
-    FOLDERS = FOLDERS.filter(f => f.id !== id);
-    FOLDER_EDIT_MODE.delete(id); // não deixa "vazando" um modo de edição pra um id de pasta que não existe mais
+    const idsToRemove = new Set(_collectFolderAndDescendantIds(id));
+    FOLDERS = FOLDERS.filter(f => !idsToRemove.has(f.id));
+    idsToRemove.forEach(fid => FOLDER_EDIT_MODE.delete(fid)); // não deixa "vazando" um modo de edição pra um id de pasta que não existe mais
     fetch(`/api/folders/${id}`, { method: 'DELETE' }).catch(e => {
       console.warn('Falha ao excluir pasta no servidor (mantida localmente)', e);
     });

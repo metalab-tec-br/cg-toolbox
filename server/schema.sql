@@ -279,15 +279,25 @@ CREATE INDEX IF NOT EXISTS idx_user_favorites_command ON user_favorites(command_
 -- task #459), mesmo espírito do "Created by".
 -- UNIQUE(username, name) evita duas pastas com o mesmo nome para o mesmo
 -- usuário (mensagem amigável no 409, ver POST /api/folders).
+-- parent_id (subpastas, aninhamento ilimitado): auto-referência opcional —
+-- NULL = pasta de topo (comportamento de sempre). Só é possível apontar para
+-- outra pasta do MESMO usuário (checado em POST /api/folders, não aqui — uma
+-- FK simples não consegue expressar "mesmo dono"). ON DELETE CASCADE: apagar
+-- uma pasta apaga sozinho toda a árvore de subpastas abaixo dela (o Postgres
+-- resolve o cascade em múltiplos níveis numa única instrução DELETE), que por
+-- sua vez já cascateia para folder_commands/notes de cada uma (ver abaixo) —
+-- nenhum passo manual extra é necessário em DELETE /api/folders/:id.
 CREATE TABLE IF NOT EXISTS folders (
   id         SERIAL PRIMARY KEY,
   username   TEXT NOT NULL,
   name       TEXT NOT NULL,
   sort_order INTEGER NOT NULL DEFAULT 0,
+  parent_id  INTEGER REFERENCES folders(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (username, name)
 );
 CREATE INDEX IF NOT EXISTS idx_folders_username ON folders(username);
+CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id);
 
 -- command_id com ON DELETE CASCADE (igual user_favorites antes) — apagar um
 -- comando limpa sozinho a sua presença em qualquer pasta. folder_id com ON

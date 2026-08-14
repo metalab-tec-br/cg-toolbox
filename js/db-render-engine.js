@@ -602,14 +602,26 @@ function buildFolderItemsCards(cmdById, notesById, orderTagged, values, hasIPs, 
 // explícito (`.sec-title-divider`, substitui o ::after padrão de
 // `.sec-title` só nas seções de pasta, ver `.section-folder` em
 // components.css) em vez de ficar espremido do lado do nome/contagem.
-function buildFolderSectionFromCards(cards, folderId, folderName, key, withActions, copyable, editMode) {
+// `childrenHtml` (subpastas, aninhamento ilimitado): HTML já pronto das
+// seções de subpasta desta pasta (montado recursivamente por quem chama —
+// ver buildFolderSection abaixo e os 3 ramos de VIEW_FOLDERS_HOME em
+// render.js), inserido no CORPO desta seção, depois dos cards. `depth`
+// (0 = pasta de topo) só controla a indentação visual (margin-left inline —
+// ver o wrapper abaixo), simples o bastante pra funcionar em qualquer
+// profundidade sem precisar de uma classe CSS por nível.
+function buildFolderSectionFromCards(cards, folderId, folderName, key, withActions, copyable, editMode, childrenHtml, depth) {
+  childrenHtml = childrenHtml || '';
+  depth = depth || 0;
   // Pastas do próprio usuário (withActions) SEMPRE aparecem, mesmo vazias
   // (0 comandos e 0 notas) — antes voltavam '' e a pasta recém-criada
   // simplesmente não aparecia em lugar nenhum até o usuário adicionar algo
-  // a ela, o que parecia um bug ("criei a pasta e ela não aparece").
+  // a ela, o que parecia um bug ("criei a pasta e ela não aparece"). Uma
+  // pasta com subpastas mas 0 cards próprios também precisa continuar
+  // aparecendo — senão a árvore de subpastas dela ficaria inacessível.
   // Pastas de OUTRO usuário (copyable, só leitura) continuam escondidas
-  // quando vazias — não haveria nada útil pra fazer com elas ali.
-  if (!cards.length && !withActions) return '';
+  // quando vazias (sem cards E sem subpastas) — não haveria nada útil pra
+  // fazer com elas ali.
+  if (!cards.length && !withActions && !childrenHtml) return '';
   const nameEsc = escAttr(folderName);
   const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(folderName) : nameEsc;
 
@@ -631,7 +643,7 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
     : '';
   const leftActions = (editBtn || deleteTag) ? `<span class="sec-folder-actions">${editBtn}${deleteTag}</span>` : '';
 
-  // "Add note" voltou pro cabeçalho (2º giro: tinha saído pro corpo da
+  // "+ Add note" voltou pro cabeçalho (2º giro: tinha saído pro corpo da
   // seção por ser pouco visível como botão pequeno "+" no canto — virou um
   // botão de linha inteira ABAIXO do nome; pedido mais recente do usuário:
   // "mover o botão de add note para o final da linha, na mesma direção do
@@ -643,14 +655,38 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
   // withActions é sempre a pasta PRÓPRIA, copyable é sempre a de OUTRO
   // usuário). "Cores invertidas do Add conforme cada tema" (outro pedido
   // do usuário): o Add da toolbar é sólido (fundo --teal cheio, texto
-  // branco — ver .ctb-cmd-btn.admin-highlight em layout.css); Add note usa
+  // branco — ver .ctb-cmd-btn.admin-highlight em layout.css); este aqui usa
   // o padrão "tintado" oposto (fundo --teal-bg translúcido, texto e borda
   // --teal) — mesma cor de destaque em ambos, só com fundo/texto trocados,
   // e já correto em claro/escuro porque --teal-bg é um rgba() sobre --teal
-  // (não uma cor fixa) — ver .sec-folder-add-note-btn em components.css.
+  // (não uma cor fixa) — ver .sec-folder-add-btn em components.css.
+  //
+  // 3º giro (subpastas): virou de novo um dropdown — igual ao "Add" da
+  // toolbar principal (#addDD/#addDDPanel em index.html), MESMO componente
+  // .dd/.dd-panel/.sb-row (toggleDropdown/closeAllDropdowns em js/state.js,
+  // sem JS novo) — oferecendo "Note" (o que já existia) e a opção nova
+  // "Subfolder" (promptCreateSubfolder(), js/folders.js). O id do dropdown
+  // precisa ser único por pasta (várias seções de pasta na mesma tela ao
+  // mesmo tempo) — usa o próprio folderId.
   let rightAction = '';
   if (withActions) {
-    rightAction = `<button type="button" class="btn sec-folder-add-note-btn" onclick="openNoteEditor('create', ${folderId}, null, event)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>Add note</span></button>`;
+    const addDdId = `addDD-folder-${folderId}`;
+    rightAction = `<div class="dd sec-folder-add-dd" id="${addDdId}">
+      <button type="button" class="btn sec-folder-add-btn" onmousedown="event.preventDefault()" onclick="event.stopPropagation(); toggleDropdown('${addDdId}')">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>Add</span><span class="dd-arrow">▾</span>
+      </button>
+      <div class="dd-panel" id="${addDdId}Panel">
+        <div class="sb-row" onclick="event.stopPropagation(); closeAllDropdowns(); openNoteEditor('create', ${folderId}, null, event)">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span>Note</span>
+        </div>
+        <div class="sb-row" onclick="event.stopPropagation(); closeAllDropdowns(); promptCreateSubfolder(${folderId})">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" style="flex-shrink:0;"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.2h8.5A1.5 1.5 0 0 1 21 8.7v9.8A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5v-12z"/></svg>
+          <span>Subfolder</span>
+        </div>
+      </div>
+    </div>`;
   } else if (copyable) {
     rightAction = `<button type="button" class="sec-folder-btn" onmousedown="event.preventDefault()" onclick="copyFolderFromUser(${folderId}, '${jsEsc}', event)" title="Copy this folder to your own Folders">⧉</button>`;
   }
@@ -670,13 +706,21 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
   const headerHtml = `${folderIcon(true, 12)} ${nameHtml} <span class="sec-count">${cards.length}</span>${leftActions}${divider}${rightAction}`;
   // Pasta própria recém-criada, ainda sem nenhum comando/nota — mostra um
   // aviso discreto em vez de deixar o corpo da seção parecendo vazio/quebrado
-  // (o botão "Add note" agora mora no cabeçalho, não mais aqui no corpo).
-  const emptyMsg = (withActions && !cards.length)
-    ? `<p class="sec-folder-empty-msg">This folder is empty — add a note or a command to it from the card's folder menu.</p>`
+  // (o botão "+ Add" agora mora no cabeçalho, não mais aqui no corpo). Não
+  // aparece se já existe alguma subpasta dentro — nesse caso o corpo não
+  // fica vazio de verdade, só sem comandos/notas PRÓPRIOS desta pasta.
+  const emptyMsg = (withActions && !cards.length && !childrenHtml)
+    ? `<p class="sec-folder-empty-msg">This folder is empty — add a note, a subfolder, or a command to it from the card's folder menu.</p>`
     : '';
   const active = withActions && editMode;
-  const body = emptyMsg + (active ? wrapCardsForFolderDrag(cards, folderId) : cards.join(''));
-  return collapsibleGroup(key || `folder${folderId}`, headerHtml, body, active ? 'section-folder section-editing' : 'section-folder');
+  const body = emptyMsg + (active ? wrapCardsForFolderDrag(cards, folderId) : cards.join('')) + childrenHtml;
+  // Indentação por profundidade (subpastas, aninhamento ilimitado) — inline
+  // em vez de uma classe CSS por nível, já que a profundidade não tem limite
+  // fixo. depth=0 (pasta de topo) não recebe estilo nenhum extra.
+  const style = depth > 0 ? ` style="margin-left:${depth * 18}px"` : '';
+  const extraClass = active ? 'section-folder section-editing' : 'section-folder';
+  const html = collapsibleGroup(key || `folder${folderId}`, headerHtml, body, extraClass);
+  return depth > 0 ? html.replace('<div class="section', `<div${style} class="section`) : html;
 }
 
 // Uma seção de PASTA do usuário ATUAL (ícone de pasta + nome + seus
@@ -698,10 +742,11 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
 // buildFolderSectionFromCards acima), visíveis só no hover (exceto ⚙
 // quando já ativo — ver .section-editing em components.css).
 // `editMode` (task #461/#463, opcional): repassado direto pra
-// buildFolderSectionFromCards — ver comentário lá.
-function buildFolderSection(rows, folderId, folderName, values, hasIPs, key, notes, order, editMode) {
+// buildFolderSectionFromCards — ver comentário lá. `childrenHtml`/`depth`
+// (subpastas, opcionais): idem, ver comentário em buildFolderSectionFromCards.
+function buildFolderSection(rows, folderId, folderName, values, hasIPs, key, notes, order, editMode, childrenHtml, depth) {
   const cmdById = new Map(rows.filter(r => (r.folder_ids || []).includes(folderId)).map(r => [r.id, r]));
   const notesById = new Map((notes || []).map(n => [n.id, n]));
   const cards = buildFolderItemsCards(cmdById, notesById, order, values, hasIPs, true);
-  return buildFolderSectionFromCards(cards, folderId, folderName, key, true, false, editMode);
+  return buildFolderSectionFromCards(cards, folderId, folderName, key, true, false, editMode, childrenHtml, depth);
 }
