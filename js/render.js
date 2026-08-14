@@ -102,13 +102,6 @@ async function render() {
     commands = commands.filter(c => c.folder_ids && c.folder_ids.length);
   }
 
-  // Campo de busca unificado (src:/dst:/dport:/... — ver query-bar.js): só oferece o chip
-  // "Adicionar filtro" de um campo se algum comando exibido para o Tópico/Ambiente atual
-  // realmente usa aquele parâmetro.
-  if (typeof computeUsedQueryTokens === 'function') {
-    updateQueryChipsVisibility(computeUsedQueryTokens(commands, topicSel, e));
-  }
-
   // Resolve a seleção de Versão/Ambiente numa lista de valores concretos a gerar. Nada
   // marcado (padrão — sem item mestre 'all' na lista, ver js/state.js) mantém o
   // comportamento único de sempre: gera com o padrão (R82 / Standalone), expandindo os

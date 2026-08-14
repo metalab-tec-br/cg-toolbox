@@ -511,9 +511,11 @@ function closeQueryPanel() {
 
 // Abre/fecha o painel secundário com TODOS os parâmetros cadastrados (lista
 // alfabética, estilo antigo) — pedido do usuário: "na ultima posição ter um
-// Others que ao clicar exiba todos os parametros cadastrados". Reaproveita o
-// mesmo filtro (usedTokens + typeahead) já usado antes por toda a lista —
-// ver applyQueryChipsFilter, agora restrito a #cpqChipsOthers.
+// Others que ao clicar exiba todos os parametros cadastrados". Simplificação
+// pedida depois: "pode remover o filtro dinâmico que haviamos criado para
+// aparecer somente os parâmetros que estavam em uso" — o painel Others
+// sempre mostra TODOS os parâmetros cadastrados, só reduzidos pelo texto que
+// o usuário estiver digitando no momento (ver applyQueryChipsFilter abaixo).
 function toggleQueryOthersPanel() {
   const panel = document.getElementById('cpqChipsOthers');
   if (!panel) return;
@@ -526,52 +528,13 @@ document.addEventListener('click', ev => {
   if (!bar) closeQueryPanel();
 });
 
-// ── Chips dinâmicos: só mostra o filtro de um campo se algum comando ATUALMENTE exibido
-// (respeitando Tópico/Ambiente selecionados) de fato usa aquele {{token}}, E (pedido do
-// usuário) se o campo casa com o texto que estiver sendo digitado no momento — ver
-// applyQueryChipsFilter mais abaixo, que combina os dois critérios. computeUsedQueryTokens
-// é chamado por render.js a cada renderização, depois que a lista de comandos é buscada da API. ──
-function computeUsedQueryTokens(commands, topicSel, envSel) {
-  const topicsAll = topicSel.length === 0;
-  const topics = topicsAll ? null : new Set(topicSel);
-  const envsAll = envSel.length === 0;
-  const envs = envsAll ? null : new Set(envSel);
-  const used = new Set();
-  const TOKEN_RE = /\{\{(\w+)\}\}/g;
-  (commands || []).forEach(row => {
-    const rowTopics = row.topics || [row.topic];
-    const visible = rowTopics.includes('environment')
-      ? (envs ? (row.environments || []).some(e => envs.has(e)) : true)
-      : (topics ? rowTopics.some(tp => topics.has(tp)) : true);
-    if (!visible) return;
-    const text = JSON.stringify(row);
-    let m;
-    while ((m = TOKEN_RE.exec(text))) used.add(m[1]);
-  });
-  return used;
-}
-// `usedTokens` (recalculado a cada render(), ver render.js) e o texto que o
-// usuário está digitando AGORA (typeahead, ver applyQueryChipsFilter abaixo)
-// são dois filtros INDEPENDENTES sobre os mesmos chips — um chip só aparece
-// se passar nos dois ao mesmo tempo. Guardamos o último usedTokens recebido
-// para poder reaplicar o filtro combinado a cada tecla digitada, sem
-// precisar esperar o próximo render() (que só é chamado, debounced, quando o
-// valor de um parâmetro muda — nunca só por causa do NOME do campo sendo
-// digitado antes do ':').
-let _cpqLastUsedTokens = null;
-function updateQueryChipsVisibility(usedTokens) {
-  _cpqLastUsedTokens = usedTokens;
-  applyQueryChipsFilter();
-}
-
 // Pedido do usuário: "quando o usuário começar a digitar vá exibindo os
 // parâmetros que contém as letras digitadas, exemplo: ao digitar src deve
 // trazer src_ip e src_port". Só filtra por texto enquanto o usuário ainda
 // está ESCOLHENDO o campo (a parte antes do ':') — assim que o texto já tem
 // um ':', ele já escolheu o campo e está digitando o VALOR; nesse ponto o
 // filtro de texto para de fazer sentido (nenhum chip teria ':' no meio do
-// nome) e a lista volta a mostrar todos os campos realmente usados pelos
-// comandos visíveis (usedTokens), como antes desta mudança.
+// nome) e a lista volta a mostrar todos os parâmetros cadastrados.
 function currentTypedFieldFragment() {
   const input = document.getElementById('cpQuery');
   const raw = (input && input.value) || '';
@@ -580,22 +543,21 @@ function currentTypedFieldFragment() {
 }
 function applyQueryChipsFilter() {
   // A linha fixa (#cpqChips, 8 parâmetros + "Others:") é sempre visível — não
-  // entra no typeahead nem no filtro por usedTokens (pedido do usuário: esses
-  // ficam "fixos"). Só a lista completa dentro do painel "Others" continua
-  // usando os dois filtros combinados, como a lista única de antes.
+  // entra no typeahead (pedido do usuário: esses ficam "fixos"). Só a lista
+  // completa dentro do painel "Others" é filtrada, e só pelo texto digitado
+  // — o antigo filtro por "parâmetros realmente usados pelos comandos
+  // visíveis" foi removido (pedido do usuário: simplificar, mostrar sempre
+  // todos os parâmetros cadastrados dentro de Others).
   const chips = document.querySelectorAll('#cpqChipsOthers .cpq-chip');
-  const usedTokens = _cpqLastUsedTokens;
   const typed = currentTypedFieldFragment();
   let anyVisible = false;
   chips.forEach(chip => {
-    const usedOk = !usedTokens || usedTokens.has(chip.dataset.field);
     // Casa tanto pelo nome técnico do campo (data-field, ex.: "src_ip")
-    // quanto pelo rótulo amigável (title, ex.: "Source IP") — o usuário pode
+    // quanto pelo rótulo amigável (title, ex.: "Source") — o usuário pode
     // digitar qualquer um dos dois.
-    const typedOk = !typed
+    const show = !typed
       || chip.dataset.field.toLowerCase().includes(typed)
       || (chip.title || '').toLowerCase().includes(typed);
-    const show = usedOk && typedOk;
     chip.style.display = show ? '' : 'none';
     if (show) anyVisible = true;
   });

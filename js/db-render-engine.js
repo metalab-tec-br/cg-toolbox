@@ -743,7 +743,7 @@ function buildFolderSectionFromCards(items, folderId, folderName, key, withActio
   // vazio/quebrado (o botão "+ Add" agora mora no cabeçalho, não mais aqui
   // no corpo).
   const emptyMsg = (withActions && !items.length)
-    ? `<p class="sec-folder-empty-msg">This folder is empty — add a note, a subfolder, or a command to it from the card's folder menu.</p>`
+    ? `<p class="sec-folder-empty-msg">Empty folder.</p>`
     : '';
   const active = withActions && editMode;
   const body = emptyMsg + items.map(it => active

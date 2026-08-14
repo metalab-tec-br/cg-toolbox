@@ -303,7 +303,7 @@
              cadastrados, aberta ao clicar no rótulo "Others:" da linha fixa
              acima — ver toggleQueryOthersPanel() em js/query-bar.js. -->
         <div class="cpq-chips-others" id="cpqChipsOthers"></div>
-        <div class="cpq-empty-note" id="cpqEmptyNote">None of the commands currently shown use source/destination parameters.</div>
+        <div class="cpq-empty-note" id="cpqEmptyNote">No parameters match your search.</div>
         <div class="cpq-panel-divider"></div>
         <div class="cpq-history-section" id="cpqHistorySection">
           <div class="cpq-history-head">
@@ -1256,7 +1256,7 @@
         <input type="text" class="set-input" id="catVdSearchInput" placeholder="Search vendors…" oninput="catAdminSearchInput('vendors', this.value)">
         <div class="list-editor" id="catVendorsList" style="max-height:40vh;overflow-y:auto;"></div>
         <div class="cat-row" id="catVendorNewRow">
-          <input class="set-input" id="catVdNewLabel" style="flex:1;" placeholder="Vendor name">
+          <input class="set-input" id="catVdNewLabel" style="flex:1;" placeholder="Vendor">
           <input type="color" class="cat-color-input" id="catVdNewColor" value="#8B949E">
         </div>
         <div class="cat-add-actions">
@@ -1287,7 +1287,7 @@
         <div class="list-editor" id="catSysList" style="max-height:40vh;overflow-y:auto;"></div>
         <div class="cat-row" id="catSysNewRow">
           <select class="set-input" id="catSysNewVendor" style="max-width:150px;"></select>
-          <input class="set-input" id="catSysNewLabel" style="flex:1;" placeholder="System name">
+          <input class="set-input" id="catSysNewLabel" style="flex:1;" placeholder="System">
           <input type="color" class="cat-color-input" id="catSysNewColor" value="#8B949E">
         </div>
         <div class="cat-add-actions">
@@ -1318,7 +1318,7 @@
         <div class="list-editor" id="catVersionsList" style="max-height:40vh;overflow-y:auto;"></div>
         <div class="cat-row" id="catVersionNewRow">
           <select class="set-input" id="catVNewSystem" style="max-width:150px;"></select>
-          <input class="set-input" id="catVNewLabel" style="flex:1;" placeholder="Version name">
+          <input class="set-input" id="catVNewLabel" style="flex:1;" placeholder="Version">
           <input type="color" class="cat-color-input" id="catVNewColor" value="#8B949E">
         </div>
         <div class="cat-add-actions">
@@ -1349,7 +1349,7 @@
         <div class="list-editor" id="catEnvironmentsList" style="max-height:40vh;overflow-y:auto;"></div>
         <div class="cat-row" id="catEnvironmentNewRow">
           <select class="set-input" id="catENewSystem" style="max-width:150px;"></select>
-          <input class="set-input" id="catENewLabel" style="flex:1;" placeholder="Environment name">
+          <input class="set-input" id="catENewLabel" style="flex:1;" placeholder="Environment">
           <input type="color" class="cat-color-input" id="catENewColor" value="#8B949E">
         </div>
         <div class="cat-add-actions">
@@ -1379,7 +1379,7 @@
         <input type="text" class="set-input" id="catTSearchInput" placeholder="Search topics…" oninput="catAdminSearchInput('topics', this.value)">
         <div class="list-editor" id="catTopicsList" style="max-height:40vh;overflow-y:auto;"></div>
         <div class="cat-row" id="catTopicNewRow">
-          <input class="set-input" id="catTNewLabel" style="flex:1;min-width:120px;" placeholder="Topic name">
+          <input class="set-input" id="catTNewLabel" style="flex:1;min-width:120px;" placeholder="Topic">
           <input type="color" class="cat-color-input" id="catTNewColor" value="#8B949E">
         </div>
         <div class="cat-add-actions">
@@ -1441,7 +1441,7 @@
         <input type="text" class="set-input" id="catPrSearchInput" placeholder="Search prompts…" oninput="catAdminSearchInput('prompts', this.value)">
         <div class="list-editor" id="catPromptsList" style="max-height:40vh;overflow-y:auto;"></div>
         <div class="cat-row" id="catPromptNewRow">
-          <input class="set-input" id="catPrNewLabel" style="flex:1;" placeholder="e.g. [Expert@FW]#">
+          <input class="set-input" id="catPrNewLabel" style="flex:1;" placeholder="Prompt">
         </div>
         <div class="cat-add-actions">
           <button type="button" class="btn btn-sm" onclick="catAdminAddPrompt()">+ Add prompt</button>
@@ -1487,7 +1487,7 @@
     <div class="modal-body">
       <div class="set-group">
         <span class="set-label">Name</span>
-        <input class="set-input" type="text" id="folderPromptInput" placeholder="e.g. &quot;Favorites&quot;, &quot;VPN troubleshooting&quot;" maxlength="80">
+        <input class="set-input" type="text" id="folderPromptInput" maxlength="80">
       </div>
       <p class="confirm-msg" id="folderPromptError" style="display:none;color:var(--red);"></p>
     </div>

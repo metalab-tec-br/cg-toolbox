@@ -91,11 +91,13 @@ function ccSet(id, html, itemAttr) {
 }
 
 // ── Chips do campo de busca unificado ──
-// data-field = nome do placeholder {{key}} (usado por computeUsedQueryTokens/
-// updateQueryChipsVisibility em query-bar.js para mostrar só os chips
-// realmente usados pelos comandos visíveis); onclick insere a própria `key`
-// como prefixo de busca (key e "palavra antes do :" são a mesma coisa desde
-// a simplificação do catálogo de parâmetros — sem mais query_key/aliases).
+// data-field = nome do placeholder {{key}} (usado só pelo typeahead por texto
+// em applyQueryChipsFilter, js/query-bar.js — o filtro por "parâmetros
+// realmente usados pelos comandos visíveis" foi removido a pedido do
+// usuário: "simplificar... pode remover o filtro dinâmico"); onclick insere
+// a própria `key` como prefixo de busca (key e "palavra antes do :" são a
+// mesma coisa desde a simplificação do catálogo de parâmetros — sem mais
+// query_key/aliases).
 //
 // Lista completa (ordem alfabética) — usada dentro do painel "Others" (ver
 // ccBuildQueryChipsFixedRow abaixo), mesmo estilo/comportamento de sempre
@@ -118,7 +120,7 @@ function ccBuildQueryChips(parameters) {
 // painel com TODOS os parâmetros (ver toggleQueryOthersPanel em
 // js/query-bar.js), estilo texto simples (.cpq-chip-flat) para caber numa
 // única linha, como no exemplo de referência do usuário.
-const CPQ_FIXED_PARAM_ORDER = ['src_ip', 'src_port', 'dst_ip', 'dest_port', 'user', 'host', 'license', 'signature'];
+const CPQ_FIXED_PARAM_ORDER = ['src_ip', 'dst_ip', 'src_port', 'dest_port', 'user', 'host', 'license', 'signature'];
 function ccBuildQueryChipsFixedRow(parameters) {
   const byKey = new Map(parameters.map(p => [p.key, p]));
   const fixed = CPQ_FIXED_PARAM_ORDER.filter(k => byKey.has(k)).map(k => {
