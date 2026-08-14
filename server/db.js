@@ -60,6 +60,17 @@ async function initDb({ retries = 30, delayMs = 2000 } = {}) {
       await runMigrations();
       await seedDefaultAdmin();
       await seedDefaultFolders();
+      // Ordem importa: vendors -> systems (FK vendor) -> versions/environments
+      // (FK system) -> parameters/prompts (independentes). Cada função só
+      // semeia se a PRÓPRIA tabela estiver totalmente vazia (mesmo padrão já
+      // usado por seedDefaultPrompts abaixo) — não mexe em nada numa
+      // instalação que já tem QUALQUER vendor/system/version/environment/
+      // parameter/prompt cadastrado, seja pelo Register, seja por um import.
+      await seedDefaultVendors();
+      await seedDefaultSystems();
+      await seedDefaultVersions();
+      await seedDefaultEnvironments();
+      await seedDefaultParameters();
       await seedDefaultPrompts();
       return;
     } catch (err) {
@@ -304,26 +315,23 @@ async function seedDefaultFolders() {
 }
 
 // Semeia o catálogo de Prompts (task: "crie a variável Prompt para ser
-// utilizada nos comandos que atualmente é um texto livre") com os valores já
-// em uso pelos ~1300 comandos importados via CSV (import-templates/
-// check-point.csv e fortinet.csv — levantado via grep na coluna "Prompt" de
-// cada um). Só roda numa instalação nova (tabela vazia): se o usuário já
-// cadastrou/editou/excluiu prompts pelo Register, isto nunca mexe de novo —
-// diferente de seedDefaultFolders acima (que é ON CONFLICT DO NOTHING e
-// sempre "reafirma" a mesma coisa), aqui um `DELETE` intencional do usuário
-// não pode "voltar" a cada boot. Keys fixas (não geradas por slugifyCatalogKey,
-// que vive em server/index.js) — evita depender de outro módulo só para isto.
+// utilizada nos comandos que atualmente é um texto livre") — pedido do
+// usuário (definição dos valores padrão de uma instalação nova): um prompt
+// Check Point (Expert/Clish) + dois Fortinet (CLI padrão / modo config). Só
+// roda numa instalação nova (tabela vazia): se o usuário já cadastrou/editou/
+// excluiu prompts pelo Register, isto nunca mexe de novo — diferente de
+// seedDefaultFolders acima (que é ON CONFLICT DO NOTHING e sempre "reafirma"
+// a mesma coisa), aqui um `DELETE` intencional do usuário não pode "voltar" a
+// cada boot (exceto se ele apagar TODOS os prompts, esvaziando a tabela de
+// novo — mesma ressalva de sempre para este padrão de seed "só se vazio").
+// Keys fixas (não geradas por slugifyCatalogKey, que vive em server/index.js)
+// — evita depender de outro módulo só para isto.
 async function seedDefaultPrompts() {
   const DEFAULTS = [
     { key: 'expert-fw', label: '[Expert@FW]#' },
-    { key: 'expert-mgmt', label: '[Expert@MGMT]#' },
-    { key: 'expert-mds', label: '[Expert@MDS]#' },
-    { key: 'expert-sg', label: '[Expert@SG]#' },
-    { key: 'expert-host', label: '[Expert@Host]#' },
-    { key: 'clish', label: '[Clish]>' },
-    { key: 'gclish', label: '[gClish]>' },
-    { key: 'hash', label: '#' },
-    { key: 'config-hash', label: '(config)#' },
+    { key: 'clish', label: 'clish>' },
+    { key: 'fgt', label: 'FGT#' },
+    { key: 'fgt-config', label: 'FGT(config)#' },
   ];
   try {
     const { rows } = await pool.query('SELECT COUNT(*) AS n FROM prompts');
@@ -334,6 +342,134 @@ async function seedDefaultPrompts() {
     }
   } catch (err) {
     console.error('[db] Falha ao semear catálogo de Prompts padrão:', err.message);
+  }
+}
+
+// ── Catálogos padrão de uma instalação nova (Vendor/System/Version/
+// Environment/Parameter) — pedido do usuário: "definir os seguintes valores
+// como padrão em uma instalação nova". Mesmo princípio de seedDefaultPrompts
+// acima (só semeia se a PRÓPRIA tabela estiver totalmente vazia; nunca
+// sobrescreve nem "reafirma" o que o administrador já tenha cadastrado,
+// editado ou excluído pelo Register). Keys fixas e já em minúsculas/
+// hifenizadas no mesmo estilo que slugifyCatalogKey (server/index.js) geraria
+// a partir do label — evita depender daquele módulo só para isto, e mantém a
+// key estável mesmo que o label venha a ser editado depois.
+async function seedDefaultVendors() {
+  const DEFAULTS = [
+    { key: 'check-point', label: 'Check Point' },
+    { key: 'fortinet', label: 'Fortinet' },
+  ];
+  try {
+    const { rows } = await pool.query('SELECT COUNT(*) AS n FROM vendors');
+    if (Number(rows[0].n) > 0) return;
+    for (let i = 0; i < DEFAULTS.length; i++) {
+      const { key, label } = DEFAULTS[i];
+      await pool.query('INSERT INTO vendors (key, label, sort_order) VALUES ($1, $2, $3) ON CONFLICT (key) DO NOTHING', [key, label, i]);
+    }
+  } catch (err) {
+    console.error('[db] Falha ao semear catálogo de Vendors padrão:', err.message);
+  }
+}
+
+// Depende de vendors já semeado (FK obrigatória systems.vendor) — chamada
+// DEPOIS de seedDefaultVendors() em initDb().
+async function seedDefaultSystems() {
+  const DEFAULTS = [
+    { key: 'gaia', vendor: 'check-point', label: 'Gaia' },
+    { key: 'fortios', vendor: 'fortinet', label: 'FortiOS' },
+  ];
+  try {
+    const { rows } = await pool.query('SELECT COUNT(*) AS n FROM systems');
+    if (Number(rows[0].n) > 0) return;
+    for (let i = 0; i < DEFAULTS.length; i++) {
+      const { key, vendor, label } = DEFAULTS[i];
+      await pool.query('INSERT INTO systems (key, vendor, label, sort_order) VALUES ($1, $2, $3, $4) ON CONFLICT (key) DO NOTHING', [key, vendor, label, i]);
+    }
+  } catch (err) {
+    console.error('[db] Falha ao semear catálogo de Systems padrão:', err.message);
+  }
+}
+
+// Depende de systems já semeado (FK obrigatória versions.system/vendor).
+async function seedDefaultVersions() {
+  const DEFAULTS = [
+    { system: 'gaia', vendor: 'check-point', key: 'r81.10', label: 'R81.10' },
+    { system: 'gaia', vendor: 'check-point', key: 'r81.20', label: 'R81.20' },
+    { system: 'gaia', vendor: 'check-point', key: 'r82', label: 'R82' },
+    { system: 'gaia', vendor: 'check-point', key: 'r82.10', label: 'R82.10' },
+    { system: 'fortios', vendor: 'fortinet', key: '7.2', label: '7.2' },
+    { system: 'fortios', vendor: 'fortinet', key: '7.4', label: '7.4' },
+    { system: 'fortios', vendor: 'fortinet', key: '7.6', label: '7.6' },
+    { system: 'fortios', vendor: 'fortinet', key: '8.0', label: '8.0' },
+  ];
+  try {
+    const { rows } = await pool.query('SELECT COUNT(*) AS n FROM versions');
+    if (Number(rows[0].n) > 0) return;
+    for (let i = 0; i < DEFAULTS.length; i++) {
+      const { system, vendor, key, label } = DEFAULTS[i];
+      await pool.query(
+        'INSERT INTO versions (system, vendor, key, label, sort_order) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (system, key) DO NOTHING',
+        [system, vendor, key, label, i]
+      );
+    }
+  } catch (err) {
+    console.error('[db] Falha ao semear catálogo de Versions padrão:', err.message);
+  }
+}
+
+// Depende de systems já semeado (FK obrigatória environments.system/vendor,
+// ver comentário em server/schema.sql). Roda DEPOIS de runMigrations() (que
+// cuida do backfill de instalações já existentes) — numa instalação nova a
+// tabela chega vazia em ambos os casos, então não há conflito entre os dois.
+async function seedDefaultEnvironments() {
+  const DEFAULTS = [
+    { system: 'gaia', vendor: 'check-point', key: 'firewall', label: 'Firewall' },
+    { system: 'gaia', vendor: 'check-point', key: 'management', label: 'Management' },
+    { system: 'gaia', vendor: 'check-point', key: 'maestro', label: 'Maestro' },
+    { system: 'gaia', vendor: 'check-point', key: 'multi-domain', label: 'Multi-Domain' },
+    { system: 'gaia', vendor: 'check-point', key: 'vsx', label: 'VSX' },
+    { system: 'fortios', vendor: 'fortinet', key: 'fortigate', label: 'FortiGate' },
+    { system: 'fortios', vendor: 'fortinet', key: 'forticlient', label: 'FortiClient' },
+    { system: 'fortios', vendor: 'fortinet', key: 'fortianalyzer', label: 'FortiAnalyzer' },
+    { system: 'fortios', vendor: 'fortinet', key: 'fortimanager', label: 'FortiManager' },
+    { system: 'fortios', vendor: 'fortinet', key: 'fortisase', label: 'FortiSASE' },
+  ];
+  try {
+    const { rows } = await pool.query('SELECT COUNT(*) AS n FROM environments');
+    if (Number(rows[0].n) > 0) return;
+    for (let i = 0; i < DEFAULTS.length; i++) {
+      const { system, vendor, key, label } = DEFAULTS[i];
+      await pool.query(
+        'INSERT INTO environments (key, system, vendor, label, sort_order) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (key) DO NOTHING',
+        [key, system, vendor, label, i]
+      );
+    }
+  } catch (err) {
+    console.error('[db] Falha ao semear catálogo de Environments padrão:', err.message);
+  }
+}
+
+// Sem dependência de FK — independente da ordem em relação aos 4 acima.
+async function seedDefaultParameters() {
+  const DEFAULTS = [
+    { key: 'src_ip', label: 'Source IP' },
+    { key: 'dst_ip', label: 'Destination IP' },
+    { key: 'src_port', label: 'Source Port' },
+    { key: 'dest_port', label: 'Destination Port' },
+    { key: 'user', label: 'User' },
+    { key: 'host', label: 'Host' },
+    { key: 'license', label: 'License' },
+    { key: 'signature', label: 'Signature' },
+  ];
+  try {
+    const { rows } = await pool.query('SELECT COUNT(*) AS n FROM parameters');
+    if (Number(rows[0].n) > 0) return;
+    for (let i = 0; i < DEFAULTS.length; i++) {
+      const { key, label } = DEFAULTS[i];
+      await pool.query('INSERT INTO parameters (key, label, sort_order) VALUES ($1, $2, $3) ON CONFLICT (key) DO NOTHING', [key, label, i]);
+    }
+  } catch (err) {
+    console.error('[db] Falha ao semear catálogo de Parameters padrão:', err.message);
   }
 }
 
