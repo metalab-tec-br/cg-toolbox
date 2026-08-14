@@ -245,12 +245,16 @@ async function runMigrations() {
   // CPQ_FIXED_PARAM_ORDER em js/catalogs.js), não há necessidade de
   // preservar um rótulo customizado nelas — força o valor certo
   // incondicionalmente, todo boot, independente do que já estava salvo.
+  // 2º ajuste (pedido do usuário: "ajuste a descrição respeitando as letras
+  // com caixa alta dos parametros" src_port="Source Port",
+  // dest_port="Destination Port" — antes eram "src Port"/"dst Port",
+  // abreviados e com caixa inconsistente em relação a Source/Destination).
   try {
     const FORCED_LABELS = [
       { key: 'src_ip', label: 'Source' },
       { key: 'dst_ip', label: 'Destination' },
-      { key: 'src_port', label: 'src Port' },
-      { key: 'dest_port', label: 'dst Port' },
+      { key: 'src_port', label: 'Source Port' },
+      { key: 'dest_port', label: 'Destination Port' },
     ];
     for (const { key, label } of FORCED_LABELS) {
       await pool.query('UPDATE parameters SET label = $1 WHERE key = $2', [label, key]);
@@ -272,8 +276,8 @@ async function runMigrations() {
     const FIXED_PARAM_DEFAULTS = [
       { key: 'src_ip', label: 'Source' },
       { key: 'dst_ip', label: 'Destination' },
-      { key: 'src_port', label: 'src Port' },
-      { key: 'dest_port', label: 'dst Port' },
+      { key: 'src_port', label: 'Source Port' },
+      { key: 'dest_port', label: 'Destination Port' },
       { key: 'user', label: 'User' },
       { key: 'host', label: 'Host' },
       { key: 'license', label: 'License' },
@@ -510,8 +514,8 @@ async function seedDefaultParameters() {
   const DEFAULTS = [
     { key: 'src_ip', label: 'Source' },
     { key: 'dst_ip', label: 'Destination' },
-    { key: 'src_port', label: 'src Port' },
-    { key: 'dest_port', label: 'dst Port' },
+    { key: 'src_port', label: 'Source Port' },
+    { key: 'dest_port', label: 'Destination Port' },
     { key: 'user', label: 'User' },
     { key: 'host', label: 'Host' },
     { key: 'license', label: 'License' },
