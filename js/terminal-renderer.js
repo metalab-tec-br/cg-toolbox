@@ -415,8 +415,7 @@ function scopeTagsHtml(scope) {
   return `<span class="scope-tags">${vd}${sy}${ve}${en}</span>`;
 }
 
-function card({ id, name, desc, about, lines, diffs, folderIds = [], createdBy, modifiedBy, updatedAt, isSystem = false, vendors, systems, versions, environments }) {
-  const did = 'd' + (++_uid);
+function card({ id, name, desc, about, lines, folderIds = [], createdBy, modifiedBy, updatedAt, isSystem = false, vendors, systems, versions, environments }) {
   const scopeHtml = scopeTagsHtml({ vendors, systems, versions, environments });
   const inAnyFolder = !!(folderIds && folderIds.length);
   // O botão agora abre um dropdown de pastas (toggleFolderMenu, ver
@@ -459,23 +458,6 @@ function card({ id, name, desc, about, lines, diffs, folderIds = [], createdBy, 
       ${about.obs ? `<span class="about-when"><strong>Note:</strong> ${about.obs}</span>` : ''}
     </div>
   </div>` : '';
-  const diffOpenCls = AUTO_EXPAND_DIFFS ? ' open' : '';
-  const diffHtml = diffs ? `
-    <div class="diff">
-      <div class="diff-hd${diffOpenCls}" onclick="toggleDiff('${did}')">
-        <svg width="6" height="10" fill="none" viewBox="0 0 6 10">
-          <path d="M1 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>⚡ Differences by version / platform
-      </div>
-      <div class="diff-body${diffOpenCls}" id="${did}">
-        ${diffs.map(d => `
-          <div class="diff-ver">
-            <div class="diff-ver-hd"><span class="diff-ver-tag">${d.v}</span>${d.n || ''}</div>
-            ${termRender(d.l, id)}
-          </div>`).join('')}
-      </div>
-    </div>` : '';
-
   return `<div class="card" data-cmd-id="${id || ''}">
     <div class="card-head">
       <span class="card-name">${name}</span>
@@ -485,7 +467,6 @@ function card({ id, name, desc, about, lines, diffs, folderIds = [], createdBy, 
     </div>
     ${aboutHtml}
     ${termRender(lines, id)}
-    ${diffHtml}
   </div>`;
 }
 
@@ -559,13 +540,6 @@ function expandAllSections() {
     if (el.dataset.secKey) COLLAPSED_SECTIONS.delete(el.dataset.secKey);
   });
   persistCollapsedSections();
-}
-
-function toggleDiff(id) {
-  const body = document.getElementById(id);
-  const hd = body.previousElementSibling;
-  body.classList.toggle('open');
-  hd.classList.toggle('open');
 }
 
 // ════════════════════════════════════════════════

@@ -67,7 +67,6 @@ const CSV_COLUMNS = [
   { key: 'systems', header: 'System', get: c => (c.systems || []).map(csvSystemLabel).join(', ') },
   { key: 'versions', header: 'Versions', get: c => (c.versions || []).join(', ') },
   { key: 'environments', header: 'Environments', get: c => (c.environments || []).join(', ') },
-  { key: 'requires_ips', header: 'Requires IP/Port', get: c => c.requires_ips ? 'Yes' : 'No' },
   { key: 'command', header: 'Command', get: c => csvCommandLines(c.lines && c.lines.default) },
   { key: 'purpose', header: 'Purpose', get: c => (c.about && c.about.purpose) || '' },
   { key: 'when', header: 'When to use', get: c => (c.about && c.about.when) || '' },

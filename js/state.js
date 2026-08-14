@@ -36,10 +36,6 @@ function togFlag(k) {
   render();
 }
 
-// Quando ST.v === 'all' ("Todas as versões"), os blocos de diferenças por versão
-// (⚡ ver diferenças) vêm auto-expandidos em cada card, já que não há uma única versão ativa.
-let AUTO_EXPAND_DIFFS = false;
-
 // ── Dropdowns da sidebar (Versão / Ambiente / Tipo-Assunto) ──
 function closeAllDropdowns(exceptId) {
   document.querySelectorAll('.dd.open').forEach(dd => { if (dd.id !== exceptId) dd.classList.remove('open'); });

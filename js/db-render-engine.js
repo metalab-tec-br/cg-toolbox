@@ -1,11 +1,11 @@
 // ════════════════════════════════════════════════
 // DB RENDER ENGINE — turns /api/commands rows (already language-resolved by
-// the server: name/desc/about/diffs text is in the requested language)
+// the server: name/desc/about text is in the requested language)
 // into the same card()/section() HTML terminal-renderer.js has always produced.
 //
 // Two rendering paths:
 //   1) ~24 plain commands (placeholder_resolver = null): straightforward
-//      {{token}} substitution on the DB row's lines/raw_template/name/desc.
+//      {{token}} substitution on the DB row's lines/name/desc.
 //   2) 10 "advanced" commands (placeholder_resolver set): dispatched to
 //      RESOLVERS[id](row, values), which calls the exact same net-utils.js
 //      helpers (buildFwMonitorFilters, combinedAddrRegex, tcpdumpClause,
@@ -96,10 +96,6 @@ function dbLineToTerm(line, values) {
 function dbLinesToTerm(lines, values) {
   return (lines || []).map(l => dbLineToTerm(l, values));
 }
-function dbDiffsToTerm(diffs, values) {
-  return (diffs || []).map(d => ({ v: d.version, n: d.note || '', l: dbLinesToTerm(d.lines, values) }));
-}
-
 // For a DB line whose content contains a literal substring (still holding
 // its own {{token}} placeholders) that needs to be swapped for a computed
 // value (e.g. a full -F filter string), replace BEFORE token resolution so
@@ -119,31 +115,11 @@ function buildLineWithOverride(line, values, overridePairs) {
 
 const RANGE_TOO_LARGE_NOTE = 'A range that is too large (more than 64 /24 blocks) was skipped in the filter — narrow the range or search in parts.';
 
-// Raw (copy-button) text for commands whose "empty" state (IPs not filled, for
-// requires_ips resolvers; or IP/Porta not filled, for requires_ip_port plain
-// commands like tcpdumpipport) should show a clean literal command in the
-// original app (not the template with blank tokens, which would produce
-// broken syntax, e.g. "tcpdump -nni any host  and port ").
-const EMPTY_RAW = {
-  fwmonitor: 'fw monitor',
-  tcpdump: 'tcpdump',
-  zdebug: 'fw ctl zdebug + drop',
-  fwlog: 'fw log -n',
-  fetchlogs: 'fw fetchlogs',
-  fwaccelconns: 'fwaccel conns',
-  tcpdumpipport: 'tcpdump',
-};
-
-// kdebug is the one command whose "diffs" block is shown regardless of
-// whether IPs are filled (S.kdDiffs in the pre-migration commands.js was
-// always attached, unlike fwmonitor/zdebug which drop diffs when empty).
-const ALWAYS_SHOW_DIFFS_WHEN_EMPTY = new Set(['kdebug']);
-
 // ════════════════════════════════════════════════
 // RESOLVERS — one per placeholder_resolver value. Each receives the API row
-// (already language-resolved; row.lines.default/row.diffs still contain
-// {{token}} placeholders) and the current filter values, and returns
-// { lines, diffs, raw } in the exact shape card() expects.
+// (already language-resolved; row.lines.default still contains {{token}}
+// placeholders) and the current filter values, and returns { lines } in the
+// exact shape card() expects.
 // ════════════════════════════════════════════════
 const RESOLVERS = {};
 
@@ -159,19 +135,7 @@ RESOLVERS.fwmonitor = function (row, values) {
     ...fwmonFilters.notes.map(n => ({ type: 'warn', c: n })),
   ].filter(Boolean);
 
-  const FLAG_PATTERN = '-F "{{src_ip}},{{src_port}},{{dst_ip}},{{dst_port}},{{proto}}" -F "{{dst_ip}},{{dst_port}},{{src_ip}},{{src_port}},{{proto}}"';
-  const diffs = (row.diffs || []).map(d => ({
-    v: d.version, n: d.note || '',
-    l: d.lines.map(l => {
-      if (l.line_type === 'cmd' && l.content.includes(FLAG_PATTERN)) {
-        const c = resolveTokensMarked(l.content.split(FLAG_PATTERN).join(markVar(fwmonFilters.flagsStr)), values);
-        return { p: resolveTokens(l.prompt, values), c };
-      }
-      return dbLineToTerm(l, values);
-    }),
-  }));
-
-  return { lines, diffs, raw: fwmonCmd };
+  return { lines };
 };
 
 RESOLVERS.tcpdump = function (row, values) {
@@ -195,7 +159,7 @@ RESOLVERS.tcpdump = function (row, values) {
     staticNote ? { type: 'note', c: resolveTokens(staticNote.content, values) } : null,
     ...tcpNotesArr.map(n => ({ type: 'warn', c: n })),
   ].filter(Boolean);
-  return { lines, diffs: [], raw: tcpCmd };
+  return { lines };
 };
 
 RESOLVERS.zdebug = function (row, values) {
@@ -212,19 +176,7 @@ RESOLVERS.zdebug = function (row, values) {
     ...orRegexNotes.map(n => ({ type: 'warn', c: n })),
   ].filter(Boolean);
 
-  const PATTERN = 'grep -E "{{src_ip}}|{{dst_ip}}"';
-  const REPLACEMENT = `grep -E "${markVar(orRegexStr)}"`;
-  const diffs = (row.diffs || []).map(d => ({
-    v: d.version, n: d.note || '',
-    l: d.lines.map(l => {
-      if (l.line_type === 'cmd' && l.content.includes(PATTERN)) {
-        return { p: resolveTokens(l.prompt, values), c: resolveTokensMarked(l.content.split(PATTERN).join(REPLACEMENT), values) };
-      }
-      return dbLineToTerm(l, values);
-    }),
-  }));
-
-  return { lines, diffs, raw: zdCmd };
+  return { lines };
 };
 
 RESOLVERS.fwlog = function (row, values) {
@@ -254,7 +206,7 @@ RESOLVERS.fwlog = function (row, values) {
     staticNote ? { type: 'note', c: resolveTokens(staticNote.content, values) } : null,
     ...fallbackNote,
   ].filter(Boolean);
-  return { lines, diffs: [], raw: fwlogCmd };
+  return { lines };
 };
 
 RESOLVERS.logexport = function (row, values) {
@@ -268,7 +220,7 @@ RESOLVERS.logexport = function (row, values) {
   if (isMultiFilter) {
     lines.push({ type: 'info', c: 'logexport filters a single exact IP at a time in -s/-e — for a list/range, export once without a filter and trim the CSV, or repeat per IP.' });
   }
-  return { lines, diffs: [], raw: resolveTokens(row.raw_template, values) };
+  return { lines };
 };
 
 RESOLVERS.fetchlogs = function (row, values) {
@@ -285,7 +237,7 @@ RESOLVERS.fetchlogs = function (row, values) {
     ...(fetchX.skippedRange ? [{ type: 'warn', c: 'Range too large to enumerate automatically (limit of 8 addresses) — repeat fw fetchlogs manually per IP.' }] : []),
     ...(fetchX.truncated ? [{ type: 'warn', c: `Showing the first ${fetchList.length} IPs — repeat the command for the rest.` }] : []),
   ];
-  return { lines, diffs: [], raw: resolveTokens(row.raw_template, values) };
+  return { lines };
 };
 
 RESOLVERS.conntable = function (row, values) {
@@ -298,7 +250,7 @@ RESOLVERS.conntable = function (row, values) {
   const notes = (srcRes.rangeTooLarge || dstRes.rangeTooLarge) ? [{ type: 'warn', c: RANGE_TOO_LARGE_NOTE }] : [];
   const subValues = Object.assign({}, values, { src_ip: srcTerm, dst_ip: dstTerm });
   const lines = [...dbLinesToTerm(row.lines.default, subValues), ...notes];
-  return { lines, diffs: [], raw: resolveTokens(row.raw_template, values) };
+  return { lines };
 };
 
 RESOLVERS.nattable = function (row, values) {
@@ -311,7 +263,7 @@ RESOLVERS.nattable = function (row, values) {
   const notes = (srcRes.rangeTooLarge || dstRes.rangeTooLarge) ? [{ type: 'warn', c: RANGE_TOO_LARGE_NOTE }] : [];
   const subValues = Object.assign({}, values, { src_ip: srcTerm, dst_ip: dstTerm });
   const lines = [...dbLinesToTerm(row.lines.default, subValues), ...notes];
-  return { lines, diffs: [], raw: resolveTokens(row.raw_template, values) };
+  return { lines };
 };
 
 RESOLVERS.routespecific = function (row, values) {
@@ -335,7 +287,7 @@ RESOLVERS.routespecific = function (row, values) {
     ...gaiaLines.map(l => ({ p: l.prompt, c: resolveTokensMarked(l.content, values) })),
     ...routeNotes,
   ].filter(Boolean);
-  return { lines, diffs: [], raw: resolveTokens(row.raw_template, values) };
+  return { lines };
 };
 
 RESOLVERS.fwaccelconns = function (row, values) {
@@ -351,7 +303,7 @@ RESOLVERS.fwaccelconns = function (row, values) {
     staticNote ? { type: 'note', c: resolveTokens(staticNote.content, values) } : null,
     ...notes,
   ].filter(Boolean);
-  return { lines, diffs: [], raw: fwaccelCmd };
+  return { lines };
 };
 
 // ════════════════════════════════════════════════
@@ -367,23 +319,20 @@ function mapAbout(about, values) {
   };
 }
 
-// Bloco "placeholder" compartilhado por requires_ips (SRC/DST vazios) e requires_ip_port
-// (IP/Porta genéricos vazios) — mesma lógica de fallback (nome/desc/raw "vazio"), só muda
-// a condição que dispara.
+// Bloco "placeholder" usado por requires_ip_port (IP/Porta genéricos vazios)
+// — mostra nome/desc/linhas alternativos quando o comando ainda não tem
+// IP/Porta preenchidos.
 function buildEmptyStateCard(row, values, about) {
   const emptyLines = (row.lines && row.lines.empty) || [];
   if (!emptyLines.length) return null; // e.g. conntable/nattable/routespecific: card omitido inteiramente
   const name = (row.name_empty !== null && row.name_empty !== undefined && row.name_empty !== '') ? row.name_empty : row.name;
   const desc = (row.desc_empty !== null && row.desc_empty !== undefined && row.desc_empty !== '') ? row.desc_empty : row.desc;
-  const raw = Object.prototype.hasOwnProperty.call(EMPTY_RAW, row.id) ? EMPTY_RAW[row.id] : resolveTokens(row.raw_template, values);
-  const diffs = (ALWAYS_SHOW_DIFFS_WHEN_EMPTY.has(row.id) && row.diffs && row.diffs.length) ? dbDiffsToTerm(row.diffs, values) : undefined;
   return card({
     id: row.id,
     name: resolveTokens(name, values),
     desc: resolveTokens(desc, values),
     about,
     lines: dbLinesToTerm(emptyLines, values),
-    diffs, raw,
     folderIds: row.folder_ids,
     createdBy: row.created_by, modifiedBy: row.modified_by, updatedAt: row.updated_at, isSystem: row.is_system,
     vendors: row.vendors, systems: row.systems, versions: row.versions, environments: row.environments,
@@ -393,10 +342,6 @@ function buildEmptyStateCard(row, values, about) {
 function buildCardHtmlForRow(row, values, hasIPs) {
   const about = mapAbout(row.about, values);
 
-  if (row.requires_ips && !hasIPs) {
-    return buildEmptyStateCard(row, values, about);
-  }
-
   // IP/Porta genéricos (sem direção — ver query-bar.js): usados por comandos como
   // "host <IP> and port <PORT>" que não distinguem origem/destino, ao contrário de
   // SRC/DST. Gatilho independente de hasIPs, lido direto de values.ip/values.port.
@@ -405,24 +350,20 @@ function buildCardHtmlForRow(row, values, hasIPs) {
     return buildEmptyStateCard(row, values, about);
   }
 
-  let lines, diffs, raw;
+  let lines;
   const resolver = row.placeholder_resolver && RESOLVERS[row.placeholder_resolver];
   if (resolver && hasIPs) {
     const res = resolver(row, values);
     lines = res.lines;
-    diffs = (res.diffs && res.diffs.length) ? res.diffs : undefined;
-    raw = res.raw;
   } else {
     lines = dbLinesToTerm(row.lines.default, values);
-    diffs = (row.diffs && row.diffs.length) ? dbDiffsToTerm(row.diffs, values) : undefined;
-    raw = resolveTokens(row.raw_template, values);
   }
 
   return card({
     id: row.id,
     name: resolveTokens(row.name, values),
     desc: resolveTokens(row.desc, values),
-    about, lines, diffs, raw,
+    about, lines,
     folderIds: row.folder_ids,
     createdBy: row.created_by, modifiedBy: row.modified_by, updatedAt: row.updated_at, isSystem: row.is_system,
     vendors: row.vendors, systems: row.systems, versions: row.versions, environments: row.environments,

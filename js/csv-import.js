@@ -90,7 +90,7 @@ function splitCell(cell) { return String(cell || '').split(',').map(s => s.trim(
 // instruções — os detalhes ficam no texto do modal. ──
 const IMPORT_HEADERS = [
   'Name', 'Description', 'Vendor', 'System', 'Topics', 'Versions', 'Environments',
-  'Requires IP/Port', 'Prompt', 'Command', 'Note', 'Purpose', 'When to use', 'Notes',
+  'Prompt', 'Command', 'Note', 'Purpose', 'When to use', 'Notes',
 ];
 // Vendor/System/Version/Environment/Topics são todos obrigatórios agora (ver
 // buildImportPayload abaixo) — "all" não é mais um valor aceito nestas 4
@@ -99,7 +99,7 @@ const IMPORT_EXAMPLE_ROW = [
   'Check WatchDog process status', 'Shows whether a monitored WatchDog process is alive',
   'Check Point', 'Gaia',
   'System Monitoring', 'R82', 'Standalone',
-  'No', '[Expert@FW]#', 'cpwd_admin list', '',
+  '[Expert@FW]#', 'cpwd_admin list', '',
   'Confirms a critical process (fwd, cpd, etc.) is being watched and running.',
   'After a restart, or when troubleshooting a service that keeps failing.', '',
 ];
@@ -173,9 +173,6 @@ function resolveTopics(cell, warnings) {
   });
   return [...new Set(keys)];
 }
-function parseYesNo(cell) {
-  return /^(y|yes|s|sim|true|1)$/i.test((cell || '').trim());
-}
 // id a partir do nome quando a coluna ID vier vazia — mesma ideia de "slug"
 // usada em URLs; suficiente para o caso comum (o servidor rejeita com 409 se
 // já existir, e o resumo da importação mostra isso linha a linha).
@@ -231,24 +228,6 @@ function buildImportPayload(obj, existingIdsInBatch) {
   if (!versions.length) return { error: 'No valid "Version" (at least one is required — must match an existing version)' };
   const environments = resolveMultiCatalog(getCell(obj, 'Environments', 'Environment'), CATALOGS.environments || [], warnings, 'Environment', 'environment');
   if (!environments.length) return { error: 'No valid "Environment" (at least one is required — must match an existing environment)' };
-  // "Requires IP/Port" = Yes só faz sentido pra um comando que muda de
-  // conteúdo quando SRC/DST estão vazios (ver toggle "This command changes
-  // content when SRC/DST are empty" no editor manual, passo Avançado) — e
-  // isso exige cadastrar uma linha alternativa (variant 'empty'), algo que a
-  // importação por CSV não tem como preencher (não existe coluna pra isso).
-  // Sem essa linha alternativa, o servidor rebaixa a flag pra 0 (ver
-  // buildCommandColumns em server/index.js) e o comando importa normalmente
-  // — mas ANTES dessa guarda existir, um comando assim ficava com a flag
-  // "presa" em 1 sem nenhuma linha empty, e o card desaparecia da tela por
-  // completo sempre que Source IP/Destination IP não estivessem os dois
-  // preenchidos no topo, sem nenhum erro visível. Por isso aqui a importação
-  // já nem tenta setar a flag — sempre "No" — e só avisa quando a célula do
-  // .csv dizia "Yes", pra quem editou o arquivo à mão entender por que foi
-  // ignorado.
-  if (parseYesNo(getCell(obj, 'Requires IP/Port'))) {
-    warnings.push('"Requires IP/Port" = Yes ignored — CSV import cannot register the alternate content shown when Source/Destination IP are empty (that requires the manual editor\'s Advanced step); the command was imported as always-visible instead.');
-  }
-  const requires_ips = false;
   const prompt = getCell(obj, 'Prompt') || '[Expert@FW]#';
   const commandCell = getCell(obj, 'Command');
   const noteCell = getCell(obj, 'Note');
@@ -280,7 +259,6 @@ function buildImportPayload(obj, existingIdsInBatch) {
     id, name,
     desc: getCell(obj, 'Description', 'Desc'),
     topics, vendors, systems, versions, environments,
-    requires_ips,
     about_purpose: getCell(obj, 'Purpose'),
     about_when: getCell(obj, 'When to use', 'When'),
     about_obs: getCell(obj, 'Notes', 'Note (about)'),

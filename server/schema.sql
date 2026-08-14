@@ -13,10 +13,14 @@
 -- exceto se `node seed.js` for rodado explicitamente (ver server/seed.js).
 --
 -- Um comando (fw monitor, tcpdump, cplic print, ...) é um registro em `commands`,
--- com uma ou mais linhas de terminal associadas (`command_lines`). Comandos que
--- variam de sintaxe entre versões (R81.10/R81.20/R82/R82.10) têm blocos extras
--- em `command_diffs`/`command_diff_lines` (o bloco expansível "Diferenças por
--- versão / plataforma" da UI).
+-- com uma ou mais linhas de terminal associadas (`command_lines`).
+--
+-- (Removidos: campo `raw_template`, feature "Differences by version"
+-- (`command_diffs`/`command_diff_lines`) e flag `requires_ips` — pedido do
+-- usuário. `raw_template` já não tinha nenhum efeito visível (o botão de
+-- copiar real é por linha, não usa esse campo); "Differences by version"
+-- e `requires_ips` eram funcionalidades reais, removidas junto com todo o
+-- conteúdo já cadastrado nelas.)
 --
 -- Todo o texto da aplicação (banco + UI) é em inglês, sem bilinguismo.
 --
@@ -32,8 +36,8 @@
 -- Notas de conversão SQLite → PostgreSQL:
 --   * INTEGER PRIMARY KEY AUTOINCREMENT  -> SERIAL PRIMARY KEY / BIGSERIAL
 --   * datetime('now')                    -> NOW() (colunas viram TIMESTAMPTZ)
---   * Flags booleanas (requires_ips, ...) continuam INTEGER 0/1 (não BOOLEAN)
---     de propósito — o backend já trata como `!!row.requires_ips` e o driver
+--   * Flags booleanas (requires_ip_port, ...) continuam INTEGER 0/1 (não BOOLEAN)
+--     de propósito — o backend já trata como `!!row.requires_ip_port` e o driver
 --     `pg` devolve INTEGER como Number, então nenhuma mudança de código era
 --     necessária além da própria query.
 --   * PRAGMA foreign_keys = ON não existe no Postgres — FKs já são sempre
@@ -44,13 +48,11 @@ CREATE TABLE IF NOT EXISTS commands (
   topic               TEXT NOT NULL,        -- tópico primário (= topics[0]), ver command_topics abaixo
   icon                TEXT NOT NULL DEFAULT '📄',
   sort_order          INTEGER NOT NULL DEFAULT 0,
-  requires_ips        INTEGER NOT NULL DEFAULT 0,   -- 1 = card muda de conteúdo quando SRC/DST não preenchidos
   requires_ip_port    INTEGER NOT NULL DEFAULT 0,   -- 1 = card muda de conteúdo quando IP/Porta (genéricos, sem direção) não preenchidos
   placeholder_resolver TEXT,                -- nome da função JS usada p/ resolver placeholders avançados (nullable)
-  raw_template        TEXT NOT NULL DEFAULT '', -- texto copiado pelo botão "copiar" (com placeholders)
 
   name                TEXT NOT NULL,
-  name_empty          TEXT,                 -- variante do nome quando requires_ips=1 (IPs vazios) ou requires_ip_port=1 (IP/Porta vazios) (opcional)
+  name_empty          TEXT,                 -- variante do nome quando requires_ip_port=1 (IP/Porta vazios) (opcional)
 
   "desc"              TEXT NOT NULL DEFAULT '', -- nome entre aspas: "desc" é palavra reservada no PostgreSQL
   desc_empty          TEXT,
@@ -214,9 +216,9 @@ CREATE TABLE IF NOT EXISTS environment_topics (
 -- Parâmetros administráveis usados nos comandos (campo de busca unificado da
 -- barra superior e botão "Inserir variável" do editor de comandos). `key` é
 -- o nome do placeholder {{key}} usado nos templates. NUNCA editável depois de
--- criado. Exclusão é bloqueada em server/index.js quando: (a) é 'src_ip'/
--- 'dst_ip' e algum comando tem requires_ips=1; (b) é 'ip'/'port' e algum
--- comando tem requires_ip_port=1; (c) {{key}} aparece em algum template.
+-- criado. Exclusão é bloqueada em server/index.js quando: (a) é 'ip'/'port'
+-- e algum comando tem requires_ip_port=1; (b) {{key}} aparece em algum
+-- template.
 CREATE TABLE IF NOT EXISTS parameters (
   key            TEXT PRIMARY KEY,
   label          TEXT NOT NULL,
@@ -243,7 +245,8 @@ CREATE TABLE IF NOT EXISTS prompts (
 );
 
 -- Linhas de terminal do card. `variant` distingue o bloco normal do bloco
--- "placeholder" mostrado quando requires_ips=1 e SRC/DST (ou requires_ip_port=1 e IP/Porta) ainda não foram preenchidos.
+-- "placeholder" mostrado quando requires_ip_port=1 e IP/Porta ainda não
+-- foram preenchidos.
 CREATE TABLE IF NOT EXISTS command_lines (
   id             SERIAL PRIMARY KEY,
   command_id     TEXT NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
@@ -258,22 +261,9 @@ CREATE TABLE IF NOT EXISTS command_lines (
                                                      -- data URI base64, enviada por upload/paste no editor
 );
 
--- Bloco expansível "Diferenças por versão / plataforma".
-CREATE TABLE IF NOT EXISTS command_diffs (
-  id          SERIAL PRIMARY KEY,
-  command_id  TEXT NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
-  version     TEXT NOT NULL,       -- versão/rótulo mostrado na tag do diff (ex.: 'R82+', 'R81.x')
-  note        TEXT NOT NULL DEFAULT '',
-  sort_order  INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS command_diff_lines (
-  id          SERIAL PRIMARY KEY,
-  diff_id     INTEGER NOT NULL REFERENCES command_diffs(id) ON DELETE CASCADE,
-  sort_order  INTEGER NOT NULL DEFAULT 0,
-  line_type   TEXT NOT NULL DEFAULT 'cmd',
-  prompt      TEXT,
-  content     TEXT NOT NULL DEFAULT ''
-);
+-- (command_diffs/command_diff_lines — bloco "Differences by version" —
+-- removidas: pedido do usuário para tirar de vez a feature junto com todo o
+-- conteúdo já cadastrado. Ver migração DROP TABLE em server/db.js.)
 
 -- ════════════════════════════════════════════════
 -- Multiusuário — servidor central compartilhado, um usuário por login do
@@ -504,8 +494,3 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 
 CREATE INDEX IF NOT EXISTS idx_commands_topic ON commands(topic);
 CREATE INDEX IF NOT EXISTS idx_command_lines_command ON command_lines(command_id);
-CREATE INDEX IF NOT EXISTS idx_command_diffs_command ON command_diffs(command_id);
--- command_diff_lines só tinha PK em `id` — toda busca por diff_id (ver
--- shapeCommand()/shapeCommandsBatch() em server/index.js) fazia sequential
--- scan; ficou perceptível depois do import de 1452 comandos.
-CREATE INDEX IF NOT EXISTS idx_command_diff_lines_diff ON command_diff_lines(diff_id);

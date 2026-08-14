@@ -444,7 +444,7 @@ async function lookupUpnFromAD(samAccountName) {
 // (não deveria acontecer em uso normal, getCurrentUsername sempre devolve
 // algo) simplesmente recebem folder_ids: [].
 async function shapeCommand(row, username) {
-  const [vendorsQ, systemsQ, versionsQ, envQ, topicsQ, folderQ, linesQ, diffsQ] = await Promise.all([
+  const [vendorsQ, systemsQ, versionsQ, envQ, topicsQ, folderQ, linesQ] = await Promise.all([
     pool.query('SELECT vendor FROM command_vendors WHERE command_id = $1 ORDER BY vendor', [row.id]),
     pool.query('SELECT system FROM command_systems WHERE command_id = $1 ORDER BY system', [row.id]),
     pool.query('SELECT version FROM command_versions WHERE command_id = $1 ORDER BY version', [row.id]),
@@ -460,7 +460,6 @@ async function shapeCommand(row, username) {
         )
       : Promise.resolve({ rows: [] }),
     pool.query('SELECT variant, sort_order, line_type, prompt, content, supports_export, image_data FROM command_lines WHERE command_id = $1 ORDER BY variant, sort_order, id', [row.id]),
-    pool.query('SELECT id, version, note, sort_order FROM command_diffs WHERE command_id = $1 ORDER BY sort_order, id', [row.id]),
   ]);
 
   const vendors = vendorsQ.rows.map(v => v.vendor);
@@ -483,16 +482,6 @@ async function shapeCommand(row, username) {
     empty: linesQ.rows.filter(l => l.variant === 'empty').map(shapeLine),
   };
 
-  const diffRows = diffsQ.rows;
-  const diffLineResults = await Promise.all(
-    diffRows.map(d => pool.query('SELECT sort_order, line_type, prompt, content FROM command_diff_lines WHERE diff_id = $1 ORDER BY sort_order, id', [d.id]))
-  );
-  const diffs = diffRows.map((d, i) => ({
-    version: d.version,
-    note: d.note,
-    lines: diffLineResults[i].rows.map(shapeLine),
-  }));
-
   return {
     id: row.id,
     topic: row.topic,
@@ -500,10 +489,8 @@ async function shapeCommand(row, username) {
     folder_ids: folderIds,
     icon: row.icon,
     sort_order: row.sort_order,
-    requires_ips: !!row.requires_ips,
     requires_ip_port: !!row.requires_ip_port,
     placeholder_resolver: row.placeholder_resolver,
-    raw_template: row.raw_template,
     name: row.name,
     name_empty: row.name_empty,
     desc: row.desc,
@@ -519,7 +506,6 @@ async function shapeCommand(row, username) {
     versions,
     environments,
     lines,
-    diffs,
     created_at: row.created_at,
     updated_at: row.updated_at,
     created_by: row.created_by || null,
@@ -544,10 +530,10 @@ function _groupRowsBy(rows, keyField) {
 }
 
 // Versão em lote de shapeCommand() — usada só por GET /api/commands (a
-// listagem completa). shapeCommand() faz 8+ queries (uma por comando) para
-// vendors/systems/versions/environments/topics/pastas/lines/diffs, mais uma
-// query extra por diff (command_diff_lines) — ótimo para 1 comando (GET/POST/
-// PUT /api/commands/:id, que continuam usando shapeCommand() normalmente),
+// listagem completa). shapeCommand() faz várias queries (uma por comando) para
+// vendors/systems/versions/environments/topics/pastas/lines — ótimo para 1
+// comando (GET/POST/PUT /api/commands/:id, que continuam usando
+// shapeCommand() normalmente),
 // péssimo para a lista inteira: com N comandos vira ~8N+ round-trips ao
 // Postgres (N=1452 → mais de 11 mil), competindo pelo pool de conexões
 // (server/db.js: max=10) e serializando o que deveria ser meia dúzia de
@@ -559,7 +545,7 @@ async function shapeCommandsBatch(rows, username) {
   if (!rows.length) return [];
   const ids = rows.map(r => r.id);
 
-  const [vendorsQ, systemsQ, versionsQ, envQ, topicsQ, folderQ, linesQ, diffsQ] = await Promise.all([
+  const [vendorsQ, systemsQ, versionsQ, envQ, topicsQ, folderQ, linesQ] = await Promise.all([
     pool.query('SELECT command_id, vendor FROM command_vendors WHERE command_id = ANY($1) ORDER BY command_id, vendor', [ids]),
     pool.query('SELECT command_id, system FROM command_systems WHERE command_id = ANY($1) ORDER BY command_id, system', [ids]),
     pool.query('SELECT command_id, version FROM command_versions WHERE command_id = ANY($1) ORDER BY command_id, version', [ids]),
@@ -575,13 +561,7 @@ async function shapeCommandsBatch(rows, username) {
         )
       : Promise.resolve({ rows: [] }),
     pool.query('SELECT command_id, variant, sort_order, line_type, prompt, content, supports_export, image_data FROM command_lines WHERE command_id = ANY($1) ORDER BY command_id, variant, sort_order, id', [ids]),
-    pool.query('SELECT id, command_id, version, note, sort_order FROM command_diffs WHERE command_id = ANY($1) ORDER BY command_id, sort_order, id', [ids]),
   ]);
-
-  const diffIds = diffsQ.rows.map(d => d.id);
-  const diffLinesQ = diffIds.length
-    ? await pool.query('SELECT diff_id, sort_order, line_type, prompt, content FROM command_diff_lines WHERE diff_id = ANY($1) ORDER BY diff_id, sort_order, id', [diffIds])
-    : { rows: [] };
 
   const vendorsBy = _groupRowsBy(vendorsQ.rows, 'command_id');
   const systemsBy = _groupRowsBy(systemsQ.rows, 'command_id');
@@ -590,8 +570,6 @@ async function shapeCommandsBatch(rows, username) {
   const topicsBy = _groupRowsBy(topicsQ.rows, 'command_id');
   const folderBy = _groupRowsBy(folderQ.rows, 'command_id');
   const linesBy = _groupRowsBy(linesQ.rows, 'command_id');
-  const diffsBy = _groupRowsBy(diffsQ.rows, 'command_id');
-  const diffLinesBy = _groupRowsBy(diffLinesQ.rows, 'diff_id');
 
   const shapeLine = l => ({
     line_type: l.line_type,
@@ -613,11 +591,6 @@ async function shapeCommandsBatch(rows, username) {
       default: rowLines.filter(l => l.variant === 'default').map(shapeLine),
       empty: rowLines.filter(l => l.variant === 'empty').map(shapeLine),
     };
-    const diffs = (diffsBy.get(row.id) || []).map(d => ({
-      version: d.version,
-      note: d.note,
-      lines: (diffLinesBy.get(d.id) || []).map(shapeLine),
-    }));
 
     return {
       id: row.id,
@@ -626,10 +599,8 @@ async function shapeCommandsBatch(rows, username) {
       folder_ids: folderIds,
       icon: row.icon,
       sort_order: row.sort_order,
-      requires_ips: !!row.requires_ips,
       requires_ip_port: !!row.requires_ip_port,
       placeholder_resolver: row.placeholder_resolver,
-      raw_template: row.raw_template,
       name: row.name,
       name_empty: row.name_empty,
       desc: row.desc,
@@ -645,7 +616,6 @@ async function shapeCommandsBatch(rows, username) {
       versions,
       environments,
       lines,
-      diffs,
       created_at: row.created_at,
       updated_at: row.updated_at,
       created_by: row.created_by || null,
@@ -1836,11 +1806,11 @@ const REQUIRED_TEXT_FIELDS = ['name', 'desc', 'about_purpose', 'about_when', 'ab
 
 function buildCommandColumns(body) {
   const topics = resolveTopics(body);
-  // Guarda estrutural: requires_ips/requires_ip_port fazem buildCardHtmlForRow
-  // (js/db-render-engine.js) trocar para um "empty state" quando SRC/DST (ou
-  // IP/Porta genéricos) não estão preenchidos — se não existir NENHUMA linha
+  // Guarda estrutural: requires_ip_port faz buildCardHtmlForRow
+  // (js/db-render-engine.js) trocar para um "empty state" quando IP/Porta
+  // genéricos não estão preenchidos — se não existir NENHUMA linha
   // variant='empty' cadastrada, o card desaparece da tela sem erro visível.
-  // Por isso o server nunca aceita requires_ips/requires_ip_port=1 sem pelo
+  // Por isso o server nunca aceita requires_ip_port=1 sem pelo
   // menos uma linha empty com conteúdo.
   const hasEmptyLines = Array.isArray(body.lines) && body.lines.some(l => l && l.variant === 'empty' && String(l.content || '').trim());
   const cols = {
@@ -1848,10 +1818,8 @@ function buildCommandColumns(body) {
     topic: topics[0],
     icon: body.icon || '📄',
     sort_order: Number.isInteger(body.sort_order) ? body.sort_order : 0,
-    requires_ips: (body.requires_ips && hasEmptyLines) ? 1 : 0,
     requires_ip_port: (body.requires_ip_port && hasEmptyLines) ? 1 : 0,
     placeholder_resolver: body.placeholder_resolver || null,
-    raw_template: body.raw_template || '',
     about_icon: body.about_icon || 'ℹ️',
   };
   for (const f of REQUIRED_TEXT_FIELDS) cols[f] = body[f] != null ? body[f] : '';
@@ -1896,24 +1864,6 @@ async function insertChildren(client, id, body) {
       ]
     );
   }
-
-  const diffs = body.diffs || [];
-  for (let i = 0; i < diffs.length; i++) {
-    const diff = diffs[i];
-    const diffResult = await client.query(
-      'INSERT INTO command_diffs (command_id, version, note, sort_order) VALUES ($1, $2, $3, $4) RETURNING id',
-      [id, diff.version, diff.note || '', Number.isInteger(diff.sort_order) ? diff.sort_order : i]
-    );
-    const diffId = diffResult.rows[0].id;
-    const diffLines = diff.lines || [];
-    for (let j = 0; j < diffLines.length; j++) {
-      const line = diffLines[j];
-      await client.query(
-        'INSERT INTO command_diff_lines (diff_id, sort_order, line_type, prompt, content) VALUES ($1, $2, $3, $4, $5)',
-        [diffId, Number.isInteger(line.sort_order) ? line.sort_order : j, line.line_type || 'cmd', line.prompt || null, line.content || '']
-      );
-    }
-  }
 }
 
 // ════════════════════════════════════════════════
@@ -1947,14 +1897,14 @@ app.post('/api/commands', async (req, res) => {
     await withTransaction(async client => {
       await client.query(
         `INSERT INTO commands (
-          id, topic, icon, sort_order, requires_ips, requires_ip_port, placeholder_resolver, raw_template,
+          id, topic, icon, sort_order, requires_ip_port, placeholder_resolver,
           name, name_empty, "desc", desc_empty,
           about_icon, about_purpose, about_when, about_obs,
           created_by, modified_by
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
         [
-          cols.id, cols.topic, cols.icon, cols.sort_order, cols.requires_ips, cols.requires_ip_port,
-          cols.placeholder_resolver, cols.raw_template,
+          cols.id, cols.topic, cols.icon, cols.sort_order, cols.requires_ip_port,
+          cols.placeholder_resolver,
           cols.name, cols.name_empty, cols.desc, cols.desc_empty,
           cols.about_icon, cols.about_purpose, cols.about_when, cols.about_obs,
           cols.created_by, cols.modified_by,
@@ -2010,18 +1960,18 @@ app.put('/api/commands/:id', async (req, res) => {
     await withTransaction(async client => {
       await client.query(
         `UPDATE commands SET
-          topic = $1, icon = $2, sort_order = $3, requires_ips = $4,
-          requires_ip_port = $5,
-          placeholder_resolver = $6, raw_template = $7,
-          name = $8, name_empty = $9, "desc" = $10, desc_empty = $11,
-          about_icon = $12, about_purpose = $13, about_when = $14, about_obs = $15,
-          modified_by = $16,
+          topic = $1, icon = $2, sort_order = $3,
+          requires_ip_port = $4,
+          placeholder_resolver = $5,
+          name = $6, name_empty = $7, "desc" = $8, desc_empty = $9,
+          about_icon = $10, about_purpose = $11, about_when = $12, about_obs = $13,
+          modified_by = $14,
           updated_at = NOW()
-        WHERE id = $17`,
+        WHERE id = $15`,
         [
-          cols.topic, cols.icon, cols.sort_order, cols.requires_ips,
+          cols.topic, cols.icon, cols.sort_order,
           cols.requires_ip_port,
-          cols.placeholder_resolver, cols.raw_template,
+          cols.placeholder_resolver,
           cols.name, cols.name_empty, cols.desc, cols.desc_empty,
           cols.about_icon, cols.about_purpose, cols.about_when, cols.about_obs,
           cols.modified_by,
@@ -2035,7 +1985,6 @@ app.put('/api/commands/:id', async (req, res) => {
       await client.query('DELETE FROM command_versions WHERE command_id = $1', [id]);
       await client.query('DELETE FROM command_environments WHERE command_id = $1', [id]);
       await client.query('DELETE FROM command_lines WHERE command_id = $1', [id]);
-      await client.query('DELETE FROM command_diffs WHERE command_id = $1', [id]); // cascades to command_diff_lines
 
       await insertChildren(client, id, req.body);
     });
@@ -2048,7 +1997,7 @@ app.put('/api/commands/:id', async (req, res) => {
     const changeDetails = summarizeChangedFields(found, cols, {
       name: 'name', topic: 'topic', desc: 'description',
       about_purpose: 'purpose', about_when: 'when to use', about_obs: 'notes',
-      requires_ips: 'IP/Port list support', requires_ip_port: 'IP+Port pairing',
+      requires_ip_port: 'IP+Port pairing',
     });
     await logAudit(currentUser, 'update', 'command', id, cols.name, changeDetails);
     const row = await findCommand(id);
@@ -2543,28 +2492,20 @@ app.delete('/api/topics/:key', async (req, res) => {
 
 // ── Parâmetros (campo de busca unificado + botão "Inserir variável") ──
 // Conta em quantos comandos DISTINTOS o placeholder {{key}} aparece de verdade
-// (raw_template, linhas normais e linhas de diff) — usado para bloquear
-// exclusão de um parâmetro que algum comando ainda referencia no texto.
+// (linhas normais) — usado para bloquear exclusão de um parâmetro que algum
+// comando ainda referencia no texto.
 async function countParameterTemplateUsage(key) {
   const needle = `{{${key}}}`;
   const usedBy = new Set();
-  const cmds = await pool.query('SELECT id, raw_template FROM commands');
-  cmds.rows.forEach(r => { if (r.raw_template && r.raw_template.includes(needle)) usedBy.add(r.id); });
   const lines = await pool.query('SELECT command_id, content FROM command_lines');
   lines.rows.forEach(r => { if (r.content && r.content.includes(needle)) usedBy.add(r.command_id); });
-  const diffLines = await pool.query(
-    `SELECT cd.command_id AS command_id, cdl.content AS content
-     FROM command_diff_lines cdl JOIN command_diffs cd ON cd.id = cdl.diff_id`
-  );
-  diffLines.rows.forEach(r => { if (r.content && r.content.includes(needle)) usedBy.add(r.command_id); });
   return usedBy.size;
 }
-// 'src_ip'/'dst_ip' e 'ip'/'port' são lidos DIRETO (não via {{token}}) pela
-// lógica de estado vazio do card (requires_ips/requires_ip_port em commands) —
-// excluí-los quebraria essa lógica para todo comando marcado com a respectiva
-// flag, mesmo que nenhum {{src_ip}}/{{ip}} literal apareça no texto.
+// 'ip'/'port' são lidos DIRETO (não via {{token}}) pela lógica de estado
+// vazio do card (requires_ip_port em commands) — excluí-los quebraria essa
+// lógica para todo comando marcado com a flag, mesmo que nenhum {{ip}}
+// literal apareça no texto.
 async function parameterStructuralDependencyCount(key) {
-  if (key === 'src_ip' || key === 'dst_ip') return countUsage('commands', 'requires_ips', 1);
   if (key === 'ip' || key === 'port') return countUsage('commands', 'requires_ip_port', 1);
   return 0;
 }
@@ -2615,7 +2556,7 @@ app.delete('/api/parameters/:key', async (req, res) => {
     if (structCount > 0) {
       return res.status(409).json({
         error: 'structural_dependency',
-        message: `Parameter '${key}' is read directly by ${structCount} command(s)' empty-state logic (requires_ips/requires_ip_port) and cannot be deleted`,
+        message: `Parameter '${key}' is read directly by ${structCount} command(s)' empty-state logic (requires_ip_port) and cannot be deleted`,
         count: structCount,
       });
     }

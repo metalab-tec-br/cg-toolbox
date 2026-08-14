@@ -5,7 +5,7 @@
 // calls createCommand()/updateCommand()/deleteCommand() from api-client.js.
 //
 // The whole app (database + UI) is English-only now — name/desc/about/
-// lines/diffs are all single-language fields, so a single fetchCommands()
+// lines are all single-language fields, so a single fetchCommands()
 // call is enough to populate the form (no more PT/EN zipping).
 // ════════════════════════════════════════════════
 
@@ -47,17 +47,16 @@ let CMD_EDITOR_ORIGINAL_ID = null;
 let CMD_EDITOR_RESOLVER = null; // placeholder_resolver of the row being edited (preserved as-is, never set by this UI)
 
 // ════════════════════════════════════════════════
-// WIZARD — 4 steps: 1) Identification, 2) Scope (Vendor/System/Version/
-// Environment/Topic), 3) Command lines, 4) Advanced (empty-state variant,
-// raw template, diffs). Navigation is linear-with-validation: "Next"
-// only advances (and unlocks the step indicator button) once the CURRENT
-// step's required fields are filled; "Back" and clicking an already-unlocked
-// step in the indicator are always free. In edit/duplicate mode every step
-// starts unlocked (the command already has valid data everywhere), so you
-// can jump straight to whatever section needs a change instead of having to
-// re-walk the whole wizard — see openCommandEditor() below.
+// WIZARD — 3 steps: 1) Identification, 2) Scope (Vendor/System/Version/
+// Environment/Topic), 3) Command lines. Navigation is linear-with-validation:
+// "Next" only advances (and unlocks the step indicator button) once the
+// CURRENT step's required fields are filled; "Back" and clicking an
+// already-unlocked step in the indicator are always free. In edit/duplicate
+// mode every step starts unlocked (the command already has valid data
+// everywhere), so you can jump straight to whatever section needs a change
+// instead of having to re-walk the whole wizard — see openCommandEditor() below.
 // ════════════════════════════════════════════════
-const CMD_WIZ_TOTAL_STEPS = 4;
+const CMD_WIZ_TOTAL_STEPS = 3;
 let CMD_WIZ_STEP = 1;
 let CMD_WIZ_MAX_STEP = 1; // furthest step unlocked so far (indicator buttons beyond this are disabled)
 
@@ -80,7 +79,7 @@ function _ceValidateStep(step) {
     }
     return null;
   }
-  return null; // steps 3 (lines) and 4 (advanced) have no blocking requirement today
+  return null; // step 3 (lines) has no blocking requirement today
 }
 
 function _ceRenderWizardState() {
@@ -296,23 +295,6 @@ function _ceApplyEditorCascade() {
   if (envChanged) _ceUpdateMultiSegDDLabel('cmdEnvSeg', 'cmdEnvDDBtn', null, 'selected');
 }
 
-// ── requires_ips toggle (reuses the .sb-toggle switch look) ─
-function _ceSetRequiresIps(on) {
-  _ce('cmdRequiresIpsToggle').classList.toggle('on', !!on);
-  _ce('cmdEmptyNameRow').style.display = on ? 'flex' : 'none';
-  _ce('cmdEmptyDescRow').style.display = on ? 'flex' : 'none';
-  _ce('cmdLinesEmptySection').style.display = on ? '' : 'none';
-}
-function cmdEditorToggleRequiresIps() {
-  _ceSetRequiresIps(!_ce('cmdRequiresIpsToggle').classList.contains('on'));
-}
-function _ceGetRequiresIps() { return _ce('cmdRequiresIpsToggle').classList.contains('on'); }
-
-function cmdEditorToggleDiffsDisclosure() {
-  _ce('cmdDiffsDisclosureHd').classList.toggle('open');
-  _ce('cmdDiffsDisclosureBody').classList.toggle('open');
-}
-
 // ── error banner ──────────────────────────────────
 function _ceShowError(msg) {
   const el = _ce('cmdEditorError');
@@ -326,12 +308,10 @@ function _ceHideError() {
 }
 
 // ════════════════════════════════════════════════
-// Repeatable list rows: lines / diffs
+// Repeatable list rows: command lines
 // ════════════════════════════════════════════════
 // opts.allowImage (default true) controls whether the 'image' line type is
-// offered at all — used to keep it OFF inside version/platform diffs (see
-// _ceBuildDiffRow below), so command_diff_lines (which has no image_data
-// column, by design — see schema.sql) never needs to carry one.
+// offered at all.
 function _ceBuildLineRow(data, opts) {
   data = data || { line_type: 'cmd', prompt: '[Expert@FW]#', content: '', supports_export: false, image_data: '' };
   const allowImage = !opts || opts.allowImage !== false;
@@ -548,9 +528,9 @@ function _ceInsertVariable(btn, key) {
 // sort_order is derived purely from DOM order at save time (see
 // _ceReadLinesFrom below), so moving a .line-row in the DOM is the entire
 // reorder operation — nothing else needs to track position. Works the same
-// way for the Default list, the Empty-state list, and each version/platform
-// diff's own line list, since it only ever reorders a row among its own
-// siblings (drag is rejected if hovering over a row from a different list).
+// way for the Default list and the Empty-state list, since it only ever
+// reorders a row among its own siblings (drag is rejected if hovering over
+// a row from a different list).
 // Drag is armed only via mousedown on the small grip handle (⠿), not the
 // whole row, so selecting/editing text inside the content textarea is
 // unaffected.
@@ -593,7 +573,7 @@ function _ceReadLinesFrom(containerEl) {
     // que agrupa note/warn/info/ok; o valor real salvo vem do dropdown de categoria.
     const categorySel = row.querySelector('.ln-text-category');
     const lineType = rawType === 'text' && categorySel ? categorySel.value : rawType;
-    const imageDataInput = row.querySelector('.ln-image-data'); // ausente nas linhas de diff (allowImage:false)
+    const imageDataInput = row.querySelector('.ln-image-data'); // ausente quando allowImage:false
     return {
       sort_order: i,
       line_type: lineType,
@@ -605,48 +585,13 @@ function _ceReadLinesFrom(containerEl) {
   });
 }
 
-function _ceBuildDiffRow(data) {
-  data = data || { version: '', note: '', lines: [] };
-  const row = document.createElement('div');
-  row.className = 'diff-row';
-  row.innerHTML = `
-    <div class="row-head">
-      <input class="set-input diff-version" style="max-width:160px;" placeholder="e.g.: R82+" value="${_ceEscAttr(data.version)}">
-      <button type="button" class="btn btn-ghost btn-sm row-remove-btn">✕ Remove</button>
-    </div>
-    <div class="set-row">
-      <div class="set-group"><span class="set-label">Note</span><input class="set-input diff-note" value="${_ceEscAttr(data.note)}"></div>
-    </div>
-    <span class="set-label">Diff lines</span>
-    <div class="diff-lines-wrap"></div>
-    <button type="button" class="btn btn-ghost btn-sm diff-add-line-btn">+ Add line</button>
-  `;
-  row.querySelector('.row-remove-btn').addEventListener('click', () => row.remove());
-  const linesWrap = row.querySelector('.diff-lines-wrap');
-  // allowImage:false — diffs não suportam linha de imagem (command_diff_lines
-  // não tem coluna image_data; ver comentário em schema.sql e _ceBuildLineRow).
-  (data.lines || []).forEach(l => linesWrap.appendChild(_ceBuildLineRow(l, { allowImage: false })));
-  row.querySelector('.diff-add-line-btn').addEventListener('click', () => linesWrap.appendChild(_ceBuildLineRow(null, { allowImage: false })));
-  return row;
-}
-function cmdEditorAddDiff(data) { _ce('cmdDiffsList').appendChild(_ceBuildDiffRow(data)); }
-function _ceReadDiffs() {
-  return [...document.querySelectorAll('#cmdDiffsList .diff-row')].map((row, i) => ({
-    version: row.querySelector('.diff-version').value || '',
-    note: row.querySelector('.diff-note').value || '',
-    sort_order: i,
-    lines: _ceReadLinesFrom(row.querySelector('.diff-lines-wrap')),
-  }));
-}
-
 // ════════════════════════════════════════════════
 // Reset / populate / open / close
 // ════════════════════════════════════════════════
 function _ceResetForm() {
   _ceSetMultiSeg('cmdTopicSeg', ['capture'], 'cmdTopicDDBtn', null, 'selected');
-  _ceSetRequiresIps(false);
   ['cmdName', 'cmdNameEmpty', 'cmdDesc', 'cmdDescEmpty',
-   'cmdAboutPurpose', 'cmdAboutWhen', 'cmdAboutObs', 'cmdRawTemplate']
+   'cmdAboutPurpose', 'cmdAboutWhen', 'cmdAboutObs']
     .forEach(id => { _ce(id).value = ''; });
   _ceSetSingleSeg('cmdVendorSeg', [], 'cmdVendorDDBtn');
   _ceSetSingleSeg('cmdSysSeg', [], 'cmdSysDDBtn');
@@ -655,9 +600,6 @@ function _ceResetForm() {
   _ceApplyEditorCascade();
   _ce('cmdLinesDefaultList').innerHTML = '';
   _ce('cmdLinesEmptyList').innerHTML = '';
-  _ce('cmdDiffsList').innerHTML = '';
-  _ce('cmdDiffsDisclosureHd').classList.remove('open');
-  _ce('cmdDiffsDisclosureBody').classList.remove('open');
   _ceHideError();
   _ce('cmdEditorResolverWarning').classList.remove('show');
   _ce('cmdEditorDeleteBtn').style.display = 'none';
@@ -671,7 +613,6 @@ async function _cePopulateForm(id) {
   if (!row) throw new Error('Command not found: ' + id);
 
   _ceSetMultiSeg('cmdTopicSeg', row.topics || [row.topic], 'cmdTopicDDBtn', null, 'selected');
-  _ceSetRequiresIps(!!row.requires_ips);
   _ce('cmdName').value = row.name || '';
   _ce('cmdNameEmpty').value = row.name_empty || '';
   _ce('cmdDesc').value = row.desc || '';
@@ -679,7 +620,6 @@ async function _cePopulateForm(id) {
   _ce('cmdAboutPurpose').value = (row.about && row.about.purpose) || '';
   _ce('cmdAboutWhen').value = (row.about && row.about.when) || '';
   _ce('cmdAboutObs').value = (row.about && row.about.obs) || '';
-  _ce('cmdRawTemplate').value = row.raw_template || '';
 
   _ceSetSingleSeg('cmdVendorSeg', row.vendors || [], 'cmdVendorDDBtn');
   _ceSetSingleSeg('cmdSysSeg', row.systems || [], 'cmdSysDDBtn');
@@ -692,19 +632,16 @@ async function _cePopulateForm(id) {
     cmdEditorAddLine('cmdLinesDefaultList', { line_type: l.line_type, prompt: l.prompt, content: l.content, supports_export: !!l.supports_export, image_data: l.image_data || '' });
   });
 
+  // cmdLinesEmptyList/cmdNameEmpty/cmdDescEmpty continuam sendo carregados
+  // mesmo sem nenhum controle de UI que os exiba — são a variante 'empty'
+  // usada por requires_ip_port (ex.: tcpdumpipport), que nunca teve
+  // toggle próprio nesta tela (ver comentário em server/index.js
+  // buildCommandColumns). Preservar os valores aqui evita que salvar um
+  // comando existente com essa flag apague silenciosamente seus dados.
   _ce('cmdLinesEmptyList').innerHTML = '';
   ((row.lines && row.lines.empty) || []).forEach(l => {
     cmdEditorAddLine('cmdLinesEmptyList', { line_type: l.line_type, prompt: l.prompt, content: l.content, supports_export: !!l.supports_export, image_data: l.image_data || '' });
   });
-
-  _ce('cmdDiffsList').innerHTML = '';
-  (row.diffs || []).forEach(d => {
-    const lines = (d.lines || []).map(l => ({ line_type: l.line_type, prompt: l.prompt, content: l.content }));
-    cmdEditorAddDiff({ version: d.version, note: d.note, lines });
-  });
-  const hasDiffs = (row.diffs || []).length > 0;
-  _ce('cmdDiffsDisclosureHd').classList.toggle('open', hasDiffs);
-  _ce('cmdDiffsDisclosureBody').classList.toggle('open', hasDiffs);
 
   CMD_EDITOR_RESOLVER = row.placeholder_resolver || null;
   _ce('cmdEditorResolverWarning').classList.toggle('show', !!CMD_EDITOR_RESOLVER);
@@ -843,16 +780,16 @@ async function cmdEditorSave() {
     }
   }
 
-  const requiresIps = _ceGetRequiresIps();
   const defaultLines = _ceReadLinesFrom(_ce('cmdLinesDefaultList')).map(l => Object.assign({}, l, { variant: 'default' }));
-  const emptyLines = requiresIps ? _ceReadLinesFrom(_ce('cmdLinesEmptyList')).map(l => Object.assign({}, l, { variant: 'empty' })) : [];
+  // cmdLinesEmptyList é sempre lida (não há mais toggle de UI para isso — ver
+  // comentário em _cePopulateForm) para não apagar a variante 'empty' de um
+  // comando com requires_ip_port=1 (ex.: tcpdumpipport) ao salvar uma edição.
+  const emptyLines = _ceReadLinesFrom(_ce('cmdLinesEmptyList')).map(l => Object.assign({}, l, { variant: 'empty' }));
 
   const payload = {
     id,
     topics,
-    requires_ips: requiresIps,
     placeholder_resolver: CMD_EDITOR_MODE === 'edit' ? CMD_EDITOR_RESOLVER : null,
-    raw_template: _ce('cmdRawTemplate').value || '',
     name,
     name_empty: _ce('cmdNameEmpty').value || null,
     desc: _ce('cmdDesc').value || '',
@@ -862,7 +799,6 @@ async function cmdEditorSave() {
     about_obs: _ce('cmdAboutObs').value || '',
     vendors, systems, versions, environments,
     lines: [...defaultLines, ...emptyLines],
-    diffs: _ceReadDiffs(),
   };
 
   try {

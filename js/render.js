@@ -128,7 +128,6 @@ async function render() {
     ? { values: VERSION_KEYS, isAllMode: false }
     : resolveMultiSelection(v, VERSION_KEYS, FALLBACK_VERSION);
   const envSel = resolveMultiSelection(e, ENV_KEYS, FALLBACK_ENV);
-  AUTO_EXPAND_DIFFS = versionSel.isAllMode;
 
   const MAX_COMBOS = 8;
   let combos = [];

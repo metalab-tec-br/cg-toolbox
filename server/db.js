@@ -315,16 +315,18 @@ async function runMigrations() {
   // linha line_type='note' de um comando vira um parágrafo anexado ao
   // about_obs JÁ EXISTENTE daquele comando (preserva o que já estava
   // escrito lá, separado por uma linha em branco — nunca sobrescreve).
-  // Mesma lógica para command_diffs/command_diff_lines: o bloco "Diferenças
-  // por versão/plataforma" já tem seu próprio campo `note` livre
-  // (schema.sql) — destino natural para as linhas 'note' de um diff.
   // Depois de migrado o conteúdo, as linhas 'note' são apagadas (não dá
   // pra remover a COLUNA line_type em si — ela é compartilhada com cmd/
   // info/ok/warn/image — então "apagar essa coluna" aqui significa apagar
   // as LINHAS dessa categoria). Idempotente: depois da 1ª execução não
-  // sobra nenhuma linha line_type='note', então os UPDATEs (que dependem de
-  // encontrar essas linhas) e os DELETEs seguintes não afetam mais nada nas
+  // sobra nenhuma linha line_type='note', então o UPDATE (que depende de
+  // encontrar essas linhas) e o DELETE seguinte não afetam mais nada nas
   // próximas vezes que o backend subir.
+  //
+  // (A parte equivalente para command_diffs/command_diff_lines que existia
+  // aqui foi removida junto com a própria feature "Differences by version"
+  // — ver DROP TABLE logo abaixo — não fazia mais sentido migrar notas de
+  // diff para uma tabela que está sendo apagada.)
   try {
     const { rowCount: movedCmdNotes } = await pool.query(`
       UPDATE commands c SET about_obs = trim(both chr(10) from
@@ -340,25 +342,40 @@ async function runMigrations() {
     `);
     const { rowCount: deletedCmdNotes } = await pool.query(`DELETE FROM command_lines WHERE line_type = 'note'`);
 
-    const { rowCount: movedDiffNotes } = await pool.query(`
-      UPDATE command_diffs d SET note = trim(both chr(10) from
-        d.note || CASE WHEN d.note <> '' THEN chr(10) || chr(10) ELSE '' END || agg.combined
-      )
-      FROM (
-        SELECT diff_id, string_agg(content, chr(10) ORDER BY sort_order, id) AS combined
-        FROM command_diff_lines
-        WHERE line_type = 'note' AND trim(content) <> ''
-        GROUP BY diff_id
-      ) agg
-      WHERE d.id = agg.diff_id
-    `);
-    const { rowCount: deletedDiffNotes } = await pool.query(`DELETE FROM command_diff_lines WHERE line_type = 'note'`);
-
-    if (deletedCmdNotes || deletedDiffNotes) {
-      console.log(`[db] Categoria de texto 'note' migrada e removida: ${movedCmdNotes} comando(s) e ${movedDiffNotes} diff(s) tiveram o texto movido para o campo Note; ${deletedCmdNotes} linha(s) de command_lines e ${deletedDiffNotes} de command_diff_lines apagadas.`);
+    if (deletedCmdNotes) {
+      console.log(`[db] Categoria de texto 'note' migrada e removida: ${movedCmdNotes} comando(s) tiveram o texto movido para o campo Note; ${deletedCmdNotes} linha(s) de command_lines apagadas.`);
     }
   } catch (err) {
-    console.error(`[db] Falha ao migrar linhas 'note' para about_obs/diff note:`, err.message);
+    console.error(`[db] Falha ao migrar linhas 'note' para about_obs:`, err.message);
+  }
+
+  // Remoção completa de 3 recursos, a pedido do usuário — "remover as opções
+  // e campos Differences by version (advanced) e This command changes
+  // content when SRC/DST are empty" + "remover Raw template (copy button)
+  // também":
+  //   1) raw_template — já não tinha nenhum efeito visível: o valor calculado
+  //      era passado para card() (js/terminal-renderer.js), mas essa função
+  //      nunca lê esse parâmetro — dado morto de ponta a ponta.
+  //   2) command_diffs/command_diff_lines — bloco "Differences by version",
+  //      removido junto com todo o conteúdo já cadastrado (schema.sql não
+  //      cria mais essas tabelas numa instalação nova; aqui é o DROP para
+  //      quem já tinha uma instalação existente).
+  //   3) commands.requires_ips — toggle "This command changes content when
+  //      SRC/DST are empty", removido junto com o conteúdo (name_empty/
+  //      desc_empty/linhas variant='empty' continuam existindo no schema
+  //      porque são COMPARTILHADOS com requires_ip_port, que não foi pedido
+  //      para remover — só a flag requires_ips em si e o que dependia dela
+  //      são apagados).
+  // DROP COLUMN/TABLE IF EXISTS: seguro rodar em toda instalação, inclusive
+  // uma nova (onde essas colunas/tabelas nunca existiram, então o IF EXISTS
+  // simplesmente não faz nada).
+  try {
+    await pool.query(`ALTER TABLE commands DROP COLUMN IF EXISTS raw_template`);
+    await pool.query(`ALTER TABLE commands DROP COLUMN IF EXISTS requires_ips`);
+    await pool.query(`DROP TABLE IF EXISTS command_diff_lines`);
+    await pool.query(`DROP TABLE IF EXISTS command_diffs`);
+  } catch (err) {
+    console.error('[db] Falha ao remover raw_template/requires_ips/command_diffs:', err.message);
   }
 }
 

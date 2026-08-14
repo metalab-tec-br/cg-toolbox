@@ -1027,8 +1027,8 @@
         <span>⚠️</span><span>⚠️ This command uses advanced code-driven logic (net-utils.js) to expand IP lists/ranges/CIDR — e.g. fw monitor, tcpdump, fw ctl zdebug, fw tab, ip route get, fwaccel conns, fw fetchlogs, fwm logexport. Editing the lines here only changes the display fallback shown when that logic does not apply — the actual computed behavior requires a code change, not just this data edit.</span>
       </div>
 
-      <!-- Wizard step indicator — 4 steps (Identification / Scope / Command
-           lines / Advanced). Clicking a step only works once it has been
+      <!-- Wizard step indicator — 3 steps (Identification / Scope / Command
+           lines). Clicking a step only works once it has been
            unlocked (see CMD_WIZ_MAX_STEP in js/command-editor.js): in
            create/duplicate mode steps unlock one at a time as Next validates
            each one; in edit mode every step starts unlocked (the command
@@ -1045,10 +1045,6 @@
         <span class="wiz-step-sep"></span>
         <button type="button" class="wiz-step" data-step="3" onclick="cmdWizGoTo(3)">
           <span class="wiz-step-num">3</span><span class="wiz-step-label">Command lines</span>
-        </button>
-        <span class="wiz-step-sep"></span>
-        <button type="button" class="wiz-step" data-step="4" onclick="cmdWizGoTo(4)">
-          <span class="wiz-step-num">4</span><span class="wiz-step-label">Advanced</span>
         </button>
       </div>
 
@@ -1174,44 +1170,20 @@
         <span class="set-hint">Supports the tokens {{src_ip}}, {{dst_ip}}, {{src_port}}, {{dst_port}}, {{proto}}, {{iface}}, {{vsid}}, {{logFile}} — substituted at render time.</span>
         <div class="list-editor" id="cmdLinesDefaultList"></div>
         <button type="button" class="btn btn-ghost btn-sm" onclick="cmdEditorAddLine('cmdLinesDefaultList')">+ Add line</button>
-      </div>
 
-      <!-- ═══ STEP 4 — Advanced (empty-state variant, raw template, tags, diffs) ═══ -->
-      <div class="wiz-panel" data-step="4">
-        <div class="set-group">
-          <div class="sb-toggle" id="cmdRequiresIpsToggle" onclick="cmdEditorToggleRequiresIps()">
-            <div class="tog-track"><div class="tog-knob"></div></div><span>This command changes content when SRC/DST are empty</span>
-          </div>
-        </div>
-
+        <!-- Estes 3 elementos ficam sempre ocultos (sem toggle de UI) —
+             existem só para não perder os dados de comandos com
+             requires_ip_port=1 (ex.: tcpdumpipport) ao salvar uma edição.
+             Ver comentário em _cePopulateForm/cmdEditorSave em
+             js/command-editor.js. -->
         <div class="set-group" id="cmdEmptyNameRow" style="display:none;">
           <span class="set-label">Name when SRC/DST are empty</span><input class="set-input" id="cmdNameEmpty">
         </div>
-
         <div class="set-group" id="cmdEmptyDescRow" style="display:none;">
           <span class="set-label">Description when SRC/DST are empty</span><input class="set-input" id="cmdDescEmpty">
         </div>
-
         <div id="cmdLinesEmptySection" style="display:none;">
-          <div class="set-section-title">Lines when SRC/DST are empty</div>
           <div class="list-editor" id="cmdLinesEmptyList"></div>
-          <button type="button" class="btn btn-ghost btn-sm" onclick="cmdEditorAddLine('cmdLinesEmptyList')">+ Add line</button>
-        </div>
-
-        <div class="set-group">
-          <span class="set-label">Raw template (copy button)</span>
-          <input class="set-input" id="cmdRawTemplate">
-          <span class="set-hint">Technical text copied by the copy button — not translated. Accepts the same {{...}} tokens as the lines below.</span>
-        </div>
-
-        <div>
-          <div class="disclosure-hd" id="cmdDiffsDisclosureHd" onclick="cmdEditorToggleDiffsDisclosure()">
-            <span>▸ Differences by version (advanced)</span>
-          </div>
-          <div class="disclosure-body" id="cmdDiffsDisclosureBody">
-            <div class="list-editor" id="cmdDiffsList"></div>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="cmdEditorAddDiff()">+ Add difference</button>
-          </div>
         </div>
       </div>
     </div>
