@@ -218,7 +218,7 @@
       <div class="tog-track"><div class="tog-knob"></div></div><span>Export</span>
     </div>
     <div class="sb-file-wrap" id="fw-log">
-      <input class="sb-file" id="f-log" value="/tmp/fw_export.txt" oninput="render()">
+      <input class="sb-file" id="f-log" value="/tmp/$(hostname).txt" oninput="onExportPathInput()">
     </div>
     <!-- Mesma preferência pessoal espelhada em Configurações → User
          preferences (mShowImagesToggle) — ver toggleShowImages()/
@@ -226,7 +226,7 @@
          miniatura das linhas do tipo 'image' aparece direto no card, sem
          precisar clicar no badge "[Image]# ...". -->
     <div class="sb-toggle" id="tog-show-images" onclick="toggleShowImages()">
-      <div class="tog-track"><div class="tog-knob"></div></div><span>Show images</span>
+      <div class="tog-track"><div class="tog-knob"></div></div><span>Images</span>
     </div>
     <!-- Ordem alfabética (Details, Export, Show images, System commands). -->
     <div class="sb-toggle" id="tog-system-commands" onclick="toggleShowSystemCommands()">
@@ -290,7 +290,7 @@
         </span>
         <div class="cpq-tags-box" id="cpqTagsBox" onclick="focusQueryInput()">
           <span class="cpq-tags" id="cpqTags"></span>
-          <input type="text" id="cpQuery" class="cpq-input" placeholder="Command parameter" autocomplete="off" oninput="onQueryInput()" onkeydown="onQueryKeydown(event)" onfocus="openQueryPanel()" onblur="closeQueryPanel()">
+          <input type="text" id="cpQuery" class="cpq-input" placeholder="Parameter" autocomplete="off" oninput="onQueryInput()" onkeydown="onQueryKeydown(event)" onfocus="openQueryPanel()" onblur="closeQueryPanel()">
         </div>
         <button type="button" class="cpq-clear" id="cpQueryClear" onclick="clearQuery()" title="Clear filters">✕</button>
       </div>
@@ -299,7 +299,11 @@
         <!-- Chips generated dynamically from the admin-managed parameters
              catalog (js/catalogs.js, `parameters` table) — see renderCatalogUI(). -->
         <div class="cpq-chips" id="cpqChips"></div>
-        <div class="cpq-empty-note" id="cpqEmptyNote">None of the commands currently shown use source/destination parameters.</div>
+        <!-- Painel "Others": lista completa (alfabética) de parâmetros
+             cadastrados, aberta ao clicar no rótulo "Others:" da linha fixa
+             acima — ver toggleQueryOthersPanel() em js/query-bar.js. -->
+        <div class="cpq-chips-others" id="cpqChipsOthers"></div>
+        <div class="cpq-empty-note" id="cpqEmptyNote">No parameters match your search.</div>
         <div class="cpq-panel-divider"></div>
         <div class="cpq-history-section" id="cpqHistorySection">
           <div class="cpq-history-head">
@@ -435,53 +439,119 @@
       </nav>
       <div class="settings-content">
       <div class="settings-pane" data-pane="prefs">
+      <!-- Ordem completa da aba (pedido do usuário): Dark mode; Home page +
+           Group by; Vendor; System; Version; Environment; Topic; Details;
+           Export (+ Export to); Show images; System commands. Dark mode
+           ficou sozinho aqui no topo — os outros 4 toggles (Details/Export/
+           Show images/System commands) moraram no mesmo #settingsToggleGroup
+           antes desta mudança; agora formam um 2º grupo, no fim da lista
+           (ver depois da linha Topic, mais abaixo). -->
       <div class="set-group" id="settingsToggleGroup">
         <span class="set-label">Default settings</span>
         <div class="sb-toggle" id="mThemeToggle" onclick="toggleModalTheme()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>Dark mode</span>
+          <!-- Linha dividida ao meio, mesmo padrão de Home page/Group by e
+               Export/Export to (pedido do usuário: "coloque uma divisão nas
+               colunas home page e export igual entre as linhas. faça o
+               mesmo na linha dark mode e alinhe as cores a esquerda") — a
+               divisória vertical vem de ".set-row-half + .set-row-half"
+               (ver css/components.css). -->
+          <div class="set-row-half">
+            <div class="tog-track"><div class="tog-knob"></div></div><span>Dark mode</span>
+          </div>
           <!-- Cor de destaque (--teal/--teal-bg) — vale igual nos dois temas,
                ver ACCENT_PRESETS/applyAccentColor em js/theme.js. Padrão: rosa
                (cor oficial de marca da Check Point, #DA1572), por isso listado
                primeiro. stopPropagation evita disparar o toggle do tema
-               (onclick do pai) ao clicar num swatch. -->
-          <div class="accent-swatches" id="accentSwatches" onclick="event.stopPropagation()">
-            <button type="button" class="accent-swatch" data-accent="pink" style="background:#DA1572" onclick="setAccentColor('pink')" title="Check Point pink (default)"></button>
-            <button type="button" class="accent-swatch" data-accent="blue" style="background:#60A5FA" onclick="setAccentColor('blue')" title="Light blue"></button>
-            <button type="button" class="accent-swatch" data-accent="green" style="background:#4ADE80" onclick="setAccentColor('green')" title="Green"></button>
-            <button type="button" class="accent-swatch" data-accent="purple" style="background:#C084FC" onclick="setAccentColor('purple')" title="Purple"></button>
-            <button type="button" class="accent-swatch" data-accent="orange" style="background:#FB923C" onclick="setAccentColor('orange')" title="Orange"></button>
-            <button type="button" class="accent-swatch" data-accent="red" style="background:#F87171" onclick="setAccentColor('red')" title="Red"></button>
+               (onclick do pai) ao clicar num swatch. Agora alinhados à
+               esquerda dentro da 2ª metade da linha (antes ficavam
+               encostados na borda direita via margin-left:auto). Rótulo
+               "Color" na frente, mesmo padrão de "Group by"/"Export to"
+               nas outras linhas divididas (pedido do usuário, com
+               screenshot). -->
+          <div class="set-row-half">
+            <span class="set-label">Color</span>
+            <div class="accent-swatches" id="accentSwatches" onclick="event.stopPropagation()">
+              <button type="button" class="accent-swatch" data-accent="pink" style="background:#DA1572" onclick="setAccentColor('pink')" title="Check Point pink (default)"></button>
+              <button type="button" class="accent-swatch" data-accent="blue" style="background:#60A5FA" onclick="setAccentColor('blue')" title="Light blue"></button>
+              <button type="button" class="accent-swatch" data-accent="green" style="background:#4ADE80" onclick="setAccentColor('green')" title="Green"></button>
+              <button type="button" class="accent-swatch" data-accent="purple" style="background:#C084FC" onclick="setAccentColor('purple')" title="Purple"></button>
+              <button type="button" class="accent-swatch" data-accent="orange" style="background:#FB923C" onclick="setAccentColor('orange')" title="Orange"></button>
+              <button type="button" class="accent-swatch" data-accent="red" style="background:#F87171" onclick="setAccentColor('red')" title="Red"></button>
+            </div>
           </div>
         </div>
-        <div class="sb-toggle" id="mDescToggle" onclick="toggleModalDesc()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>Details</span>
+      </div>
+      <!-- Home page + Group by na mesma linha, dividida ao meio (pedido do
+           usuário: "divida a linha no meio e deixe tudo alinhado para
+           esquerda" — antes Group by ficava encostado na borda direita via
+           margin-left:auto; agora cada metade (.set-row-half, flex:1 1 50%)
+           começa exatamente na metade da linha, com seu próprio rótulo e
+           controle alinhados à esquerda dentro dela). -->
+      <div class="set-group set-group-row">
+        <div class="set-row-half">
+          <span class="set-label">Home page</span>
+          <div class="dd" id="mHomeDD">
+            <button type="button" class="dd-btn" id="mHomeDDBtn" onclick="toggleDropdown('mHomeDD')">
+              <span class="dd-label">Folders</span><span class="dd-arrow">▾</span>
+            </button>
+            <div class="dd-panel seg" id="mHome">
+              <button type="button" class="seg-btn" data-val="folders">Folders</button>
+              <button type="button" class="seg-btn" data-val="menu">Command</button>
+              <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mHomeDD')">Close</button></div>
+            </div>
+          </div>
         </div>
-        <!-- Mesma preferência pessoal do toggle "Export" da sidebar (Options)
-             — só um espelho aqui no modal, igual ao par tog-details/mDescToggle
-             acima (ver syncExportToggleUI em js/settings.js). -->
-        <div class="sb-toggle" id="mExportToggle" onclick="toggleModalExport()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>Export</span>
+        <div class="set-row-half">
+          <span class="set-label">Group by</span>
+          <div class="dd" id="mGroupByDD">
+            <button type="button" class="dd-btn" id="mGroupByDDBtn" onclick="toggleDropdown('mGroupByDD')">
+              <span class="dd-label">Topic</span><span class="dd-arrow">▾</span>
+            </button>
+            <div class="dd-panel seg" id="mGroupBy">
+              <button type="button" class="seg-btn" data-val="creator">Created by</button>
+              <button type="button" class="seg-btn" data-val="topic">Topic</button>
+              <button type="button" class="seg-btn" data-val="version">Version</button>
+            </div>
+          </div>
         </div>
-        <!-- Mesma preferência pessoal do toggle "Show images" da sidebar
-             (tog-show-images, seção Options) — só um espelho aqui no
-             modal, igual ao par tog-details/mDescToggle acima. Quando
-             ligada, as linhas do tipo 'image' de cada comando mostram a
-             miniatura da imagem direto no card, sem precisar clicar no
-             badge "[Image]# ..." para abrir o lightbox (ver SHOW_IMAGES /
-             applyShowImagesSetting em js/settings.js e a renderização
-             condicional em termRender(), js/terminal-renderer.js). -->
-        <div class="sb-toggle" id="mShowImagesToggle" onclick="toggleModalShowImages()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>Show images</span>
+      </div>
+      <div class="set-group set-group-row">
+        <span class="set-label">Vendor</span>
+        <div class="dd" id="mVendorDD">
+          <button type="button" class="dd-btn" id="mVendorDDBtn" onclick="toggleDropdown('mVendorDD')">
+            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="mVendor">
+            <button type="button" class="seg-btn" data-val="check-point">Check Point</button>
+            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mVendorDD')">Close</button></div>
+          </div>
         </div>
-        <!-- Mesma preferência pessoal do toggle "System commands" da sidebar
-             (Options) — só um espelho aqui no modal, igual ao par
-             tog-details/mDescToggle acima (ver syncShowSystemCommandsToggleUI
-             em js/settings.js). Não confundir com o "Admin default" abaixo,
-             que é o valor herdado por quem ainda não mexeu neste toggle.
-             Ordem alfabética (Details, Export, Show images, System
-             commands). -->
-        <div class="sb-toggle" id="mSystemCommandsToggle" onclick="toggleModalSystemCommands()">
-          <div class="tog-track"><div class="tog-knob"></div></div><span>System commands</span>
+      </div>
+      <div class="set-group set-group-row">
+        <span class="set-label">System</span>
+        <div class="dd" id="mSysDD">
+          <button type="button" class="dd-btn" id="mSysDDBtn" onclick="toggleDropdown('mSysDD')">
+            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="mSys">
+            <button type="button" class="seg-btn" data-val="gaia">Gaia</button>
+            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mSysDD')">Close</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="set-group set-group-row">
+        <span class="set-label">Version</span>
+        <div class="dd" id="mVersionDD">
+          <button type="button" class="dd-btn" id="mVersionDDBtn" onclick="toggleDropdown('mVersionDD')">
+            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-panel seg" id="mVersion">
+            <button type="button" class="seg-btn" data-val="R81.10">R81.10</button>
+            <button type="button" class="seg-btn" data-val="R81.20">R81.20</button>
+            <button type="button" class="seg-btn" data-val="R82">R82</button>
+            <button type="button" class="seg-btn" data-val="R82.10">R82.10</button>
+            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mVersionDD')">Close</button></div>
+          </div>
         </div>
       </div>
       <div class="set-group set-group-row">
@@ -500,48 +570,6 @@
             <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mEnvDD')">Close</button></div>
           </div>
         </div>
-      </div>
-      <div class="set-group set-group-row">
-        <span class="set-label">Group by</span>
-        <div class="dd" id="mGroupByDD">
-          <button type="button" class="dd-btn" id="mGroupByDDBtn" onclick="toggleDropdown('mGroupByDD')">
-            <span class="dd-label">Topic</span><span class="dd-arrow">▾</span>
-          </button>
-          <div class="dd-panel seg" id="mGroupBy">
-            <button type="button" class="seg-btn" data-val="creator">Created by</button>
-            <button type="button" class="seg-btn" data-val="topic">Topic</button>
-            <button type="button" class="seg-btn" data-val="version">Version</button>
-          </div>
-        </div>
-      </div>
-      <div class="set-group set-group-row">
-        <span class="set-label">Home page</span>
-        <div class="dd" id="mHomeDD">
-          <button type="button" class="dd-btn" id="mHomeDDBtn" onclick="toggleDropdown('mHomeDD')">
-            <span class="dd-label">Folders</span><span class="dd-arrow">▾</span>
-          </button>
-          <div class="dd-panel seg" id="mHome">
-            <button type="button" class="seg-btn" data-val="folders">Folders</button>
-            <button type="button" class="seg-btn" data-val="menu">Command menu</button>
-            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mHomeDD')">Close</button></div>
-          </div>
-        </div>
-      </div>
-      <div class="set-group set-group-row">
-        <span class="set-label">System</span>
-        <div class="dd" id="mSysDD">
-          <button type="button" class="dd-btn" id="mSysDDBtn" onclick="toggleDropdown('mSysDD')">
-            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
-          </button>
-          <div class="dd-panel seg" id="mSys">
-            <button type="button" class="seg-btn" data-val="gaia">Gaia</button>
-            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mSysDD')">Close</button></div>
-          </div>
-        </div>
-      </div>
-      <div class="set-group set-group-row">
-        <span class="set-label">Path — file export</span>
-        <input class="set-input" id="mLogFile" placeholder="/tmp/fw_export.txt">
       </div>
       <div class="set-group set-group-row">
         <span class="set-label">Topic</span>
@@ -572,31 +600,56 @@
           </div>
         </div>
       </div>
-      <div class="set-group set-group-row">
-        <span class="set-label">Vendor</span>
-        <div class="dd" id="mVendorDD">
-          <button type="button" class="dd-btn" id="mVendorDDBtn" onclick="toggleDropdown('mVendorDD')">
-            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
-          </button>
-          <div class="dd-panel seg" id="mVendor">
-            <button type="button" class="seg-btn" data-val="check-point">Check Point</button>
-            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mVendorDD')">Close</button></div>
+      <!-- 2º grupo de toggles (Details/Export/Show images/System commands) —
+           ver comentário junto de #settingsToggleGroup, lá em cima, sobre a
+           divisão em dois grupos pra caber a ordem pedida pelo usuário.
+           Ordem alfabética entre os 4, como já era antes desta mudança. -->
+      <div class="set-group" id="settingsToggleGroup2">
+        <div class="sb-toggle" id="mDescToggle" onclick="toggleModalDesc()">
+          <div class="tog-track"><div class="tog-knob"></div></div><span>Details</span>
+        </div>
+        <!-- Mesma preferência pessoal do toggle "Export" da sidebar (Options)
+             — só um espelho aqui no modal, igual ao par tog-details/mDescToggle
+             acima (ver syncExportToggleUI em js/settings.js). O caminho de
+             exportação (Export to / mLogFile) mora na MESMA linha, dividida
+             ao meio (pedido do usuário: "divida a linha no meio e deixe tudo
+             alinhado para esquerda" — antes "Export to" ficava encostado na
+             borda direita via margin-left:auto; agora cada metade (.set-row-half,
+             flex:1 1 50%) começa exatamente na metade da linha, com seu
+             conteúdo alinhado à esquerda dentro dela). stopPropagation no
+             wrapper E no input evita que clicar/digitar ali dispare o
+             onclick da linha inteira (toggleModalExport()). -->
+        <div class="sb-toggle" id="mExportToggle" onclick="toggleModalExport()">
+          <div class="set-row-half">
+            <div class="tog-track"><div class="tog-knob"></div></div><span>Export</span>
+          </div>
+          <div class="set-row-half sb-toggle-inline-field" onclick="event.stopPropagation()">
+            <span class="set-label">Export to</span>
+            <!-- Texto livre, sem validação de extensão nem de formato — pode
+                 conter substituições de shell como $(hostname), resolvidas
+                 pelo próprio gateway Check Point ao rodar o comando
+                 exportado (não pelo app). -->
+            <input class="set-input" id="mLogFile" placeholder="/tmp/$(hostname).txt" onclick="event.stopPropagation()">
           </div>
         </div>
-      </div>
-      <div class="set-group set-group-row">
-        <span class="set-label">Version</span>
-        <div class="dd" id="mVersionDD">
-          <button type="button" class="dd-btn" id="mVersionDDBtn" onclick="toggleDropdown('mVersionDD')">
-            <span class="dd-label">All</span><span class="dd-arrow">▾</span>
-          </button>
-          <div class="dd-panel seg" id="mVersion">
-            <button type="button" class="seg-btn" data-val="R81.10">R81.10</button>
-            <button type="button" class="seg-btn" data-val="R81.20">R81.20</button>
-            <button type="button" class="seg-btn" data-val="R82">R82</button>
-            <button type="button" class="seg-btn" data-val="R82.10">R82.10</button>
-            <div class="dd-panel-foot"><button type="button" class="btn btn-ghost" onclick="toggleDropdown('mVersionDD')">Close</button></div>
-          </div>
+        <!-- Mesma preferência pessoal do toggle "Show images" da sidebar
+             (tog-show-images, seção Options) — só um espelho aqui no
+             modal, igual ao par tog-details/mDescToggle acima. Quando
+             ligada, as linhas do tipo 'image' de cada comando mostram a
+             miniatura da imagem direto no card, sem precisar clicar no
+             badge "[Image]# ..." para abrir o lightbox (ver SHOW_IMAGES /
+             applyShowImagesSetting em js/settings.js e a renderização
+             condicional em termRender(), js/terminal-renderer.js). -->
+        <div class="sb-toggle" id="mShowImagesToggle" onclick="toggleModalShowImages()">
+          <div class="tog-track"><div class="tog-knob"></div></div><span>Images</span>
+        </div>
+        <!-- Mesma preferência pessoal do toggle "System commands" da sidebar
+             (Options) — só um espelho aqui no modal, igual ao par
+             tog-details/mDescToggle acima (ver syncShowSystemCommandsToggleUI
+             em js/settings.js). Não confundir com o "Admin default" abaixo,
+             que é o valor herdado por quem ainda não mexeu neste toggle. -->
+        <div class="sb-toggle" id="mSystemCommandsToggle" onclick="toggleModalSystemCommands()">
+          <div class="tog-track"><div class="tog-knob"></div></div><span>System commands</span>
         </div>
       </div>
       </div><!-- /.settings-pane[prefs] -->
@@ -633,6 +686,10 @@
           <button type="button" class="settings-tile" onclick="openCatalogAdmin('parameters')">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
             <span>Parameters</span>
+          </button>
+          <button type="button" class="settings-tile" onclick="openCatalogAdmin('prompts')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
+            <span>Prompts</span>
           </button>
         </div>
       </div><!-- /.settings-pane[catalog] -->
@@ -674,6 +731,22 @@
             <button type="button" class="btn btn-ghost" onclick="openAuditLogModal()">
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h10v11H3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
               <span>View audit log</span>
+            </button>
+          </div>
+        </div>
+        <!-- SSL Certificate — importar/substituir/excluir o certificado usado
+             pelo nginx do frontend para servir HTTPS (ver frontend/nginx.conf,
+             docker-compose.yml: volume cg-toolbox-tls compartilhado). Sem
+             certificado próprio, a aplicação já serve HTTPS com um
+             autoassinado gerado no primeiro boot (ensureTlsBootstrap() em
+             server/index.js) — este botão é só para quem quiser trocar por um
+             emitido por uma CA de verdade. Ver js/ssl-certificate.js. -->
+        <div class="set-group" id="sysGroupSslCertificate" style="display:none;">
+          <span class="set-label">SSL Certificate</span>
+          <div class="settings-action-row">
+            <button type="button" class="btn btn-ghost" id="sslCertificateBtn" onclick="openSslCertificateModal()">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><rect x="3.5" y="7" width="9" height="6.5" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="10.2" r=".9" fill="currentColor"/></svg>
+              <span>Manage certificate</span>
             </button>
           </div>
         </div>
@@ -866,6 +939,77 @@
     <div class="modal-foot">
       <div></div>
       <button class="btn" onclick="closeBackupManagerModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SSL CERTIFICATE MODAL ══ — ver js/ssl-certificate.js e
+     GET/POST/DELETE /api/system/ssl-certificate em server/index.js. -->
+<div class="modal-overlay" id="sslCertificateOverlay">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <span class="modal-title" style="display:flex;align-items:center;gap:6px;">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="3.5" y="7" width="9" height="6.5" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="10.2" r=".9" fill="currentColor"/></svg>
+        <span>SSL Certificate</span>
+      </span>
+      <button class="modal-close" onclick="closeSslCertificateModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="set-group">
+        <span class="set-label">Current certificate</span>
+        <div class="audit-log-wrap" id="sslCertInfoWrap" style="padding:10px 12px;">
+          <div id="sslCertInfo" style="font-size:12.5px;line-height:1.7;">Loading…</div>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <span class="set-label">Import / replace certificate</span>
+        <span class="set-hint">Paste (or upload) the certificate and its private key as PEM text — both are required, unencrypted (no passphrase). An optional chain/intermediate bundle can be appended after the certificate.</span>
+
+        <span class="set-label" style="margin-top:6px;">Certificate (PEM)</span>
+        <textarea class="set-input" id="sslCertPemInput" rows="5" spellcheck="false" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" style="font-family:var(--mono);font-size:11.5px;width:100%;resize:vertical;"></textarea>
+        <div class="settings-action-row" style="margin-top:4px;">
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
+            📄 Upload file
+            <input type="file" id="sslCertFileInput" accept=".pem,.crt,.cer,.txt" style="display:none;" onchange="_sslReadFileIntoTextarea(this, 'sslCertPemInput')">
+          </label>
+        </div>
+
+        <span class="set-label" style="margin-top:10px;">Private key (PEM)</span>
+        <textarea class="set-input" id="sslKeyPemInput" rows="5" spellcheck="false" placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----" style="font-family:var(--mono);font-size:11.5px;width:100%;resize:vertical;"></textarea>
+        <div class="settings-action-row" style="margin-top:4px;">
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
+            📄 Upload file
+            <input type="file" id="sslKeyFileInput" accept=".pem,.key,.txt" style="display:none;" onchange="_sslReadFileIntoTextarea(this, 'sslKeyPemInput')">
+          </label>
+        </div>
+
+        <span class="set-label" style="margin-top:10px;">Chain / intermediates (PEM, optional)</span>
+        <textarea class="set-input" id="sslChainPemInput" rows="3" spellcheck="false" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" style="font-family:var(--mono);font-size:11.5px;width:100%;resize:vertical;"></textarea>
+        <div class="settings-action-row" style="margin-top:4px;">
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
+            📄 Upload file
+            <input type="file" id="sslChainFileInput" accept=".pem,.crt,.cer,.txt" style="display:none;" onchange="_sslReadFileIntoTextarea(this, 'sslChainPemInput')">
+          </label>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+          <button type="button" class="btn btn-primary" id="sslSaveBtn" onclick="saveSslCertificate()">Save certificate</button>
+          <span class="set-hint" id="sslSaveStatus"></span>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <span class="set-label">Danger zone</span>
+        <span class="set-hint">Removes the custom certificate and reverts to a freshly generated self-signed one. Browsers will show a trust warning again until a new certificate is imported.</span>
+        <div>
+          <button type="button" class="btn btn-ghost" style="color:var(--danger,#e5484d);" onclick="deleteSslCertificate()">🗑️ Remove custom certificate</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div></div>
+      <button class="btn" onclick="closeSslCertificateModal()">Close</button>
     </div>
   </div>
 </div>
@@ -1107,13 +1251,15 @@
       <button class="modal-close" onclick="closeCatalogAdmin('vendors')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="cat-admin-msg" id="catAdminMsgVendors"></div>
       <div class="cat-panel" id="catPanelVendors">
+        <div class="cat-admin-msg" id="catAdminMsgVendors"></div>
         <input type="text" class="set-input" id="catVdSearchInput" placeholder="Search vendors…" oninput="catAdminSearchInput('vendors', this.value)">
         <div class="list-editor" id="catVendorsList" style="max-height:40vh;overflow-y:auto;"></div>
         <div class="cat-row" id="catVendorNewRow">
-          <input class="set-input" id="catVdNewLabel" style="flex:1;" placeholder="Vendor name">
+          <input class="set-input" id="catVdNewLabel" style="flex:1;" placeholder="Vendor">
           <input type="color" class="cat-color-input" id="catVdNewColor" value="#8B949E">
+        </div>
+        <div class="cat-add-actions">
           <button type="button" class="btn btn-sm" onclick="catAdminAddVendor()">+ Add vendor</button>
         </div>
       </div>
@@ -1135,14 +1281,16 @@
       <button class="modal-close" onclick="closeCatalogAdmin('systems')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="cat-admin-msg" id="catAdminMsgSystems"></div>
       <div class="cat-panel" id="catPanelSystems">
+        <div class="cat-admin-msg" id="catAdminMsgSystems"></div>
         <input type="text" class="set-input" id="catSysSearchInput" placeholder="Search systems…" oninput="catAdminSearchInput('systems', this.value)">
         <div class="list-editor" id="catSysList" style="max-height:40vh;overflow-y:auto;"></div>
         <div class="cat-row" id="catSysNewRow">
           <select class="set-input" id="catSysNewVendor" style="max-width:150px;"></select>
-          <input class="set-input" id="catSysNewLabel" style="flex:1;" placeholder="System name">
+          <input class="set-input" id="catSysNewLabel" style="flex:1;" placeholder="System">
           <input type="color" class="cat-color-input" id="catSysNewColor" value="#8B949E">
+        </div>
+        <div class="cat-add-actions">
           <button type="button" class="btn btn-sm" onclick="catAdminAddSystem()">+ Add system</button>
         </div>
       </div>
@@ -1164,14 +1312,16 @@
       <button class="modal-close" onclick="closeCatalogAdmin('versions')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="cat-admin-msg" id="catAdminMsgVersions"></div>
       <div class="cat-panel" id="catPanelVersions">
+        <div class="cat-admin-msg" id="catAdminMsgVersions"></div>
         <input type="text" class="set-input" id="catVSearchInput" placeholder="Search versions…" oninput="catAdminSearchInput('versions', this.value)">
         <div class="list-editor" id="catVersionsList" style="max-height:40vh;overflow-y:auto;"></div>
         <div class="cat-row" id="catVersionNewRow">
           <select class="set-input" id="catVNewSystem" style="max-width:150px;"></select>
-          <input class="set-input" id="catVNewLabel" style="flex:1;" placeholder="Version name">
+          <input class="set-input" id="catVNewLabel" style="flex:1;" placeholder="Version">
           <input type="color" class="cat-color-input" id="catVNewColor" value="#8B949E">
+        </div>
+        <div class="cat-add-actions">
           <button type="button" class="btn btn-sm" onclick="catAdminAddVersion()">+ Add version</button>
         </div>
       </div>
@@ -1193,13 +1343,16 @@
       <button class="modal-close" onclick="closeCatalogAdmin('environments')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="cat-admin-msg" id="catAdminMsgEnvironments"></div>
       <div class="cat-panel" id="catPanelEnvironments">
+        <div class="cat-admin-msg" id="catAdminMsgEnvironments"></div>
         <input type="text" class="set-input" id="catESearchInput" placeholder="Search environments…" oninput="catAdminSearchInput('environments', this.value)">
         <div class="list-editor" id="catEnvironmentsList" style="max-height:40vh;overflow-y:auto;"></div>
         <div class="cat-row" id="catEnvironmentNewRow">
-          <input class="set-input" id="catENewLabel" style="flex:1;" placeholder="Environment name">
+          <select class="set-input" id="catENewSystem" style="max-width:150px;"></select>
+          <input class="set-input" id="catENewLabel" style="flex:1;" placeholder="Environment">
           <input type="color" class="cat-color-input" id="catENewColor" value="#8B949E">
+        </div>
+        <div class="cat-add-actions">
           <button type="button" class="btn btn-sm" onclick="catAdminAddEnvironment()">+ Add environment</button>
         </div>
       </div>
@@ -1221,13 +1374,15 @@
       <button class="modal-close" onclick="closeCatalogAdmin('topics')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="cat-admin-msg" id="catAdminMsgTopics"></div>
       <div class="cat-panel" id="catPanelTopics">
+        <div class="cat-admin-msg" id="catAdminMsgTopics"></div>
         <input type="text" class="set-input" id="catTSearchInput" placeholder="Search topics…" oninput="catAdminSearchInput('topics', this.value)">
         <div class="list-editor" id="catTopicsList" style="max-height:40vh;overflow-y:auto;"></div>
         <div class="cat-row" id="catTopicNewRow">
-          <input class="set-input" id="catTNewLabel" style="flex:1;min-width:120px;" placeholder="Topic name">
+          <input class="set-input" id="catTNewLabel" style="flex:1;min-width:120px;" placeholder="Topic">
           <input type="color" class="cat-color-input" id="catTNewColor" value="#8B949E">
+        </div>
+        <div class="cat-add-actions">
           <button type="button" class="btn btn-sm" onclick="catAdminAddTopic()">+ Add topic</button>
         </div>
       </div>
@@ -1249,15 +1404,16 @@
       <button class="modal-close" onclick="closeCatalogAdmin('parameters')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="cat-admin-msg" id="catAdminMsgParameters"></div>
       <div class="cat-panel" id="catPanelParameters">
-        <span class="set-hint">The key (used as {{key}} in commands) can never be changed after creation. Order sets the display position on the main commands screen.</span>
+        <div class="cat-admin-msg" id="catAdminMsgParameters"></div>
+        <span class="set-hint">The key (used as {{key}} in commands) can never be changed after creation.</span>
         <input type="text" class="set-input" id="catPSearchInput" placeholder="Search parameters…" oninput="catAdminSearchInput('parameters', this.value)">
         <div class="list-editor" id="catParametersList" style="max-height:38vh;overflow-y:auto;"></div>
         <div class="cat-row" id="catParameterNewRow">
-          <input class="set-input" type="number" id="catPNewOrder" style="max-width:56px;" placeholder="Order">
           <input class="set-input" id="catPNewKey" style="max-width:110px;" placeholder="Key (used as {{key}})">
           <input class="set-input" id="catPNewLabel" style="flex:1;min-width:180px;" placeholder="Description">
+        </div>
+        <div class="cat-add-actions">
           <button type="button" class="btn btn-sm" onclick="catAdminAddParameter()">+ Add parameter</button>
         </div>
       </div>
@@ -1267,6 +1423,36 @@
       <div style="display:flex;gap:8px;">
         <button class="btn" id="catAdminCancelParameters" onclick="catAdminCancel('parameters')" disabled>Cancel</button>
         <button class="btn btn-primary" id="catAdminSaveParameters" onclick="catAdminSaveAll('parameters')" disabled>Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="catalogAdminPromptsOverlay">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <span class="modal-title">➡️ Manage Prompts</span>
+      <button class="modal-close" onclick="closeCatalogAdmin('prompts')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="cat-panel" id="catPanelPrompts">
+        <div class="cat-admin-msg" id="catAdminMsgPrompts"></div>
+        <span class="set-hint">Reusable values for the "Prompt" field of each command line (used instead of typing free text every time).</span>
+        <input type="text" class="set-input" id="catPrSearchInput" placeholder="Search prompts…" oninput="catAdminSearchInput('prompts', this.value)">
+        <div class="list-editor" id="catPromptsList" style="max-height:40vh;overflow-y:auto;"></div>
+        <div class="cat-row" id="catPromptNewRow">
+          <input class="set-input" id="catPrNewLabel" style="flex:1;" placeholder="Prompt">
+        </div>
+        <div class="cat-add-actions">
+          <button type="button" class="btn btn-sm" onclick="catAdminAddPrompt()">+ Add prompt</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" id="catAdminCancelPrompts" onclick="catAdminCancel('prompts')" disabled>Cancel</button>
+        <button class="btn btn-primary" id="catAdminSavePrompts" onclick="catAdminSaveAll('prompts')" disabled>Save changes</button>
       </div>
     </div>
   </div>
@@ -1301,7 +1487,7 @@
     <div class="modal-body">
       <div class="set-group">
         <span class="set-label">Name</span>
-        <input class="set-input" type="text" id="folderPromptInput" placeholder="e.g. &quot;Favorites&quot;, &quot;VPN troubleshooting&quot;" maxlength="80">
+        <input class="set-input" type="text" id="folderPromptInput" maxlength="80">
       </div>
       <p class="confirm-msg" id="folderPromptError" style="display:none;color:var(--red);"></p>
     </div>
@@ -1612,6 +1798,7 @@
 <script src="js/audit-log.js"></script>
 <script src="js/backup.js"></script>
 <script src="js/api-keys.js"></script>
+<script src="js/ssl-certificate.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/users-admin.js"></script>
 </body>
