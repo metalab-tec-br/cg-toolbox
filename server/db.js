@@ -304,6 +304,62 @@ async function runMigrations() {
   } catch (err) {
     console.error('[db] Falha ao migrar favoritos legados para folders:', err.message);
   }
+
+  // Migração de dados: categoria de texto 'note' (roxa) foi removida do
+  // editor (js/command-editor.js, CMD_EDITOR_TEXT_CATEGORIES) por conflitar
+  // com o conceito de "Notes" (post-its dentro das pastas) — pedido do
+  // usuário: "existem notas no campo text em alguns comandos. todas notas
+  // que existirem nesse campo mova para nota do comando e apague essa
+  // coluna do banco de dados". "Nota do comando" = campo about_obs (rótulo
+  // "Note" na aba Advanced do editor, junto de Purpose/When to use). Cada
+  // linha line_type='note' de um comando vira um parágrafo anexado ao
+  // about_obs JÁ EXISTENTE daquele comando (preserva o que já estava
+  // escrito lá, separado por uma linha em branco — nunca sobrescreve).
+  // Mesma lógica para command_diffs/command_diff_lines: o bloco "Diferenças
+  // por versão/plataforma" já tem seu próprio campo `note` livre
+  // (schema.sql) — destino natural para as linhas 'note' de um diff.
+  // Depois de migrado o conteúdo, as linhas 'note' são apagadas (não dá
+  // pra remover a COLUNA line_type em si — ela é compartilhada com cmd/
+  // info/ok/warn/image — então "apagar essa coluna" aqui significa apagar
+  // as LINHAS dessa categoria). Idempotente: depois da 1ª execução não
+  // sobra nenhuma linha line_type='note', então os UPDATEs (que dependem de
+  // encontrar essas linhas) e os DELETEs seguintes não afetam mais nada nas
+  // próximas vezes que o backend subir.
+  try {
+    const { rowCount: movedCmdNotes } = await pool.query(`
+      UPDATE commands c SET about_obs = trim(both chr(10) from
+        c.about_obs || CASE WHEN c.about_obs <> '' THEN chr(10) || chr(10) ELSE '' END || agg.combined
+      )
+      FROM (
+        SELECT command_id, string_agg(content, chr(10) ORDER BY sort_order, id) AS combined
+        FROM command_lines
+        WHERE line_type = 'note' AND trim(content) <> ''
+        GROUP BY command_id
+      ) agg
+      WHERE c.id = agg.command_id
+    `);
+    const { rowCount: deletedCmdNotes } = await pool.query(`DELETE FROM command_lines WHERE line_type = 'note'`);
+
+    const { rowCount: movedDiffNotes } = await pool.query(`
+      UPDATE command_diffs d SET note = trim(both chr(10) from
+        d.note || CASE WHEN d.note <> '' THEN chr(10) || chr(10) ELSE '' END || agg.combined
+      )
+      FROM (
+        SELECT diff_id, string_agg(content, chr(10) ORDER BY sort_order, id) AS combined
+        FROM command_diff_lines
+        WHERE line_type = 'note' AND trim(content) <> ''
+        GROUP BY diff_id
+      ) agg
+      WHERE d.id = agg.diff_id
+    `);
+    const { rowCount: deletedDiffNotes } = await pool.query(`DELETE FROM command_diff_lines WHERE line_type = 'note'`);
+
+    if (deletedCmdNotes || deletedDiffNotes) {
+      console.log(`[db] Categoria de texto 'note' migrada e removida: ${movedCmdNotes} comando(s) e ${movedDiffNotes} diff(s) tiveram o texto movido para o campo Note; ${deletedCmdNotes} linha(s) de command_lines e ${deletedDiffNotes} de command_diff_lines apagadas.`);
+    }
+  } catch (err) {
+    console.error(`[db] Falha ao migrar linhas 'note' para about_obs/diff note:`, err.message);
+  }
 }
 
 // Garante que sempre existe pelo menos uma conta local com role='admin' —
