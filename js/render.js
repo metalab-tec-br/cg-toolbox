@@ -263,15 +263,29 @@ async function render() {
       // toda a recursão, = o id da própria RAIZ) viaja junto só pra marcar
       // até onde o drag-and-drop pode mover um item (não pode sair da
       // árvore, pedido do usuário).
+      // `rootEditMode` (pedido do usuário: "a edição de subpastas e ordem
+      // dos comandos e notas deve ficar somente na pasta pai") é calculado
+      // UMA VEZ por raiz, a partir de FOLDER_EDIT_MODE.has(RAIZ.id), e viaja
+      // sem mudar pra toda a recursão — nenhuma subpasta consulta
+      // FOLDER_EDIT_MODE com o próprio id. Isso, combinado com o `editBtn`
+      // só aparecer em depth 0 (ver buildFolderSectionFromCards em
+      // db-render-engine.js), garante que só a pasta pai liga/desliga o modo
+      // de edição da árvore inteira — mas uma vez ligado, toda subpasta
+      // abaixo também fica com nome editável, Excluir e itens arrastáveis
+      // (drag continua podendo mover itens/subpastas entre si livremente,
+      // só nunca pra fora da árvore — ver rootFolderId acima, regra que não
+      // muda aqui).
       const tree = buildFolderTree(typeof FOLDERS !== 'undefined' ? FOLDERS : []);
-      const renderFolderNode = (folder, depth, rootFolderId) => {
-        const editMode = typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(folder.id);
+      const renderFolderNode = (folder, depth, rootFolderId, rootEditMode) => {
         const childSectionById = new Map(
-          tree.childrenOf(folder.id).map(child => [child.id, renderFolderNode(child, depth + 1, rootFolderId)])
+          tree.childrenOf(folder.id).map(child => [child.id, renderFolderNode(child, depth + 1, rootFolderId, rootEditMode)])
         );
-        return buildFolderSection(commandsByFolder.get(folder.id) || [], folder.id, folder.name, values, hasIPs, `${kp}folder${folder.id}`, folder.notes, folder.order, editMode, childSectionById, depth, rootFolderId);
+        return buildFolderSection(commandsByFolder.get(folder.id) || [], folder.id, folder.name, values, hasIPs, `${kp}folder${folder.id}`, folder.notes, folder.order, rootEditMode, childSectionById, depth, rootFolderId);
       };
-      folderGroups = tree.roots.map(folder => renderFolderNode(folder, 0, folder.id)).join('');
+      folderGroups = tree.roots.map(folder => {
+        const rootEditMode = typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(folder.id);
+        return renderFolderNode(folder, 0, folder.id, rootEditMode);
+      }).join('');
     } else {
       const allFolders = typeof ALL_USERS_FOLDERS !== 'undefined' ? ALL_USERS_FOLDERS : [];
       const targetUsername = scope.startsWith('user:') ? scope.slice('user:'.length) : null;
@@ -300,17 +314,23 @@ async function render() {
           // server/index.js), então buildFolderTree roda sobre userFolders,
           // não sobre `relevant`/`allFolders` inteiro.
           const tree = buildFolderTree(byUser.get(username));
-          const renderFolderNode = (f, depth, rootFolderId) => {
+          // `rootEditMode` (mesma regra do ramo 'mine' acima — "a edição de
+          // subpastas e ordem dos comandos e notas deve ficar somente na
+          // pasta pai"): calculado uma vez por pasta de TOPO deste usuário,
+          // nunca por subpasta.
+          const renderFolderNode = (f, depth, rootFolderId, rootEditMode) => {
             const cmdById = new Map(commands.filter(c => f.command_ids.has(c.id)).map(c => [c.id, c]));
             const notesById = new Map((f.notes || []).map(n => [n.id, n]));
-            const editMode = canManage && typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(f.id);
             const childSectionById = new Map(
-              tree.childrenOf(f.id).map(child => [child.id, renderFolderNode(child, depth + 1, rootFolderId)])
+              tree.childrenOf(f.id).map(child => [child.id, renderFolderNode(child, depth + 1, rootFolderId, rootEditMode)])
             );
             const items = buildFolderItemsCards(cmdById, notesById, childSectionById, f.order, values, hasIPs, isOwn);
-            return buildFolderSectionFromCards(items, f.id, f.name, `${kp}scope_${userKey}__folder${f.id}`, canManage, !isOwn, editMode, depth, rootFolderId);
+            return buildFolderSectionFromCards(items, f.id, f.name, `${kp}scope_${userKey}__folder${f.id}`, canManage, !isOwn, rootEditMode, depth, rootFolderId);
           };
-          const folderSections = tree.roots.map(f => renderFolderNode(f, 0, f.id)).join('');
+          const folderSections = tree.roots.map(f => {
+            const rootEditMode = canManage && typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(f.id);
+            return renderFolderNode(f, 0, f.id, rootEditMode);
+          }).join('');
           const cardCount = (folderSections.match(/<div class="card"/g) || []).length;
           // Mesma correção do bug "pasta vazia não aparece" (buildFolderSectionFromCards):
           // uma pasta PRÓPRIA vazia ainda tem o botão "+ Add" (só pastas
@@ -331,17 +351,22 @@ async function render() {
         // Subpastas: mesma árvore por dono do ramo "all" acima — `relevant`
         // já é só as pastas dessa pessoa (filtro logo no início do bloco).
         const tree = buildFolderTree(relevant);
-        const renderFolderNode = (f, depth, rootFolderId) => {
+        // `rootEditMode` — mesma regra dos dois ramos acima ("a edição de
+        // subpastas e ordem dos comandos e notas deve ficar somente na
+        // pasta pai").
+        const renderFolderNode = (f, depth, rootFolderId, rootEditMode) => {
           const cmdById = new Map(commands.filter(c => f.command_ids.has(c.id)).map(c => [c.id, c]));
           const notesById = new Map((f.notes || []).map(n => [n.id, n]));
-          const editMode = canManage && typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(f.id);
           const childSectionById = new Map(
-            tree.childrenOf(f.id).map(child => [child.id, renderFolderNode(child, depth + 1, rootFolderId)])
+            tree.childrenOf(f.id).map(child => [child.id, renderFolderNode(child, depth + 1, rootFolderId, rootEditMode)])
           );
           const items = buildFolderItemsCards(cmdById, notesById, childSectionById, f.order, values, hasIPs, isOwn);
-          return buildFolderSectionFromCards(items, f.id, f.name, `${kp}scopeuser__folder${f.id}`, canManage, !isOwn, editMode, depth, rootFolderId);
+          return buildFolderSectionFromCards(items, f.id, f.name, `${kp}scopeuser__folder${f.id}`, canManage, !isOwn, rootEditMode, depth, rootFolderId);
         };
-        folderGroups = tree.roots.map(f => renderFolderNode(f, 0, f.id)).join('');
+        folderGroups = tree.roots.map(f => {
+          const rootEditMode = canManage && typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(f.id);
+          return renderFolderNode(f, 0, f.id, rootEditMode);
+        }).join('');
       }
     }
     if (!folderGroups) return '';

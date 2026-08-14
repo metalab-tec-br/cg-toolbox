@@ -612,13 +612,19 @@ function buildFolderItemsCards(cmdById, notesById, childSectionById, orderTagged
 // nunca junto com withActions. Notas de outro usuário aparecem no corpo
 // (buildFolderItemsCards já foi chamado com ownFolder=false por quem monta
 // `cards`), só que sem NENHUM botão de ação — ver buildNoteCardHtml.
-// `editMode` (task #461/#463) — só dentro desse modo (toggle "✎ Edit
-// folder" no cabeçalho) é que: (a) os cards ficam arrastáveis (embrulhados
-// em .folder-item-row, ver wrapItemForFolderDrag), e (b) aparece Excluir.
-// Fora desse modo, mesmo numa pasta própria, a seção mostra só os cards +
-// os botões sempre visíveis (✎ Edit / + Note) — arrastar/excluir por
-// acidente não deveria ser possível sem o usuário ter entrado
-// deliberadamente no modo de edição.
+// `editMode` (task #461/#463, restrito à raiz numa task posterior — "a
+// edição de subpastas e ordem dos comandos e notas deve ficar somente na
+// pasta pai") — só dentro desse modo (toggle "✎ Edit folder", que só existe
+// no cabeçalho da RAIZ da árvore, depth 0 — ver `editBtn` abaixo) é que: (a)
+// os cards E subpastas ficam arrastáveis em qualquer profundidade
+// (embrulhados em .folder-item-row, ver wrapItemForFolderDrag), e (b)
+// aparece Excluir/nome editável em qualquer profundidade. Fora desse modo,
+// mesmo numa pasta própria, a seção mostra só os cards + os botões sempre
+// visíveis (✎ Edit, só na raiz / + Add) — arrastar/excluir por acidente não
+// deveria ser possível sem o usuário ter entrado deliberadamente no modo de
+// edição. Quem chama (renderFolderNode em js/render.js) já resolve o valor
+// de `editMode` como o estado da RAIZ, replicado sem mudança pra toda a
+// árvore abaixo dela — uma subpasta nunca liga/desliga esse modo sozinha.
 //
 // Layout do cabeçalho (a pedido do usuário, ver mockup/print anexado): o
 // botão de editar é um lápis (✎, antes uma engrenagem ⚙) um pouco maior que
@@ -665,7 +671,21 @@ function buildFolderSectionFromCards(items, folderId, folderName, key, withActio
   // server/index.js, FAVORITES_FOLDER_NAME).
   const isFavorites = withActions && folderName === 'Favorites';
 
-  const editBtn = withActions
+  // Pedido do usuário: "a edição de subpastas e ordem dos comandos e notas
+  // deve ficar somente na pasta pai". Antes, CADA pasta (raiz ou subpasta,
+  // qualquer profundidade) tinha seu próprio botão ✎ e seu próprio estado em
+  // FOLDER_EDIT_MODE — dava pra entrar/sair do modo de edição de uma
+  // subpasta independente da pasta-mãe. Agora só a RAIZ (depth 0) mostra o
+  // botão ✎ — `editMode`, recebido de quem chama (ver renderFolderNode em
+  // js/render.js), já vem como o estado da RAIZ da árvore inteira, replicado
+  // sem mudança pra todas as subpastas abaixo dela (nunca mais lido por
+  // FOLDER_EDIT_MODE.has(id-da-subpasta)). Isso faz o modo de edição ligar/
+  // desligar em bloco para a árvore toda de uma vez: quando a raiz entra em
+  // edição, TODAS as subpastas abaixo também mostram nome editável e ✕
+  // Delete (linhas abaixo, que continuam olhando só pra `editMode`, sem
+  // checar depth) e seus itens ficam arrastáveis (ver `active` mais abaixo)
+  // — mas nenhuma subpasta tem um botão próprio pra ligar/desligar isso.
+  const editBtn = (withActions && depth === 0)
     ? `<button type="button" class="sec-folder-btn sec-folder-edit-btn${editMode ? ' on' : ''}" onmousedown="event.preventDefault()" onclick="toggleFolderEditMode(${folderId}, event)" title="${editMode ? 'Done editing' : 'Edit folder'}">✎</button>`
     : '';
   const deleteTag = (withActions && editMode && !isFavorites)
