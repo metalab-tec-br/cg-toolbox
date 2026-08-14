@@ -236,44 +236,6 @@ async function runMigrations() {
     console.error('[db] Falha ao migrar environments.system/vendor:', err.message);
   }
 
-  // Correção de rótulos dos parâmetros padrão (pedido do usuário: "mude a
-  // descrição dos parametros" src_ip/dst_ip/src_port/dest_port). PRIMEIRA
-  // tentativa (só trocava se o label ainda fosse EXATAMENTE um valor antigo
-  // conhecido, ex. 'Source IP') não convergiu em instalações já em uso —
-  // relatado pelo usuário como "a descrição continua antiga" mesmo após
-  // deploy. Como estas 4 chaves são reservadas pela linha fixa da busca (ver
-  // CPQ_FIXED_PARAM_ORDER em js/catalogs.js), não há necessidade de
-  // preservar um rótulo customizado nelas — força o valor certo
-  // incondicionalmente, todo boot, independente do que já estava salvo.
-  // 2º ajuste (pedido do usuário: "ajuste a descrição respeitando as letras
-  // com caixa alta dos parametros" src_port="Source Port",
-  // dest_port="Destination Port" — antes eram "src Port"/"dst Port",
-  // abreviados e com caixa inconsistente em relação a Source/Destination).
-  // 3º ajuste (pedido do usuário, com screenshot da linha fixa da busca:
-  // "user e signature estão com a primeira letra minuscula") — a instalação
-  // real tinha essas 2 chaves com o label igual à própria key (minúsculo,
-  // nunca corrigido porque a 1ª versão desta correção só cobria as 4 chaves
-  // renomeadas, assumindo que user/host/license/signature "não precisavam
-  // mudar" — só que host/license já estavam certos por acaso, user/signature
-  // não). Adicionadas ao FORCED_LABELS pelo mesmo motivo das outras 4: são
-  // chaves reservadas da linha fixa, sem necessidade de preservar um valor
-  // customizado.
-  try {
-    const FORCED_LABELS = [
-      { key: 'src_ip', label: 'Source' },
-      { key: 'dst_ip', label: 'Destination' },
-      { key: 'src_port', label: 'Source Port' },
-      { key: 'dest_port', label: 'Destination Port' },
-      { key: 'user', label: 'User' },
-      { key: 'signature', label: 'Signature' },
-    ];
-    for (const { key, label } of FORCED_LABELS) {
-      await pool.query('UPDATE parameters SET label = $1 WHERE key = $2', [label, key]);
-    }
-  } catch (err) {
-    console.error('[db] Falha ao corrigir rótulos padrão de Parameters:', err.message);
-  }
-
   // Garante que os 8 parâmetros "fixos" da linha única do campo de busca
   // (ver ccBuildQueryChipsFixedRow em js/catalogs.js) sempre EXISTAM no
   // catálogo — relatado pelo usuário: alguns não apareciam na linha fixa.
