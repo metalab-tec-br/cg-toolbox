@@ -336,7 +336,12 @@ function _ceBuildLineRow(data, opts) {
   const row = document.createElement('div');
   row.className = 'line-row';
   const typeOptions = availableTypes.map(lt => `<option value="${lt}"${lt === displayType ? ' selected' : ''}>${lt}</option>`).join('');
-  const categoryOptions = CMD_EDITOR_TEXT_CATEGORIES.map(c => `<option value="${c}"${c === selectedCategory ? ' selected' : ''}>${c}</option>`).join('');
+  // Cor de cada <option> = a mesma cor que a linha vai ganhar na tela quando
+  // renderizada (ver .ln-info/.ln-note/.ln-ok/.ln-warn em css/components.css
+  // e termRender() em js/terminal-renderer.js) — pedido do usuário: "no campos
+  // de text coloque a cor que será exibida na tela em cada opção".
+  const CMD_EDITOR_TEXT_CATEGORY_COLORS = { info: 'var(--blue)', note: 'var(--purple)', ok: 'var(--green)', warn: 'var(--orange)' };
+  const categoryOptions = CMD_EDITOR_TEXT_CATEGORIES.map(c => `<option value="${c}"${c === selectedCategory ? ' selected' : ''} style="color:${CMD_EDITOR_TEXT_CATEGORY_COLORS[c]};">${c}</option>`).join('');
   const promptOptions = _ceBuildPromptOptions(data.prompt);
   row.innerHTML = `
     <div class="row-head">
