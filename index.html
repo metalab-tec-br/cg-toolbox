@@ -1188,7 +1188,11 @@
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-ghost" id="cmdEditorDeleteBtn" style="display:none;color:var(--red);" onclick="cmdEditorDelete()">🗑️ Delete command</button>
+      <!-- visibility (não display) para não mudar a posição do grupo
+           Cancel/Back/Next/Save quando o Delete está oculto (New command,
+           ou steps 1-2 do Edit) — ver _ceRenderWizardState em
+           js/command-editor.js. -->
+      <button class="btn btn-ghost" id="cmdEditorDeleteBtn" style="visibility:hidden;color:var(--red);" onclick="cmdEditorDelete()">🗑️ Delete command</button>
       <div style="display:flex;gap:8px;">
         <button class="btn" onclick="closeCommandEditor()">Cancel</button>
         <button class="btn" id="cmdWizBackBtn" onclick="cmdWizBack()" style="display:none;">← Back</button>

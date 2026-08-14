@@ -59,6 +59,10 @@ let CMD_EDITOR_RESOLVER = null; // placeholder_resolver of the row being edited 
 const CMD_WIZ_TOTAL_STEPS = 3;
 let CMD_WIZ_STEP = 1;
 let CMD_WIZ_MAX_STEP = 1; // furthest step unlocked so far (indicator buttons beyond this are disabled)
+// Whether the current command *may* be deleted by this user (owner or admin —
+// see canDeleteThis in _cePopulateForm) — the button itself is only ever shown
+// on the last wizard step (see _ceRenderWizardState), regardless of this flag.
+let CMD_EDITOR_CAN_DELETE = false;
 
 // Per-step blocking validation — mirrors (a subset of) the final check in
 // cmdEditorSave(), just split by which step each field lives in, so the user
@@ -95,6 +99,14 @@ function _ceRenderWizardState() {
   _ce('cmdWizBackBtn').style.display = CMD_WIZ_STEP > 1 ? '' : 'none';
   _ce('cmdWizNextBtn').style.display = CMD_WIZ_STEP < CMD_WIZ_TOTAL_STEPS ? '' : 'none';
   _ce('cmdWizSaveBtn').style.display = CMD_WIZ_STEP === CMD_WIZ_TOTAL_STEPS ? '' : 'none';
+  // Delete só aparece no último passo (Command lines) — nos passos anteriores
+  // fica oculto mesmo que o usuário tenha permissão (CMD_EDITOR_CAN_DELETE),
+  // para não competir visualmente com Next/Cancel antes da revisão final.
+  // Usa visibility (não display) para manter o espaço reservado no rodapé —
+  // assim o grupo Cancel/Back/Next/Save não muda de posição conforme o
+  // Delete aparece/some (ex.: New command nunca o mostra, Edit só no passo 3).
+  _ce('cmdEditorDeleteBtn').style.visibility =
+    (CMD_EDITOR_CAN_DELETE && CMD_WIZ_STEP === CMD_WIZ_TOTAL_STEPS) ? 'visible' : 'hidden';
 }
 
 // Jump to an already-unlocked step (indicator click) — no-op if the target
@@ -602,9 +614,9 @@ function _ceResetForm() {
   _ce('cmdLinesEmptyList').innerHTML = '';
   _ceHideError();
   _ce('cmdEditorResolverWarning').classList.remove('show');
-  _ce('cmdEditorDeleteBtn').style.display = 'none';
+  CMD_EDITOR_CAN_DELETE = false;
   cmdEditorAddLine('cmdLinesDefaultList'); // one blank starter line, convenience only
-  _ceResetWizard(); // back to step 1, locked (create/duplicate walk the wizard step by step)
+  _ceResetWizard(); // back to step 1, locked (create/duplicate walk the wizard step by step) — also re-renders the (hidden) Delete button via _ceRenderWizardState
 }
 
 async function _cePopulateForm(id) {
@@ -651,7 +663,9 @@ async function _cePopulateForm(id) {
   // de outro usuário nunca bate com CURRENT_USER, então continua exigindo
   // admin automaticamente, sem precisar de um caso especial aqui.
   const canDeleteThis = window.CG_IS_ADMIN || (typeof CURRENT_USER !== 'undefined' && CURRENT_USER === row.created_by);
-  _ce('cmdEditorDeleteBtn').style.display = canDeleteThis ? '' : 'none';
+  // Só guarda a permissão aqui — a visibilidade real do botão (também exige
+  // estar no último passo do wizard) é decidida em _ceRenderWizardState().
+  CMD_EDITOR_CAN_DELETE = canDeleteThis;
   _ce('cmdEditorDeleteBtn').dataset.name = row.name || id;
   return row;
 }
@@ -710,7 +724,7 @@ async function openCommandEditor(mode, id, ev) {
     // and wouldn't make sense/work under a new id). The id itself is auto-
     // generated from the Name at save time (see cmdEditorSave) — nothing to
     // reset here, since it's never shown/editable in the form.
-    _ce('cmdEditorDeleteBtn').style.display = 'none';
+    CMD_EDITOR_CAN_DELETE = false;
     CMD_EDITOR_RESOLVER = null;
     _ce('cmdEditorResolverWarning').classList.remove('show');
   }
