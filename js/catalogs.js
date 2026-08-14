@@ -90,17 +90,44 @@ function ccSet(id, html, itemAttr) {
   }
 }
 
-// ── Chips do campo de busca unificado: #cpqChips (topbar) ──
+// ── Chips do campo de busca unificado ──
 // data-field = nome do placeholder {{key}} (usado por computeUsedQueryTokens/
 // updateQueryChipsVisibility em query-bar.js para mostrar só os chips
 // realmente usados pelos comandos visíveis); onclick insere a própria `key`
 // como prefixo de busca (key e "palavra antes do :" são a mesma coisa desde
 // a simplificação do catálogo de parâmetros — sem mais query_key/aliases).
+//
+// Lista completa (ordem alfabética) — usada dentro do painel "Others" (ver
+// ccBuildQueryChipsFixedRow abaixo), mesmo estilo/comportamento de sempre
+// (lista vertical de botões .cpq-chip).
 function ccBuildQueryChips(parameters) {
   return parameters.map(p => {
     const label = p.label || p.key;
     return `<button type="button" class="cpq-chip" data-field="${ccEsc(p.key)}" onmousedown="event.preventDefault()" onclick="insertFieldToken('${ccEsc(p.key)}')" title="${ccEsc(label)}">${ccEsc(label)}</button>`;
   }).join('');
+}
+
+// Linha única e fixa (pedido do usuário: "ajustar o campo de parametro para
+// fica em uma linha... deixar os parametros [8 chaves] fixo e na ultima
+// posição ter um Others que ao clicar exiba todos os parametros
+// cadastrados"). Só entra na linha o parâmetro que EXISTIR de fato no
+// catálogo (evita um botão quebrado se algum administrador renomear/excluir
+// uma dessas 8 keys) — a ordem abaixo é fixa, independente do sort_order do
+// catálogo (que continua regendo só a lista completa dentro de "Others" e a
+// tela de Register). "Others:" nunca chama insertFieldToken — abre/fecha o
+// painel com TODOS os parâmetros (ver toggleQueryOthersPanel em
+// js/query-bar.js), estilo texto simples (.cpq-chip-flat) para caber numa
+// única linha, como no exemplo de referência do usuário.
+const CPQ_FIXED_PARAM_ORDER = ['src_ip', 'src_port', 'dst_ip', 'dest_port', 'user', 'host', 'license', 'signature'];
+function ccBuildQueryChipsFixedRow(parameters) {
+  const byKey = new Map(parameters.map(p => [p.key, p]));
+  const fixed = CPQ_FIXED_PARAM_ORDER.filter(k => byKey.has(k)).map(k => {
+    const p = byKey.get(k);
+    const label = p.label || p.key;
+    return `<button type="button" class="cpq-chip-flat" data-field="${ccEsc(p.key)}" onmousedown="event.preventDefault()" onclick="insertFieldToken('${ccEsc(p.key)}')" title="${ccEsc(label)}">${ccEsc(label)}:</button>`;
+  }).join('');
+  const others = `<button type="button" class="cpq-chip-flat cpq-chip-others" onmousedown="event.preventDefault()" onclick="event.stopPropagation(); toggleQueryOthersPanel()" title="Show all registered parameters">Others:</button>`;
+  return fixed + others;
 }
 
 // Garante um <input type="hidden"> para cada parâmetro do catálogo. Os 9
@@ -324,8 +351,13 @@ function renderCatalogUI() {
   if (typeof _ceApplyEditorCascade === 'function') _ceApplyEditorCascade();
 
   ccEnsureDynamicParamInputs(parameters);
+  // Linha fixa (8 parâmetros + "Others:") sempre visível; a lista completa
+  // (alfabética, como antes) fica dentro do painel "Others" — ver
+  // ccBuildQueryChipsFixedRow acima e toggleQueryOthersPanel em js/query-bar.js.
   const chipsEl = document.getElementById('cpqChips');
-  if (chipsEl) chipsEl.innerHTML = ccBuildQueryChips(parameters);
+  if (chipsEl) chipsEl.innerHTML = ccBuildQueryChipsFixedRow(parameters);
+  const chipsOthersEl = document.getElementById('cpqChipsOthers');
+  if (chipsOthersEl) chipsOthersEl.innerHTML = ccBuildQueryChips(parameters);
   if (typeof rebuildQueryFieldDefs === 'function') rebuildQueryFieldDefs();
 
   // Cascata Vendor → Sistema → Versão → Ambiente → Tópico — precisa rodar depois

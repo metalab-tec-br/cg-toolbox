@@ -347,12 +347,30 @@
 }
 .cpq-panel.open { display: block; }
 .cpq-panel-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--dim); margin-bottom: 7px; }
-/* Coluna vertical única, em ordem alfabética (ver ccBuildQueryChips/
-   renderCatalogUI em js/catalogs.js) — antes era um grid horizontal
-   (flex-wrap) na ordem de cadastro/sort_order, difícil de escanear com
-   dezenas de parâmetros. max-height+scroll evita que a lista estoure o
-   painel quando há muitos parâmetros cadastrados. */
-.cpq-chips { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-height: 260px; overflow-y: auto; }
+/* Linha única e fixa (8 parâmetros de uso mais comum + "Others:"), estilo
+   Check Point SmartConsole (rótulos de texto simples, sem borda/fundo,
+   terminados em ":") — ver ccBuildQueryChipsFixedRow em js/catalogs.js.
+   overflow-x cobre o caso raro de a janela ficar estreita demais pra linha
+   inteira. */
+.cpq-chips { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 12px; overflow-x: auto; white-space: nowrap; }
+.cpq-chip-flat {
+  padding: 0; border: none; background: none;
+  color: var(--muted); font-size: 11px; font-family: var(--mono); cursor: pointer;
+  transition: color .12s; white-space: nowrap; flex-shrink: 0;
+}
+.cpq-chip-flat:hover { color: var(--teal); text-decoration: underline; }
+.cpq-chip-others { color: var(--teal); font-weight: 700; }
+.cpq-chip-others:hover { color: var(--text); }
+/* Painel "Others" — lista completa (alfabética) de todos os parâmetros
+   cadastrados, aberta ao clicar em "Others:" (ver toggleQueryOthersPanel em
+   js/query-bar.js). Reaproveita o estilo antigo (.cpq-chip), em coluna
+   vertical com scroll, agora só visível dentro deste painel secundário. */
+.cpq-chips-others {
+  display: none; flex-direction: column; align-items: flex-start; gap: 4px;
+  max-height: 260px; overflow-y: auto; margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid var(--bdr);
+}
+.cpq-chips-others.open { display: flex; }
 .cpq-chip {
   padding: 4px 9px; border-radius: 5px; border: 1px solid var(--bdr); background: var(--surf2);
   color: var(--muted); font-size: 11px; font-family: var(--mono); cursor: pointer;

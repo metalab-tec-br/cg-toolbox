@@ -485,6 +485,11 @@ function insertFieldToken(token) {
   // normalmente quando o usuário de fato sair do campo depois.
   const panel = document.getElementById('cpqPanel');
   if (panel) panel.classList.remove('open');
+  // Escolhido um campo (seja da linha fixa ou de dentro do "Others"), o painel
+  // "Others" também não precisa continuar aberto — mesmo raciocínio do
+  // cpqPanel logo acima.
+  const othersPanel = document.getElementById('cpqChipsOthers');
+  if (othersPanel) othersPanel.classList.remove('open');
 }
 
 // ── Painel "Adicionar filtro" (abre com foco, fecha ao perder foco/clicar fora) ──
@@ -497,9 +502,24 @@ function openQueryPanel() {
 function closeQueryPanel() {
   const panel = document.getElementById('cpqPanel');
   if (panel) panel.classList.remove('open');
+  const othersPanel = document.getElementById('cpqChipsOthers');
+  if (othersPanel) othersPanel.classList.remove('open'); // fecha junto o painel "Others", se estava aberto
   // Grava no histórico a linha completa da busca (todas as labels + o que estava
   // sendo digitado) só agora, ao sair do campo — não uma entrada por tecla Enter.
   saveQueryHistoryEntry(getComposedQuery());
+}
+
+// Abre/fecha o painel secundário com TODOS os parâmetros cadastrados (lista
+// alfabética, estilo antigo) — pedido do usuário: "na ultima posição ter um
+// Others que ao clicar exiba todos os parametros cadastrados". Reaproveita o
+// mesmo filtro (usedTokens + typeahead) já usado antes por toda a lista —
+// ver applyQueryChipsFilter, agora restrito a #cpqChipsOthers.
+function toggleQueryOthersPanel() {
+  const panel = document.getElementById('cpqChipsOthers');
+  if (!panel) return;
+  const opening = !panel.classList.contains('open');
+  panel.classList.toggle('open', opening);
+  if (opening) applyQueryChipsFilter();
 }
 document.addEventListener('click', ev => {
   const bar = ev.target.closest('.cpq-bar');
@@ -559,7 +579,11 @@ function currentTypedFieldFragment() {
   return raw.trim().toLowerCase();
 }
 function applyQueryChipsFilter() {
-  const chips = document.querySelectorAll('#cpqChips .cpq-chip');
+  // A linha fixa (#cpqChips, 8 parâmetros + "Others:") é sempre visível — não
+  // entra no typeahead nem no filtro por usedTokens (pedido do usuário: esses
+  // ficam "fixos"). Só a lista completa dentro do painel "Others" continua
+  // usando os dois filtros combinados, como a lista única de antes.
+  const chips = document.querySelectorAll('#cpqChipsOthers .cpq-chip');
   const usedTokens = _cpqLastUsedTokens;
   const typed = currentTypedFieldFragment();
   let anyVisible = false;
