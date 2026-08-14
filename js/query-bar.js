@@ -83,9 +83,60 @@ function renderQueryTagsUI() {
   const box = document.getElementById('cpqTags');
   if (!box) return;
   box.innerHTML = queryTags.map((t, i) => `<span class="cpq-tag">
-    <span class="cpq-tag-txt">${escapeQueryTagHtml(t)}</span>
+    <span class="cpq-tag-txt" onmousedown="event.preventDefault()" onclick="event.stopPropagation(); startEditQueryTag(${i})" title="Click to edit">${escapeQueryTagHtml(t)}</span>
     <button type="button" class="cpq-tag-x" onmousedown="event.preventDefault()" onclick="event.stopPropagation(); removeQueryTag(${i})">✕</button>
   </span>`).join('');
+}
+
+// ── Editar um parâmetro já confirmado (clicando no texto da label) ──
+// Pedido do usuário: "permitir editar um parâmetro informado, mas sempre que
+// algum parâmetro for editado o valor antigo deve entrar no histórico. Se
+// existir mais de um parâmetro e for editado apenas um, deverá entrar no
+// histórico a linha com todos os parâmetros." — por isso commitQueryTagEdit
+// chama saveQueryHistoryEntry(getComposedQuery()) ANTES de aplicar a
+// mudança: getComposedQuery() junta TODAS as labels confirmadas (a que está
+// sendo editada ainda com o valor ANTIGO nesse momento) + o que estiver
+// sendo digitado no campo livre, então a linha salva no histórico sempre
+// reflete a combinação completa de parâmetros como estava antes da edição,
+// não só o único campo alterado.
+function startEditQueryTag(idx) {
+  const box = document.getElementById('cpqTags');
+  const tagEl = box && box.children[idx];
+  const txtEl = tagEl && tagEl.querySelector('.cpq-tag-txt');
+  if (!txtEl) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'cpq-tag-edit-input';
+  input.value = queryTags[idx];
+  input.size = Math.max(String(queryTags[idx]).length, 4);
+  input.onclick = ev => ev.stopPropagation();
+  input.onmousedown = ev => ev.stopPropagation();
+  input.onkeydown = ev => onQueryTagEditKeydown(ev, idx);
+  input.onblur = () => commitQueryTagEdit(idx, input);
+  txtEl.replaceWith(input);
+  input.focus();
+  input.select();
+}
+function onQueryTagEditKeydown(ev, idx) {
+  if (ev.key === 'Enter') {
+    ev.preventDefault();
+    ev.target.blur(); // dispara commitQueryTagEdit via onblur
+  } else if (ev.key === 'Escape') {
+    ev.preventDefault();
+    ev.target.dataset.cancelled = '1'; // commitQueryTagEdit descarta a edição sem salvar/gravar histórico
+    ev.target.blur();
+  }
+}
+function commitQueryTagEdit(idx, inputEl) {
+  if (inputEl.dataset.cancelled) { renderQueryTagsUI(); return; }
+  const oldValue = queryTags[idx];
+  const newValue = (inputEl.value || '').trim();
+  if (!newValue) { removeQueryTag(idx); return; } // campo apagado por completo: mesmo comportamento do X (já grava histórico)
+  if (newValue === oldValue) { renderQueryTagsUI(); return; } // sem mudança de verdade: não polui o histórico
+  saveQueryHistoryEntry(getComposedQuery());
+  queryTags[idx] = newValue;
+  renderQueryTagsUI();
+  onQueryInput();
 }
 
 // Texto completo considerado para o parser: labels já confirmadas + o que está
@@ -134,15 +185,32 @@ function onQueryInput() {
   }, 120);
 }
 
-// Enter confirma o texto digitado como uma label separada; Backspace com o
-// campo vazio apaga a última label (mesma mecânica de campos de tags do Gmail/Jira).
+// Divide um texto em um ou mais tokens "campo:valor" (separados por espaço —
+// os próprios valores nunca contêm espaço, ver parseQueryTokens acima) e
+// confirma cada um como uma label separada — pedido do usuário: "permitir
+// colar em uma linha só vários parâmetros... separe os parâmetros pelo
+// espaço". Mesmo critério de "nunca duplica o mesmo campo" já usado por
+// applyQueryHistoryEntry (a ocorrência mais à direita da linha vence) —
+// reaproveitado aqui para as duas fontes (colar/Enter e clicar no histórico)
+// caírem no mesmo comportamento.
+function confirmQueryTagsFromText(text) {
+  (text || '').trim().split(/\s+/).filter(Boolean).forEach(tok => {
+    const field = tok.split(':')[0];
+    queryTags = queryTags.filter(t => t.split(':')[0] !== field);
+    queryTags.push(tok);
+  });
+}
+
+// Enter confirma o texto digitado como uma ou mais labels separadas (uma por
+// campo:valor reconhecido na linha); Backspace com o campo vazio apaga a
+// última label (mesma mecânica de campos de tags do Gmail/Jira).
 function onQueryKeydown(ev) {
   const input = ev.target;
   if (ev.key === 'Enter') {
     ev.preventDefault();
     const val = (input.value || '').trim();
     if (val) {
-      queryTags.push(val);
+      confirmQueryTagsFromText(val);
       input.value = '';
       renderQueryTagsUI();
       onQueryInput();
@@ -153,6 +221,30 @@ function onQueryKeydown(ev) {
     onQueryInput();
   }
 }
+
+// Colar uma linha com vários parâmetros de uma vez (ex.: "src_ip:10.9.8.7
+// dst_ip:10.11.12.100 port:22") confirma cada um como uma label separada na
+// hora, sem esperar o Enter — pedido do usuário. Um "paste" de um único
+// valor (sem espaço, ou sem mais de um campo:valor reconhecido) continua
+// caindo no comportamento normal (fica no campo, editável, até o Enter),
+// já que nesse caso o usuário pode só estar completando/corrigindo algo.
+// setTimeout(0): o evento 'paste' dispara ANTES do texto colado ser
+// efetivamente inserido no <input> — precisa esperar o próximo tick pra ler
+// o valor já com o conteúdo colado.
+document.getElementById('cpQuery') && document.getElementById('cpQuery').addEventListener('paste', () => {
+  setTimeout(() => {
+    const input = document.getElementById('cpQuery');
+    if (!input) return;
+    const tokens = (input.value || '').trim().split(/\s+/).filter(Boolean);
+    const recognized = tokens.filter(t => QUERY_ALIAS_MAP[(t.split(':')[0] || '').toLowerCase()]);
+    if (tokens.length > 1 && recognized.length > 1) {
+      confirmQueryTagsFromText(input.value);
+      input.value = '';
+      renderQueryTagsUI();
+      onQueryInput();
+    }
+  }, 0);
+});
 
 // ── Histórico de buscas (últimos 7 dias, persistido em localStorage) ──
 // Grava a LINHA COMPLETA da busca (todas as labels confirmadas + o que estava
@@ -242,12 +334,7 @@ function formatQueryHistoryTime(ts) {
 // ':'): se a busca atual já tiver um valor para aquele mesmo campo, ele é
 // substituído (nunca fica dst_ip duplicado); campos novos são só adicionados.
 function applyQueryHistoryEntry(text) {
-  const incoming = text.split(/\s+/).filter(Boolean);
-  incoming.forEach(tok => {
-    const field = tok.split(':')[0];
-    queryTags = queryTags.filter(t => t.split(':')[0] !== field);
-    queryTags.push(tok);
-  });
+  confirmQueryTagsFromText(text);
   renderQueryTagsUI();
   onQueryInput();
   focusQueryInput();

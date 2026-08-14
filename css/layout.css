@@ -309,6 +309,20 @@
   display: flex; align-items: center; justify-content: center; transition: background .12s, color .12s;
 }
 .cpq-tag-x:hover { background: var(--teal); color: #0D1117; }
+/* Texto de uma label já confirmada (.cpq-tag) — clicável para editar o valor
+   (ver startEditQueryTag em js/query-bar.js). cursor:pointer sinaliza que dá
+   pra clicar, mesmo motivo do -x já ter cursor:pointer ao lado. */
+.cpq-tag-txt { cursor: pointer; }
+.cpq-tag-txt:hover { text-decoration: underline; text-decoration-style: dotted; }
+/* Input que substitui .cpq-tag-txt durante a edição (mesma linha, tamanho
+   compacto ajustado ao próprio conteúdo via atributo `size`, ver
+   startEditQueryTag) — mantém a aparência mono/teal da label ao redor, só
+   trocando o texto estático por um campo editável. */
+.cpq-tag-edit-input {
+  background: none; border: none; border-bottom: 1px dashed var(--teal);
+  color: var(--teal); font-family: var(--mono); font-size: 11px;
+  line-height: 1.5; padding: 0; outline: none;
+}
 .cpq-input {
   flex: 1 1 60px; min-width: 60px; background: none; border: none;
   color: var(--text); font-family: var(--mono);
