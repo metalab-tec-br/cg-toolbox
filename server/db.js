@@ -249,12 +249,23 @@ async function runMigrations() {
   // com caixa alta dos parametros" src_port="Source Port",
   // dest_port="Destination Port" — antes eram "src Port"/"dst Port",
   // abreviados e com caixa inconsistente em relação a Source/Destination).
+  // 3º ajuste (pedido do usuário, com screenshot da linha fixa da busca:
+  // "user e signature estão com a primeira letra minuscula") — a instalação
+  // real tinha essas 2 chaves com o label igual à própria key (minúsculo,
+  // nunca corrigido porque a 1ª versão desta correção só cobria as 4 chaves
+  // renomeadas, assumindo que user/host/license/signature "não precisavam
+  // mudar" — só que host/license já estavam certos por acaso, user/signature
+  // não). Adicionadas ao FORCED_LABELS pelo mesmo motivo das outras 4: são
+  // chaves reservadas da linha fixa, sem necessidade de preservar um valor
+  // customizado.
   try {
     const FORCED_LABELS = [
       { key: 'src_ip', label: 'Source' },
       { key: 'dst_ip', label: 'Destination' },
       { key: 'src_port', label: 'Source Port' },
       { key: 'dest_port', label: 'Destination Port' },
+      { key: 'user', label: 'User' },
+      { key: 'signature', label: 'Signature' },
     ];
     for (const { key, label } of FORCED_LABELS) {
       await pool.query('UPDATE parameters SET label = $1 WHERE key = $2', [label, key]);
