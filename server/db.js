@@ -236,6 +236,27 @@ async function runMigrations() {
     console.error('[db] Falha ao migrar environments.system/vendor:', err.message);
   }
 
+  // Correção de rótulos dos parâmetros padrão (pedido do usuário: "mude a
+  // descrição dos parametros" src_ip/dst_ip/src_port/dest_port). Só atualiza
+  // linhas cujo label AINDA é o valor padrão antigo — se um administrador já
+  // tiver personalizado o rótulo (ou o próprio novo valor já estiver
+  // aplicado), o UPDATE não encontra a condição `label = old` e não faz
+  // nada, então é seguro rodar em todo boot sem sobrescrever customizações.
+  // seedDefaultParameters() já usa os novos rótulos para instalações novas.
+  try {
+    const RELABELS = [
+      { key: 'src_ip', old: 'Source IP', new: 'Source' },
+      { key: 'dst_ip', old: 'Destination IP', new: 'Destination' },
+      { key: 'src_port', old: 'Source Port', new: 'src Port' },
+      { key: 'dest_port', old: 'Destination Port', new: 'dst Port' },
+    ];
+    for (const { key, old, new: newLabel } of RELABELS) {
+      await pool.query('UPDATE parameters SET label = $1 WHERE key = $2 AND label = $3', [newLabel, key, old]);
+    }
+  } catch (err) {
+    console.error('[db] Falha ao corrigir rótulos padrão de Parameters:', err.message);
+  }
+
   // Migração de dados (não de schema, mas mesmo lugar/mesma filosofia de
   // idempotência): feature "Favorites" (tabela legada user_favorites) virou
   // "Folders" — cada usuário que tinha favoritos ganha uma pasta chamada
@@ -452,10 +473,10 @@ async function seedDefaultEnvironments() {
 // Sem dependência de FK — independente da ordem em relação aos 4 acima.
 async function seedDefaultParameters() {
   const DEFAULTS = [
-    { key: 'src_ip', label: 'Source IP' },
-    { key: 'dst_ip', label: 'Destination IP' },
-    { key: 'src_port', label: 'Source Port' },
-    { key: 'dest_port', label: 'Destination Port' },
+    { key: 'src_ip', label: 'Source' },
+    { key: 'dst_ip', label: 'Destination' },
+    { key: 'src_port', label: 'src Port' },
+    { key: 'dest_port', label: 'dst Port' },
     { key: 'user', label: 'User' },
     { key: 'host', label: 'Host' },
     { key: 'license', label: 'License' },

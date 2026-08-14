@@ -429,7 +429,7 @@ Todos os catálogos de uma vez (usado no boot do front-end):
   "versions": [{ "system": "gaia", "vendor": "check-point", "key": "r8110", "label": "R81.10", "color": "...", "sort_order": 0 }],
   "environments": [{ "key": "standalone", "label": "Standalone", "color": "...", "sort_order": 0 }],
   "topics": [{ "key": "troubleshooting", "label": "Troubleshooting", "color": "...", "sort_order": 0, "is_protected": 0 }],
-  "parameters": [{ "key": "src_ip", "label": "Source IP", "sort_order": 0 }],
+  "parameters": [{ "key": "src_ip", "label": "Source", "sort_order": 0 }],
   "version_environments": [{ "version": "r8110", "environment": "standalone" }],
   "environment_topics": [{ "environment": "standalone", "topic": "troubleshooting" }]
 }
