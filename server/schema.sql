@@ -297,7 +297,14 @@ CREATE TABLE IF NOT EXISTS folders (
   UNIQUE (username, name)
 );
 CREATE INDEX IF NOT EXISTS idx_folders_username ON folders(username);
-CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id);
+-- idx_folders_parent NÃO fica aqui de propósito: numa instalação que já
+-- tinha `folders` de antes desta coluna existir, o CREATE TABLE IF NOT
+-- EXISTS acima é pulado inteiro (a tabela já existe) e a coluna parent_id só
+-- passa a existir depois, via ALTER TABLE em runMigrations() (server/db.js)
+-- — colocar o CREATE INDEX aqui faria essa linha rodar ANTES da migração
+-- adicionar a coluna, e falhar com "column parent_id does not exist" (erro
+-- real reportado ao aplicar esta mudança numa instalação existente). O
+-- índice é criado só em runMigrations(), depois do ALTER TABLE ADD COLUMN.
 
 -- command_id com ON DELETE CASCADE (igual user_favorites antes) — apagar um
 -- comando limpa sozinho a sua presença em qualquer pasta. folder_id com ON
