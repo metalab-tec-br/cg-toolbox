@@ -237,24 +237,59 @@ async function runMigrations() {
   }
 
   // Correção de rótulos dos parâmetros padrão (pedido do usuário: "mude a
-  // descrição dos parametros" src_ip/dst_ip/src_port/dest_port). Só atualiza
-  // linhas cujo label AINDA é o valor padrão antigo — se um administrador já
-  // tiver personalizado o rótulo (ou o próprio novo valor já estiver
-  // aplicado), o UPDATE não encontra a condição `label = old` e não faz
-  // nada, então é seguro rodar em todo boot sem sobrescrever customizações.
-  // seedDefaultParameters() já usa os novos rótulos para instalações novas.
+  // descrição dos parametros" src_ip/dst_ip/src_port/dest_port). PRIMEIRA
+  // tentativa (só trocava se o label ainda fosse EXATAMENTE um valor antigo
+  // conhecido, ex. 'Source IP') não convergiu em instalações já em uso —
+  // relatado pelo usuário como "a descrição continua antiga" mesmo após
+  // deploy. Como estas 4 chaves são reservadas pela linha fixa da busca (ver
+  // CPQ_FIXED_PARAM_ORDER em js/catalogs.js), não há necessidade de
+  // preservar um rótulo customizado nelas — força o valor certo
+  // incondicionalmente, todo boot, independente do que já estava salvo.
   try {
-    const RELABELS = [
-      { key: 'src_ip', old: 'Source IP', new: 'Source' },
-      { key: 'dst_ip', old: 'Destination IP', new: 'Destination' },
-      { key: 'src_port', old: 'Source Port', new: 'src Port' },
-      { key: 'dest_port', old: 'Destination Port', new: 'dst Port' },
+    const FORCED_LABELS = [
+      { key: 'src_ip', label: 'Source' },
+      { key: 'dst_ip', label: 'Destination' },
+      { key: 'src_port', label: 'src Port' },
+      { key: 'dest_port', label: 'dst Port' },
     ];
-    for (const { key, old, new: newLabel } of RELABELS) {
-      await pool.query('UPDATE parameters SET label = $1 WHERE key = $2 AND label = $3', [newLabel, key, old]);
+    for (const { key, label } of FORCED_LABELS) {
+      await pool.query('UPDATE parameters SET label = $1 WHERE key = $2', [label, key]);
     }
   } catch (err) {
     console.error('[db] Falha ao corrigir rótulos padrão de Parameters:', err.message);
+  }
+
+  // Garante que os 8 parâmetros "fixos" da linha única do campo de busca
+  // (ver ccBuildQueryChipsFixedRow em js/catalogs.js) sempre EXISTAM no
+  // catálogo — relatado pelo usuário: alguns não apareciam na linha fixa.
+  // Causa: seedDefaultParameters() só semeia numa tabela vazia (instalação
+  // nova); numa instalação que já tinha `parameters` parcialmente
+  // preenchida de antes desta convenção (ex.: faltando dest_port/host/
+  // license), o seed nunca roda de novo e essas chaves nunca são criadas.
+  // ON CONFLICT (key) DO NOTHING: só cria o que estiver faltando, nunca
+  // sobrescreve um parâmetro (fixo ou não) já cadastrado.
+  try {
+    const FIXED_PARAM_DEFAULTS = [
+      { key: 'src_ip', label: 'Source' },
+      { key: 'dst_ip', label: 'Destination' },
+      { key: 'src_port', label: 'src Port' },
+      { key: 'dest_port', label: 'dst Port' },
+      { key: 'user', label: 'User' },
+      { key: 'host', label: 'Host' },
+      { key: 'license', label: 'License' },
+      { key: 'signature', label: 'Signature' },
+    ];
+    const { rows: maxRows } = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS m FROM parameters');
+    let nextSort = Number(maxRows[0].m) + 1;
+    for (const { key, label } of FIXED_PARAM_DEFAULTS) {
+      const { rowCount } = await pool.query(
+        'INSERT INTO parameters (key, label, sort_order) VALUES ($1, $2, $3) ON CONFLICT (key) DO NOTHING',
+        [key, label, nextSort]
+      );
+      if (rowCount) nextSort++;
+    }
+  } catch (err) {
+    console.error('[db] Falha ao garantir parâmetros fixos padrão:', err.message);
   }
 
   // Migração de dados (não de schema, mas mesmo lugar/mesma filosofia de
