@@ -893,13 +893,22 @@ app.post('/api/folders', async (req, res) => {
       return res.status(400).json({ error: 'validation_error', message: '"parent_id" must be an integer' });
     }
     const username = getCurrentUsername(req);
+    // Nova subpasta entra no TOPO da pasta-mãe (pedido do usuário) — sort_order
+    // menor que a menor já existente entre as irmãs, em vez do padrão 0 (que a
+    // deixaria misturada/alfabética junto das demais). Só se aplica a
+    // subpastas de verdade (parentId != null); pasta de topo continua com
+    // sort_order 0 (ordem de raiz é Favorites-primeiro + alfabética, decidida
+    // em buildFolderTree, js/folders.js — não depende de sort_order).
+    let sortOrder = 0;
     if (parentId !== null) {
       const parent = await pool.query('SELECT id FROM folders WHERE id = $1 AND username = $2', [parentId, username]);
       if (!parent.rows.length) return res.status(404).json({ error: 'not_found', message: `Parent folder '${parentId}' not found` });
+      const minRes = await pool.query('SELECT COALESCE(MIN(sort_order), 0) AS m FROM folders WHERE parent_id = $1', [parentId]);
+      sortOrder = minRes.rows[0].m - 1;
     }
     const { rows } = await pool.query(
-      'INSERT INTO folders (username, name, parent_id) VALUES ($1, $2, $3) RETURNING id, name, sort_order, parent_id',
-      [username, name, parentId]
+      'INSERT INTO folders (username, name, parent_id, sort_order) VALUES ($1, $2, $3, $4) RETURNING id, name, sort_order, parent_id',
+      [username, name, parentId, sortOrder]
     );
     await logAudit(username, 'create', 'folder', String(rows[0].id), name);
     res.status(201).json({ id: rows[0].id, name: rows[0].name, sort_order: rows[0].sort_order, parent_id: rows[0].parent_id, command_ids: [] });
@@ -1030,19 +1039,26 @@ app.delete('/api/folders/:id/commands/:commandId', async (req, res) => {
   }
 });
 
-// Reordena os itens (comandos E notas, task Notes) DENTRO de uma pasta do
-// usuário atual (task #458, estendido) — body { order: [{type, id}, ...] }
-// é a lista COMPLETA na nova ordem desejada (type: 'command'|'note'); o
-// índice de cada item no array vira o novo sort_order — a MESMA escala
-// compartilhada entre folder_commands e notes (ver schema.sql), o que é
-// justamente o que permite intercalar as duas. 404 se a pasta não existir/
-// não for do usuário (mesmo tratamento das outras rotas de folder). Mantém
-// compatibilidade com o formato antigo { command_ids: [...] } (só comandos)
-// — front-ends antigos ou chamadas externas via API key continuam
-// funcionando. IDs que não pertencerem de fato à pasta são ignorados
-// silenciosamente (a query composta simplesmente não bate com nada para
-// eles) — o front-end sempre manda a lista completa e correta (deriva da
-// ordem atual do DOM), então isso só protege contra uma chamada manual malformada.
+// Reordena os itens DENTRO de uma pasta do usuário atual (task #458,
+// estendido pela task Notes e depois por subpastas) — body
+// { order: [{type, id}, ...] } é a lista COMPLETA na nova ordem desejada
+// (type: 'command'|'note'|'folder'); o índice de cada item no array vira o
+// novo sort_order. 'command'/'note' compartilham a MESMA escala (ver
+// schema.sql), o que é o que permite intercalar as duas — 'folder'
+// (subpastas diretas desta pasta, pedido do usuário: "permitir ordenar as
+// subpastas igual os comandos com clica e arrasta") usa a escala PRÓPRIA de
+// `folders.sort_order`, independente, então o front-end manda só as
+// subpastas nesse caso (não precisa misturar com comandos/notas no mesmo
+// array — ver reorderSubfolders em js/folders.js). 404 se a pasta não
+// existir/não for do usuário (mesmo tratamento das outras rotas de folder).
+// Mantém compatibilidade com o formato antigo { command_ids: [...] } (só
+// comandos) — front-ends antigos ou chamadas externas via API key continuam
+// funcionando. IDs que não pertencerem de fato à pasta (ou, no caso de
+// 'folder', que não forem subpasta DIRETA desta pasta e do mesmo usuário)
+// são ignorados silenciosamente (a query composta simplesmente não bate com
+// nada para eles) — o front-end sempre manda a lista completa e correta
+// (deriva da ordem atual do DOM), então isso só protege contra uma chamada
+// manual malformada.
 app.put('/api/folders/:id/reorder', async (req, res) => {
   try {
     const username = getCurrentUsername(req);
@@ -1064,6 +1080,11 @@ app.put('/api/folders/:id/reorder', async (req, res) => {
           await client.query(
             'UPDATE notes SET sort_order = $1 WHERE folder_id = $2 AND id = $3 AND username = $4',
             [i, id, item.id, username]
+          );
+        } else if (item && item.type === 'folder') {
+          await client.query(
+            'UPDATE folders SET sort_order = $1 WHERE id = $2 AND parent_id = $3 AND username = $4',
+            [i, item.id, id, username]
           );
         } else if (item) {
           await client.query(

@@ -472,6 +472,24 @@ function wrapCardsForFolderDrag(cards, folderId) {
   </div>`).join('');
 }
 
+// Mesma ideia de wrapCardsForFolderDrag acima, só que embrulhando a seção
+// HTML já pronta de UMA SUBPASTA inteira (cabeçalho + corpo, incluindo suas
+// próprias subpastas aninhadas, se houver) em vez de um .card — pedido do
+// usuário: "permitir ordenar as subpastas igual os comandos com clica e
+// arrasta". Chamado por renderFolderNode em js/render.js, uma vez por
+// filho, só quando a pasta-MÃE está em modo de edição (reordenar filhas é
+// uma ação sobre o conteúdo da pasta-mãe, não da subpasta em si — o botão
+// ✎ Edit de cada subpasta continua controlando só o drag/exclusão dos
+// PRÓPRIOS cards dela). Ver _ffArmDrag/reorderSubfolders em js/folders.js
+// para o restante do mecanismo (dragstart/dragover/dragend + persistência
+// via PUT /api/folders/:id/reorder, type:'folder').
+function wrapFolderChildForDrag(html, parentFolderId, childFolderId) {
+  return `<div class="folder-section-row" data-parent-folder-id="${parentFolderId}" data-child-folder-id="${childFolderId}">
+    <span class="folder-drag-handle" onmousedown="_ffArmDrag(this)" title="Drag to reorder">⠿</span>
+    <div class="folder-section-row-body">${html}</div>
+  </div>`;
+}
+
 // Card de uma NOTE (task Notes) — 2º redesign (pedido mais recente: "em
 // notes, remova a palavra NOTE, permita o usuário alterar o tamanho da
 // fonte, a cor e alinha para esquerda, centro e direita; deixa a nota em

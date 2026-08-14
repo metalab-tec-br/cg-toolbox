@@ -268,7 +268,14 @@ async function render() {
       const tree = buildFolderTree(typeof FOLDERS !== 'undefined' ? FOLDERS : []);
       const renderFolderNode = (folder, depth) => {
         const editMode = typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(folder.id);
-        const childrenHtml = tree.childrenOf(folder.id).map(child => renderFolderNode(child, depth + 1)).join('');
+        // Subpastas ganham a alça de arrastar (wrapFolderChildForDrag) só
+        // quando ESTA pasta (a mãe) está em modo de edição — reordenar
+        // filhas é uma ação sobre o conteúdo dela, igual ao drag dos cards
+        // (ver wrapCardsForFolderDrag em db-render-engine.js).
+        const childrenHtml = tree.childrenOf(folder.id).map(child => {
+          const childHtml = renderFolderNode(child, depth + 1);
+          return editMode ? wrapFolderChildForDrag(childHtml, folder.id, child.id) : childHtml;
+        }).join('');
         return buildFolderSection(commandsByFolder.get(folder.id) || [], folder.id, folder.name, values, hasIPs, `${kp}folder${folder.id}`, folder.notes, folder.order, editMode, childrenHtml, depth);
       };
       folderGroups = tree.roots.map(folder => renderFolderNode(folder, 0)).join('');
@@ -305,7 +312,10 @@ async function render() {
             const notesById = new Map((f.notes || []).map(n => [n.id, n]));
             const editMode = canManage && typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(f.id);
             const cards = buildFolderItemsCards(cmdById, notesById, f.order, values, hasIPs, isOwn);
-            const childrenHtml = tree.childrenOf(f.id).map(child => renderFolderNode(child, depth + 1)).join('');
+            const childrenHtml = tree.childrenOf(f.id).map(child => {
+              const childHtml = renderFolderNode(child, depth + 1);
+              return editMode ? wrapFolderChildForDrag(childHtml, f.id, child.id) : childHtml;
+            }).join('');
             return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}scope_${userKey}__folder${f.id}`, canManage, !isOwn, editMode, childrenHtml, depth);
           };
           const folderSections = tree.roots.map(f => renderFolderNode(f, 0)).join('');
@@ -334,7 +344,10 @@ async function render() {
           const notesById = new Map((f.notes || []).map(n => [n.id, n]));
           const editMode = canManage && typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(f.id);
           const cards = buildFolderItemsCards(cmdById, notesById, f.order, values, hasIPs, isOwn);
-          const childrenHtml = tree.childrenOf(f.id).map(child => renderFolderNode(child, depth + 1)).join('');
+          const childrenHtml = tree.childrenOf(f.id).map(child => {
+            const childHtml = renderFolderNode(child, depth + 1);
+            return editMode ? wrapFolderChildForDrag(childHtml, f.id, child.id) : childHtml;
+          }).join('');
           return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}scopeuser__folder${f.id}`, canManage, !isOwn, editMode, childrenHtml, depth);
         };
         folderGroups = tree.roots.map(f => renderFolderNode(f, 0)).join('');

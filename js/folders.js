@@ -30,8 +30,23 @@ let FOLDERS = [];
 // verdade — parent_id só é setado entre pastas do MESMO usuário, ver POST
 // /api/folders em server/index.js — mas a checagem aqui evita que a pasta
 // suma da tela por engano caso isso algum dia aconteça). `childrenOf(id)`
-// devolve os filhos diretos de uma pasta, já ordenados alfabeticamente,
-// prontos para a chamada recursiva de quem está montando a seção.
+// devolve os filhos diretos de uma pasta, já ordenados, prontos para a
+// chamada recursiva de quem está montando a seção.
+//
+// Ordenação (pedido do usuário, ver print anexado): as pastas de TOPO
+// (roots) mostram sempre "Favorites" primeiro (mesma pasta padrão protegida
+// de FAVORITES_FOLDER_NAME em server/index.js — aqui não dá pra importar
+// essa constante, então repetimos o literal), e as demais em ordem
+// alfabética — independente de sort_order, que pra pastas de topo nem é
+// gerenciado pelo usuário. Já as SUBPASTAS (qualquer grupo com pid != null)
+// usam sort_order (ordem manual, arraste-e-solte — ver _ffArmDrag/
+// reorderSubfolders abaixo, e PUT /api/folders/:id/reorder com
+// type:'folder' em server/index.js): uma subpasta nova entra com
+// sort_order NEGATIVO (MIN-1, ver POST /api/folders) pra aparecer no topo
+// da pasta-mãe, e o usuário pode reordenar as demais livremente depois. O
+// desempate por nome (quando sort_order é igual, ex.: instalações
+// existentes antes desta feature, todas com sort_order 0) mantém um
+// resultado previsível em vez de depender da ordem de retorno do banco.
 function buildFolderTree(list) {
   const ids = new Set((list || []).map(f => f.id));
   const byParent = new Map();
@@ -40,8 +55,17 @@ function buildFolderTree(list) {
     if (!byParent.has(pid)) byParent.set(pid, []);
     byParent.get(pid).push(f);
   });
-  byParent.forEach(arr => arr.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })));
-  return { roots: byParent.get(null) || [], childrenOf: id => byParent.get(id) || [] };
+  const roots = byParent.get(null) || [];
+  roots.sort((a, b) => {
+    const aFav = a.name === 'Favorites', bFav = b.name === 'Favorites';
+    if (aFav !== bFav) return aFav ? -1 : 1;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
+  byParent.forEach((arr, pid) => {
+    if (pid === null) return; // roots já ordenadas acima (regra diferente: Favorites-primeiro)
+    arr.sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  });
+  return { roots, childrenOf: id => byParent.get(id) || [] };
 }
 
 // VIEW_FOLDERS_HOME = visão "Folders" ativa (home page ou clique em
@@ -648,6 +672,81 @@ function reorderFolderItems(folderId, orderedTagged) {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: orderedTagged }),
   }).catch(e => {
     console.warn('Falha ao salvar a nova ordem da pasta no servidor (mantida localmente)', e);
+  });
+}
+
+// ── Reordenar SUBPASTAS dentro da pasta-mãe por clicar-e-arrastar ──
+// Mesmo padrão de _fcArmDrag/reorderFolderItems acima, só que embrulhando a
+// seção INTEIRA de uma subpasta (cabeçalho + corpo, incluindo suas próprias
+// subpastas aninhadas) em vez de um único .card — ver wrapFolderChildForDrag
+// em db-render-engine.js, chamado por renderFolderNode em js/render.js uma
+// vez por filho, só quando a pasta-MÃE está em modo de edição (reordenar
+// filhas é uma ação sobre o conteúdo da pasta-mãe, não da subpasta em si).
+// `data-parent-folder-id` escopa o reorder só entre irmãs (mesma pasta-mãe);
+// `data-child-folder-id` identifica a subpasta arrastada.
+function _ffArmDrag(handle) {
+  const row = handle.closest('.folder-section-row');
+  if (row) row.setAttribute('draggable', 'true');
+}
+document.addEventListener('mouseup', () => {
+  document.querySelectorAll('.folder-section-row[draggable="true"]').forEach(r => r.removeAttribute('draggable'));
+});
+let _ffDragRow = null;
+document.addEventListener('dragstart', ev => {
+  const row = ev.target.closest && ev.target.closest('.folder-section-row');
+  if (!row || !row.hasAttribute('draggable')) return;
+  _ffDragRow = row;
+  row.classList.add('dragging');
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('text/plain', ''); // exigido pelo Firefox para permitir o drag
+});
+document.addEventListener('dragover', ev => {
+  if (!_ffDragRow) return;
+  const overRow = ev.target.closest && ev.target.closest('.folder-section-row');
+  // Só reordena entre IRMÃS de verdade (mesma pasta-mãe, data-parent-folder-id)
+  // — evita que soltar sobre uma subpasta ANINHADA mais fundo (netos, com um
+  // data-parent-folder-id diferente: o da subpasta arrastada, não o da
+  // pasta-avó) mova algo pro nível errado.
+  if (!overRow || overRow === _ffDragRow || overRow.dataset.parentFolderId !== _ffDragRow.dataset.parentFolderId) return;
+  ev.preventDefault();
+  const rect = overRow.getBoundingClientRect();
+  const before = (ev.clientY - rect.top) < rect.height / 2;
+  overRow.parentElement.insertBefore(_ffDragRow, before ? overRow : overRow.nextSibling);
+});
+document.addEventListener('drop', ev => { if (_ffDragRow) ev.preventDefault(); });
+document.addEventListener('dragend', ev => {
+  const row = ev.target.closest && ev.target.closest('.folder-section-row');
+  if (row) {
+    row.classList.remove('dragging');
+    row.removeAttribute('draggable');
+    const parentFolderId = Number(row.dataset.parentFolderId);
+    const container = row.parentElement;
+    if (parentFolderId && container) {
+      const orderedChildIds = [...container.querySelectorAll(`.folder-section-row[data-parent-folder-id="${parentFolderId}"]`)]
+        .map(r => Number(r.dataset.childFolderId))
+        .filter(Boolean);
+      if (orderedChildIds.length) reorderSubfolders(parentFolderId, orderedChildIds);
+    }
+  }
+  _ffDragRow = null;
+});
+// Persiste a nova ordem das subpastas — otimista (atualiza FOLDERS/
+// ALL_USERS_FOLDERS local na hora) + PUT em segundo plano (type:'folder',
+// escala PRÓPRIA de folders.sort_order — ver server/index.js). Não chama
+// render() pelo mesmo motivo de reorderFolderItems acima: destruiria a
+// própria seção que acabou de ser solta.
+function reorderSubfolders(parentFolderId, orderedChildIds) {
+  orderedChildIds.forEach((childId, i) => {
+    const f = FOLDERS.find(x => x.id === childId);
+    if (f) f.sort_order = i;
+    const g = ALL_USERS_FOLDERS.find(x => x.id === childId);
+    if (g) g.sort_order = i;
+  });
+  fetch(`/api/folders/${parentFolderId}/reorder`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order: orderedChildIds.map(id => ({ type: 'folder', id })) }),
+  }).catch(e => {
+    console.warn('Falha ao salvar a nova ordem das subpastas no servidor (mantida localmente)', e);
   });
 }
 

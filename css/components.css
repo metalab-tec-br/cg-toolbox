@@ -752,6 +752,14 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .folder-drag-handle:active { cursor: grabbing; }
 .folder-card-row.dragging { opacity: .45; }
 
+/* Mesma mecânica de .folder-card-row acima, só que embrulhando a seção
+   INTEIRA de uma SUBPASTA (não um .card) — ver wrapFolderChildForDrag em
+   db-render-engine.js e _ffArmDrag em js/folders.js. Reutiliza o mesmo
+   .folder-drag-handle (ícone ⠿) pela consistência visual. */
+.folder-section-row { display: flex; align-items: flex-start; gap: 4px; }
+.folder-section-row-body { flex: 1; min-width: 0; }
+.folder-section-row.dragging { opacity: .45; }
+
 /* Bloco recolhível por Versão/Ambiente (modo "Agrupar por Versão") — mesma mecânica de
    .section, com um destaque visual próprio (borda + fundo) para se diferenciar das
    seções de Tópico aninhadas dentro dele. */
