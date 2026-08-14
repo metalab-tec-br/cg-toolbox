@@ -703,6 +703,34 @@ document.addEventListener('dragend', ev => {
       const orderedTagged = _fldReadContainerOrderFromDom(newContainerId);
       _fldMoveItemAcrossFolders(itemType, itemId, oldContainerId, newContainerId)
         .catch(e => console.warn('Falha ao mover item entre pastas', e))
+        .then(async () => {
+          // Bug reportado pelo usuário: "notas consigo movimentar
+          // normalmente, mas continuo com problema para movimentar os
+          // comandos dentro das pastas" — no ramo "mine" de render()
+          // (js/render.js), a seção de CADA pasta lista seus comandos a
+          // partir de `c.folder_ids` (um campo por-COMANDO, vindo do cache
+          // de fetchCommands() em js/api-client.js), não a partir de
+          // FOLDERS[].order/command_ids. reloadFoldersFromServer() (abaixo)
+          // só atualiza FOLDERS/ALL_USERS_FOLDERS — nunca esse cache de
+          // comandos — então o comando movido continuava aparecendo só na
+          // pasta de ORIGEM até um F5 (que reseta o cache e busca
+          // folder_ids frescos). Notes não sofrem disso porque vêm direto
+          // de folder.notes, já recarregado abaixo. Mesmo ajuste já feito
+          // antes pro toggle via dropdown do card — ver
+          // toggleCommandInFolder acima, comentário idêntico.
+          if (itemType === 'command') {
+            try {
+              const cmds = await fetchCommands();
+              const cmd = cmds.find(c => c.id === itemId);
+              if (cmd) {
+                const ids = new Set(cmd.folder_ids || []);
+                ids.delete(oldContainerId);
+                ids.add(newContainerId);
+                cmd.folder_ids = [...ids];
+              }
+            } catch (e) { /* cache vazio/erro — reloadFoldersFromServer abaixo ainda corrige FOLDERS */ }
+          }
+        })
         .then(() => Promise.all([
           reloadFoldersFromServer(),
           typeof reloadAllUsersFoldersFromServer === 'function' ? reloadAllUsersFoldersFromServer() : Promise.resolve(),
