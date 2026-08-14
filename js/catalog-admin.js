@@ -257,10 +257,10 @@ const CAT_ADMIN_BULK = {
   environments: {
     items: () => CATALOGS.environments || [],
     rowId: e => e.key,
-    readRow: key => ({ label: _cat('catE_label_' + key).value.trim(), color: _cat('catE_color_' + key).value }),
-    original: e => ({ label: e.label, color: e.color || '#8B949E' }),
+    readRow: key => ({ label: _cat('catE_label_' + key).value.trim(), color: _cat('catE_color_' + key).value, system: _cat('catE_system_' + key).value }),
+    original: e => ({ label: e.label, color: e.color || '#8B949E', system: e.system }),
     url: key => '/api/environments/' + encodeURIComponent(key),
-    validate: b => b.label ? null : 'Fill in the required label(s).',
+    validate: b => !b.label ? 'Fill in the required label(s).' : (!b.system ? 'Choose a system.' : null),
     name: e => e.label || e.key,
   },
   topics: {
@@ -462,17 +462,24 @@ async function catAdminAddVersion() {
 }
 
 // ── Environments ─────────────────────────────────
+// Agora tem Sistema relacionado (FK obrigatória — environments.system, ver
+// server/schema.sql), mesmo padrão de Versions acima: um <select> por linha +
+// no formulário de novo ambiente.
 function renderCatAdminEnvironments() {
   const list = _cat('catEnvironmentsList');
   if (!list) return;
-  list.innerHTML = (CATALOGS.environments || []).map(e => `
-    <div class="cat-row" data-cat-search="${_catEscAttr((e.key + ' ' + e.label).toLowerCase())}">
+  const environments = CATALOGS.environments || [];
+  list.innerHTML = environments.map(e => `
+    <div class="cat-row" data-cat-search="${_catEscAttr((e.key + ' ' + e.label + ' ' + (e.system || '')).toLowerCase())}">
+      <select class="set-input" id="catE_system_${_catEscAttr(e.key)}" style="max-width:130px;" onchange="catAdminMarkDirty('environments')"></select>
       <input class="set-input" id="catE_label_${_catEscAttr(e.key)}" value="${_catEscAttr(e.label)}" style="flex:1;min-width:120px;" oninput="catAdminMarkDirty('environments')">
       <input type="color" class="cat-color-input" id="catE_color_${_catEscAttr(e.key)}" value="${_catEscAttr(e.color || '#8B949E')}" oninput="catAdminMarkDirty('environments')">
       <div class="cat-row-actions">
         <button type="button" class="edit-btn cat-delete-btn" onclick="catAdminDeleteEnvironment('${_catEscAttr(e.key)}')" title="Delete">${CAT_TRASH_SVG}</button>
       </div>
     </div>`).join('');
+  environments.forEach(e => _catPopulateSelect('catE_system_' + e.key, CATALOGS.systems, e.system, 'System'));
+  _catPopulateSelect('catENewSystem', CATALOGS.systems, null, 'System');
   catAdminApplyFilter('environments');
 }
 async function catAdminDeleteEnvironment(key) {
@@ -488,10 +495,12 @@ async function catAdminDeleteEnvironment(key) {
 async function catAdminAddEnvironment() {
   const label = _cat('catENewLabel').value.trim();
   const color = _cat('catENewColor').value;
+  const system = _cat('catENewSystem').value;
   if (!label) { catAdminMsg('Fill in the required label(s).', 'err'); return; }
+  if (!system) { catAdminMsg('Choose a system.', 'err'); return; }
   try {
     const res = await fetch('/api/environments', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label, color }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label, color, system }),
     });
     if (!res.ok) return catAdminHandleError(res);
     _cat('catENewLabel').value = ''; _cat('catENewColor').value = '#8B949E';

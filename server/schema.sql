@@ -152,8 +152,35 @@ CREATE TABLE IF NOT EXISTS versions (
   UNIQUE (vendor, key)
 );
 
+-- Ambiente agora tem um Sistema relacionado (FK obrigatória, mesmo padrão de
+-- versions.system/vendor acima) — pedido do usuário: "Environment deve ter um
+-- sistema relacionado". Diferente de Versão, o `key` de Ambiente continua uma
+-- PK simples (não composta): não há necessidade de repetir o mesmo nome de
+-- ambiente sob Sistemas diferentes, e manter a PK simples evita ter que tocar
+-- em version_environments/environment_topics/command_environments (que
+-- guardam `environment` como TEXT solto, sem FK formal — ver comentários
+-- abaixo). `vendor` é denormalizado a partir de systems.vendor (mesmo padrão
+-- de versions.vendor), mantido em sincronia pelo backend. Numa instalação já
+-- existente (de antes desta coluna existir) o backfill destes valores é feito
+-- em runMigrations() (server/db.js), inferindo o Sistema a partir dos vínculos
+-- em version_environments quando possível.
+-- system/vendor NOT NULL só se aplica a instalações NOVAS (CREATE TABLE só
+-- roda se a tabela ainda não existir) — toda criação de Ambiente passa pela
+-- API (POST /api/environments), que sempre exige `system` no body, então
+-- nunca há como um ambiente novo nascer sem essa FK. Numa instalação que já
+-- tinha `environments` de antes desta coluna existir, as colunas chegam via
+-- ALTER TABLE ADD COLUMN (nullable) + backfill em runMigrations() (server/
+-- db.js), só virando NOT NULL ali depois que nenhuma linha ficar sem Sistema.
+-- idx_environments_system NÃO fica aqui de propósito — mesmo motivo do
+-- comentário sobre idx_folders_parent mais abaixo (CREATE TABLE IF NOT EXISTS
+-- é pulado inteiro numa instalação que já tinha `environments` de antes desta
+-- coluna existir, e um CREATE INDEX sobre uma coluna que ainda não existe
+-- falharia com "column system does not exist"). O índice só é criado em
+-- runMigrations() (server/db.js), depois do ALTER TABLE ADD COLUMN.
 CREATE TABLE IF NOT EXISTS environments (
   key        TEXT PRIMARY KEY,
+  system     TEXT NOT NULL REFERENCES systems(key) ON DELETE CASCADE,
+  vendor     TEXT NOT NULL REFERENCES vendors(key) ON DELETE CASCADE,
   label      TEXT NOT NULL,
   color      TEXT NOT NULL DEFAULT '#8B949E',
   sort_order INTEGER NOT NULL DEFAULT 0

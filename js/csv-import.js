@@ -300,11 +300,15 @@ function buildImportPayload(obj, existingIdsInBatch) {
 // aplicar (applyImportResolutions), na mesma ordem de dependência.
 // ════════════════════════════════════════════════
 const IMPORT_RES_ORDER = ['vendor', 'system', 'version', 'environment', 'topic'];
+// environment.parent = 'system' (igual version) — environments.system agora é
+// FK obrigatória (ver server/schema.sql), então criar um Ambiente novo por
+// aqui também precisa escolher o Sistema, na mesma ordem de dependência
+// vendor->system->version->environment já usada por IMPORT_RES_ORDER abaixo.
 const IMPORT_RES_META = {
   vendor:      { label: 'Vendor',      endpoint: '/api/vendors',      parent: null },
   system:      { label: 'System',      endpoint: '/api/systems',      parent: 'vendor' },
   version:     { label: 'Version',     endpoint: '/api/versions',     parent: 'system' },
-  environment: { label: 'Environment', endpoint: '/api/environments', parent: null },
+  environment: { label: 'Environment', endpoint: '/api/environments', parent: 'system' },
   topic:       { label: 'Topic',       endpoint: '/api/topics',       parent: null },
 };
 // rawLower -> key já resolvida (mapeada pra existente OU criada nesta sessão

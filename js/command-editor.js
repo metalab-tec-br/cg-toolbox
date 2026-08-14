@@ -269,6 +269,22 @@ function _ceApplyEditorCascade() {
     if (!allowed && btn.classList.contains('on')) { btn.classList.remove('on'); verChanged = true; }
   });
   if (verChanged) _ceUpdateMultiSegDDLabel('cmdVersionsSeg', 'cmdVersionsDDBtn', null, 'selected');
+
+  // Ambiente também tem Sistema relacionado agora (environments.system, ver
+  // server/schema.sql) — mesmo tratamento de Versão logo acima, só que o FK
+  // direto dele é Sistema (não precisa herdar de Vendor como Versão faria se
+  // Sistema estivesse vazio: aqui usamos `systems` diretamente, igual à Versão
+  // já faz).
+  const allowedEnvironments = new Set(
+    systems.length ? (catalogs.environments || []).filter(e => systems.includes(e.system)).map(e => e.key) : []
+  );
+  let envChanged = false;
+  document.querySelectorAll('#cmdEnvSeg .seg-btn[data-val]').forEach(btn => {
+    const allowed = allowedEnvironments.has(btn.dataset.val);
+    btn.style.display = allowed ? '' : 'none';
+    if (!allowed && btn.classList.contains('on')) { btn.classList.remove('on'); envChanged = true; }
+  });
+  if (envChanged) _ceUpdateMultiSegDDLabel('cmdEnvSeg', 'cmdEnvDDBtn', null, 'selected');
 }
 
 // ── requires_ips toggle (reuses the .sb-toggle switch look) ─

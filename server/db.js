@@ -148,6 +148,83 @@ async function runMigrations() {
     console.error('[db] Falha ao rodar migrações:', err.message);
   }
 
+  // environments.system/vendor (pedido do usuário: "Environment deve ter um
+  // sistema relacionado") — ver comentário em schema.sql. Nullable no ADD
+  // COLUMN de propósito (uma instalação já existente pode ter linhas em
+  // `environments` de antes desta FK existir); o backfill abaixo tenta
+  // resolver o Sistema de cada uma a partir do que já está cadastrado, e só
+  // então a coluna vira NOT NULL — se sobrar alguma linha sem Sistema
+  // resolvido (ex.: múltiplos Sistemas cadastrados e nenhum vínculo em
+  // version_environments para desambiguar), a constraint fica pendente até um
+  // administrador corrigir manualmente via PUT /api/environments/:key (Register
+  // → Environments), e o log abaixo avisa quais chaves precisam de atenção.
+  try {
+    await pool.query(`ALTER TABLE environments ADD COLUMN IF NOT EXISTS system TEXT REFERENCES systems(key) ON DELETE CASCADE`);
+    await pool.query(`ALTER TABLE environments ADD COLUMN IF NOT EXISTS vendor TEXT REFERENCES vendors(key) ON DELETE CASCADE`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_environments_system ON environments(system)`);
+
+    // 1) Quando o Ambiente já tem exatamente 1 Sistema "descobrível" através
+    //    dos vínculos version_environments -> versions.system, usa esse.
+    await pool.query(`
+      UPDATE environments e SET system = resolved.system, vendor = s.vendor
+      FROM (
+        SELECT ve.environment, v.system
+        FROM version_environments ve
+        JOIN versions v ON v.key = ve.version
+        GROUP BY ve.environment, v.system
+        HAVING COUNT(DISTINCT v.system) = 1
+      ) resolved
+      JOIN systems s ON s.key = resolved.system
+      WHERE e.key = resolved.environment AND e.system IS NULL
+    `);
+    // Nota: a subquery acima já garante 1 system por ambiente (HAVING COUNT
+    // DISTINCT = 1) considerando TODOS os vínculos daquele ambiente — se um
+    // ambiente estiver ligado a versões de mais de um Sistema diferente,
+    // nenhuma linha é gerada para ele aqui (cai no fallback abaixo).
+
+    // 2) Ainda sem Sistema (sem vínculo nenhum, ou vínculo ambíguo) e existe
+    //    exatamente 1 Sistema cadastrado no total: assume que é esse (caso
+    //    comum de uma instalação single-vendor/single-system, ex.: só
+    //    "Check Point" / "Gaia").
+    const { rows: sysCountRows } = await pool.query('SELECT COUNT(*) AS n FROM systems');
+    if (Number(sysCountRows[0].n) === 1) {
+      await pool.query(`
+        UPDATE environments e SET system = s.key, vendor = s.vendor
+        FROM systems s
+        WHERE e.system IS NULL
+      `);
+    } else if (Number(sysCountRows[0].n) > 1) {
+      // 3) Mais de um Sistema cadastrado e ainda restam ambientes sem Sistema
+      //    resolvido: cai no primeiro Sistema por sort_order só para não
+      //    deixar a coluna NOT NULL impossível de aplicar — é uma suposição
+      //    (fica registrada no console para o administrador revisar e
+      //    corrigir depois pela tela de Register → Environments).
+      const { rows: unresolved } = await pool.query('SELECT key FROM environments WHERE system IS NULL');
+      if (unresolved.length) {
+        const { rows: firstSys } = await pool.query('SELECT key, vendor FROM systems ORDER BY sort_order, key LIMIT 1');
+        if (firstSys[0]) {
+          await pool.query('UPDATE environments SET system = $1, vendor = $2 WHERE system IS NULL', [firstSys[0].key, firstSys[0].vendor]);
+          console.warn(`[db] Ambiente(s) sem Sistema determinável de forma inequívoca (${unresolved.map(r => r.key).join(', ')}) foram atribuídos a '${firstSys[0].key}' como suposição — revise em Register → Environments.`);
+        }
+      }
+    }
+
+    // Só promove a NOT NULL se toda linha já tem um Sistema (nenhum ambiente
+    // cadastrado ainda, ou nenhum Sistema cadastrado ainda, também contam como
+    // "nada pendente" — o próximo Ambiente criado já vem com system exigido
+    // pela API). Reaplicar SET NOT NULL numa coluna que já é NOT NULL não dá
+    // erro no Postgres, então isto é seguro rodar em todo boot.
+    const { rows: pending } = await pool.query('SELECT COUNT(*) AS n FROM environments WHERE system IS NULL');
+    if (Number(pending[0].n) === 0) {
+      await pool.query(`ALTER TABLE environments ALTER COLUMN system SET NOT NULL`);
+      await pool.query(`ALTER TABLE environments ALTER COLUMN vendor SET NOT NULL`);
+    } else {
+      console.warn(`[db] ${pending[0].n} ambiente(s) ainda sem Sistema após a migração automática — corrija manualmente em Register → Environments antes de contar com a obrigatoriedade desse campo.`);
+    }
+  } catch (err) {
+    console.error('[db] Falha ao migrar environments.system/vendor:', err.message);
+  }
+
   // Migração de dados (não de schema, mas mesmo lugar/mesma filosofia de
   // idempotência): feature "Favorites" (tabela legada user_favorites) virou
   // "Folders" — cada usuário que tinha favoritos ganha uma pasta chamada
@@ -278,4 +355,10 @@ async function withTransaction(fn) {
   }
 }
 
-module.exports = { pool, initDb, withTransaction, getConnectionString };
+// runMigrations exportado além de initDb (que já o chama no boot normal) só
+// para permitir testes automatizados aplicarem o schema base e popularem
+// dados de catálogo ANTES de rodar as migrações — ex.: o teste de backfill de
+// environments.system precisa inserir vendors/systems/version_environments
+// "pré-existentes" entre a aplicação do schema.sql e o backfill em si, coisa
+// que initDb() (que roda os dois passos em sequência, sem pausa) não permite.
+module.exports = { pool, initDb, runMigrations, withTransaction, getConnectionString };

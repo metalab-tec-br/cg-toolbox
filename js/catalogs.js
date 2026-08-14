@@ -176,13 +176,22 @@ function ccResolveParentSelection(stArr) {
 // estava marcado mas deixou de ser permitido. Retorna true se alguma marcação
 // mudou (chamador deve recalcular o ST correspondente e atualizar o rótulo do
 // dropdown).
+// `scoped` aceita um único resultado de ccScopedAllowed/ccDirectFieldScoped OU
+// um array deles — usado por Ambiente, que agora precisa satisfazer DOIS
+// filtros ao mesmo tempo (Sistema, FK direta via ccDirectFieldScoped, E o N:N
+// legado Versão↔Ambiente via ccScopedAllowed): um item só fica permitido se
+// TODOS os `scoped` da lista o permitirem (AND).
+function ccIsChildAllowedAll(scopedOrList, childKey) {
+  const list = Array.isArray(scopedOrList) ? scopedOrList : [scopedOrList];
+  return list.every(s => ccIsChildAllowed(s, childKey));
+}
 function ccApplyScopeDisabled(containerId, itemSelector, keyAttr, scoped) {
   const container = document.getElementById(containerId);
   if (!container) return false;
   let changed = false;
   container.querySelectorAll(`${itemSelector}[${keyAttr}]`).forEach(el => {
     const key = el.getAttribute(keyAttr);
-    const allowed = ccIsChildAllowed(scoped, key);
+    const allowed = ccIsChildAllowedAll(scoped, key);
     el.classList.toggle('scope-disabled', !allowed);
     if (!allowed && el.classList.contains('on')) {
       el.classList.remove('on');
@@ -238,10 +247,20 @@ function ccRefreshCascade() {
     if (typeof updateVersionDDLabel === 'function') updateVersionDDLabel();
   }
 
+  // Ambiente agora tem Sistema relacionado (FK direta — environments.system,
+  // ver server/schema.sql), então entra no mesmo esquema "herda o Vendor
+  // quando o Sistema ainda está em 'All'" usado acima para Versão — reaproveita
+  // o MESMO `sysSel` já calculado (pedido do usuário: "na barra lateral quando
+  // eu selecionar um vendor, deverá exibir nos demais filtros o system, version
+  // e environment daquele vendor, como é feito atualmente, mas agora incluindo
+  // o environment"). Combinado (AND) com o filtro N:N legado Versão↔Ambiente
+  // (version_environments) que já existia, via ccApplyScopeDisabled aceitando
+  // uma lista de `scoped`.
+  const envSystemScoped = ccDirectFieldScoped(CATALOGS.environments || [], 'system', sysSel);
   const versionSel = ccResolveParentSelection(ST.v);
-  const envScoped = ccScopedAllowed(CATALOGS.version_environments || [], 'environment', 'version', versionSel);
+  const envVersionScoped = ccScopedAllowed(CATALOGS.version_environments || [], 'environment', 'version', versionSel);
   let envChanged = false;
-  ['eList', 'mEnv'].forEach(id => { if (ccApplyScopeDisabled(id, id === 'eList' ? '.sb-row' : '.seg-btn', id === 'eList' ? 'data-e' : 'data-val', envScoped)) envChanged = true; });
+  ['eList', 'mEnv'].forEach(id => { if (ccApplyScopeDisabled(id, id === 'eList' ? '.sb-row' : '.seg-btn', id === 'eList' ? 'data-e' : 'data-val', [envSystemScoped, envVersionScoped])) envChanged = true; });
   if (envChanged && document.getElementById('eList')) {
     ST.e = readMultiSelectValue('eList', '.sb-row', 'data-e', ENV_KEYS);
     if (typeof updateEnvDDLabel === 'function') updateEnvDDLabel();

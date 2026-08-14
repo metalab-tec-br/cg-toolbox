@@ -2290,8 +2290,19 @@ app.delete('/api/systems/:key', async (req, res) => {
 app.put('/api/environments/:key/versions', async (req, res) => {
   const key = req.params.key;
   try {
-    if (!(await keyExists('environments', key))) return res.status(404).json({ error: 'not_found', message: `Environment '${key}' not found` });
-    await replaceScopeLinks('version_environments', 'environment', key, 'version', req.body && req.body.versions);
+    const { rows: envRows } = await pool.query('SELECT * FROM environments WHERE key = $1', [key]);
+    const env = envRows[0];
+    if (!env) return res.status(404).json({ error: 'not_found', message: `Environment '${key}' not found` });
+    // Só faz sentido vincular Ambiente a Versões do MESMO Sistema (environments.system,
+    // ver schema.sql) — filtra silenciosamente qualquer versão de outro Sistema que
+    // porventura venha no body, em vez de recusar a chamada inteira por isso.
+    const requested = Array.isArray(req.body && req.body.versions) ? req.body.versions : [];
+    let allowed = requested;
+    if (env.system && requested.length) {
+      const { rows: validRows } = await pool.query('SELECT key FROM versions WHERE system = $1 AND key = ANY($2)', [env.system, requested]);
+      allowed = validRows.map(r => r.key);
+    }
+    await replaceScopeLinks('version_environments', 'environment', key, 'version', allowed);
     const { rows } = await pool.query('SELECT version FROM version_environments WHERE environment = $1', [key]);
     res.json({ environment: key, versions: rows.map(r => r.version) });
   } catch (err) {
@@ -2392,15 +2403,25 @@ app.delete('/api/versions/:system/:key', async (req, res) => {
 });
 
 // ── Ambientes ────────────────────────────────────
+// `system` é obrigatório (mesmo padrão de POST /api/versions) — `vendor` é
+// sempre derivado do Sistema escolhido (denormalizado, mantido em sincronia
+// pelo backend, nunca aceito diretamente do body).
 app.post('/api/environments', async (req, res) => {
-  const { label, color } = req.body || {};
+  const { label, color, system } = req.body || {};
   if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
+  if (!system || typeof system !== 'string') return res.status(400).json({ error: 'validation_error', message: '"system" is required' });
   try {
+    const { rows: systemRows } = await pool.query('SELECT * FROM systems WHERE key = $1', [system]);
+    const systemRow = systemRows[0];
+    if (!systemRow) return res.status(400).json({ error: 'validation_error', message: `System '${system}' not found` });
     const key = await uniqueCatalogKey(slugifyCatalogKey(label), k => keyExists('environments', k));
     const maxRes = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS m FROM environments');
-    await pool.query('INSERT INTO environments (key, label, color, sort_order) VALUES ($1, $2, $3, $4)', [key, label, color || '#8B949E', maxRes.rows[0].m + 1]);
+    await pool.query(
+      'INSERT INTO environments (key, system, vendor, label, color, sort_order) VALUES ($1, $2, $3, $4, $5, $6)',
+      [key, system, systemRow.vendor, label, color || '#8B949E', maxRes.rows[0].m + 1]
+    );
     const { rows } = await pool.query('SELECT * FROM environments WHERE key = $1', [key]);
-    await logAudit(getCurrentUsername(req), 'create', 'environment', key, label);
+    await logAudit(getCurrentUsername(req), 'create', 'environment', key, label, `System: ${system}`);
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -2416,10 +2437,29 @@ app.put('/api/environments/:key', async (req, res) => {
     const label = req.body.label != null ? req.body.label : existing.label;
     const color = req.body.color != null ? req.body.color : existing.color;
     const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : existing.sort_order;
+    const newSystem = req.body.system != null ? req.body.system : existing.system;
     if (!label || typeof label !== 'string') return res.status(400).json({ error: 'validation_error', message: '"label" is required' });
-    await pool.query('UPDATE environments SET label = $1, color = $2, sort_order = $3 WHERE key = $4', [label, color, sortOrder, key]);
+    if (!newSystem || typeof newSystem !== 'string') return res.status(400).json({ error: 'validation_error', message: '"system" is required' });
+    let newVendor = existing.vendor;
+    const systemChanged = newSystem !== existing.system;
+    if (systemChanged) {
+      const { rows: systemRows } = await pool.query('SELECT * FROM systems WHERE key = $1', [newSystem]);
+      const systemRow = systemRows[0];
+      if (!systemRow) return res.status(400).json({ error: 'validation_error', message: `System '${newSystem}' not found` });
+      newVendor = systemRow.vendor;
+    }
+    await pool.query('UPDATE environments SET label = $1, color = $2, sort_order = $3, system = $4, vendor = $5 WHERE key = $6', [label, color, sortOrder, newSystem, newVendor, key]);
+    if (systemChanged) {
+      // Os vínculos Versão↔Ambiente existentes (version_environments) foram
+      // registrados sob o Sistema ANTERIOR — trocar o Sistema do ambiente os
+      // deixaria "soltos"/inconsistentes (versões de outro Sistema vinculadas
+      // a este ambiente). Mais seguro resetar e deixar o administrador
+      // revincular pela tela de Register do que manter um vínculo que não
+      // faz mais sentido.
+      await pool.query('DELETE FROM version_environments WHERE environment = $1', [key]);
+    }
     const { rows } = await pool.query('SELECT * FROM environments WHERE key = $1', [key]);
-    const details = summarizeChangedFields(existing, { label, color, sort_order: sortOrder }, { label: 'label', color: 'color', sort_order: 'order' });
+    const details = summarizeChangedFields(existing, { label, color, sort_order: sortOrder, system: newSystem }, { label: 'label', color: 'color', sort_order: 'order', system: 'system' });
     await logAudit(getCurrentUsername(req), 'update', 'environment', key, label, details);
     res.json(rows[0]);
   } catch (err) {
