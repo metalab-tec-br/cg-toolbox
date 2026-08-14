@@ -371,10 +371,15 @@
   border-top: 1px solid var(--bdr);
 }
 .cpq-chips-others.open { display: flex; }
+/* width: auto (pedido do usuário: "ao clicar em Others, deixe a caixa do
+   parâmetro do mesmo tamanho do texto. não precisa ficar até o final da
+   linha") — antes width: 100% esticava cada chip até a borda direita do
+   painel; .cpq-chips-others já é align-items: flex-start (coluna), então
+   sem o width:100% cada botão volta a ocupar só o espaço do próprio texto. */
 .cpq-chip {
   padding: 4px 9px; border-radius: 5px; border: 1px solid var(--bdr); background: var(--surf2);
   color: var(--muted); font-size: 11px; font-family: var(--mono); cursor: pointer;
-  transition: border-color .12s, color .12s; width: 100%; text-align: left;
+  transition: border-color .12s, color .12s; width: auto; text-align: left;
 }
 .cpq-chip:hover { border-color: var(--teal); color: var(--teal); }
 .cpq-empty-note { font-size: 11px; color: var(--dim); display: none; }
