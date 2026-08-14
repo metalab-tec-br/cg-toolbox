@@ -16,7 +16,16 @@ const CMD_EDITOR_LINE_TYPES = ['cmd', 'note', 'warn', 'info', 'ok'];
 // agrupadas visualmente sob um único tipo "Text" no editor; a categoria real
 // (que é o line_type de fato salvo no banco — nenhuma mudança de schema) é
 // escolhida num segundo dropdown que só aparece quando "Text" está selecionado.
-const CMD_EDITOR_TEXT_CATEGORIES = ['info', 'note', 'ok', 'warn'];
+const CMD_EDITOR_TEXT_CATEGORIES = ['info', 'ok', 'warn'];
+// 'note' foi removida das categorias oferecidas para NOVAS linhas — pedido do
+// usuário: "remover a opção note do text, assim já deixamos de ter o
+// conflito com a note do comando" (o app já tem um conceito próprio de
+// "Notes", os post-its dentro das pastas; ter também uma categoria de texto
+// chamada "note" dentro do comando confundia os dois). Linhas antigas que já
+// tinham line_type='note' salvo continuam funcionando (mesma cor/ícone
+// roxo em terminal-renderer.js — nenhuma mudança de schema/dado), só não é
+// mais possível ESCOLHER "note" numa linha nova; ver CMD_EDITOR_TEXT_CATEGORIES_LEGACY.
+const CMD_EDITOR_TEXT_CATEGORIES_LEGACY = ['note'];
 
 // O campo "Prompt" de cada linha tipo 'cmd' (ex.: "[Expert@FW]#") era texto
 // livre; agora vem do catálogo Prompts (Settings → Register → Prompts, ver
@@ -330,7 +339,10 @@ function _ceBuildLineRow(data, opts) {
   // note/warn/info/ok viram categorias do tipo "text" (ver comentário em
   // CMD_EDITOR_TEXT_CATEGORIES).
   const availableTypes = allowImage ? ['cmd', 'image', 'text'] : ['cmd', 'text'];
-  const isTextCategory = CMD_EDITOR_TEXT_CATEGORIES.includes(data.line_type);
+  // isTextCategory também reconhece a categoria legada 'note' (ver
+  // CMD_EDITOR_TEXT_CATEGORIES_LEGACY) — uma linha antiga tipo 'note' precisa
+  // continuar abrindo como "Text" no dropdown principal, não como "cmd".
+  const isTextCategory = CMD_EDITOR_TEXT_CATEGORIES.includes(data.line_type) || CMD_EDITOR_TEXT_CATEGORIES_LEGACY.includes(data.line_type);
   const displayType = isTextCategory ? 'text' : data.line_type;
   const selectedCategory = isTextCategory ? data.line_type : CMD_EDITOR_TEXT_CATEGORIES[0];
   const row = document.createElement('div');
@@ -341,7 +353,15 @@ function _ceBuildLineRow(data, opts) {
   // e termRender() em js/terminal-renderer.js) — pedido do usuário: "no campos
   // de text coloque a cor que será exibida na tela em cada opção".
   const CMD_EDITOR_TEXT_CATEGORY_COLORS = { info: 'var(--blue)', note: 'var(--purple)', ok: 'var(--green)', warn: 'var(--orange)' };
-  const categoryOptions = CMD_EDITOR_TEXT_CATEGORIES.map(c => `<option value="${c}"${c === selectedCategory ? ' selected' : ''} style="color:${CMD_EDITOR_TEXT_CATEGORY_COLORS[c]};">${c}</option>`).join('');
+  let categoryOptions = CMD_EDITOR_TEXT_CATEGORIES.map(c => `<option value="${c}"${c === selectedCategory ? ' selected' : ''} style="color:${CMD_EDITOR_TEXT_CATEGORY_COLORS[c]};">${c}</option>`).join('');
+  // Se a linha já salva tem a categoria legada 'note' (removida das opções
+  // oferecidas — ver comentário em CMD_EDITOR_TEXT_CATEGORIES_LEGACY), ela
+  // ganha uma opção extra oculta no topo, só para não trocar sozinha de
+  // categoria/cor quando o usuário reabre e salva a linha sem mexer nela
+  // (mesmo padrão já usado para Prompt legado, ver _ceBuildPromptOptions).
+  if (CMD_EDITOR_TEXT_CATEGORIES_LEGACY.includes(selectedCategory)) {
+    categoryOptions = `<option value="${selectedCategory}" selected style="display:none;color:${CMD_EDITOR_TEXT_CATEGORY_COLORS[selectedCategory]};">${selectedCategory}</option>` + categoryOptions;
+  }
   const promptOptions = _ceBuildPromptOptions(data.prompt);
   row.innerHTML = `
     <div class="row-head">
