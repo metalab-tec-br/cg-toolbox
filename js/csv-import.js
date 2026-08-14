@@ -257,7 +257,14 @@ function buildImportPayload(obj, existingIdsInBatch) {
     .map(content => ({ line_type: 'cmd', prompt, content }));
   if (!cmdLines.length) return { error: 'Missing "Command"' };
   const lines = [...cmdLines];
-  if (noteCell.trim()) lines.push({ line_type: 'note', content: noteCell.trim() });
+  // A coluna "Note" do CSV virava uma linha de texto categoria 'note'
+  // (roxa) — categoria removida do editor (js/command-editor.js,
+  // CMD_EDITOR_TEXT_CATEGORIES) porque conflitava com o conceito de "Notes"
+  // (post-its dentro das pastas). Import passa a gerar 'info' (azul) pra
+  // não continuar criando linhas na categoria retirada; comandos já
+  // importados antes com 'note' continuam funcionando normalmente (ver
+  // CMD_EDITOR_TEXT_CATEGORIES_LEGACY).
+  if (noteCell.trim()) lines.push({ line_type: 'info', content: noteCell.trim() });
 
   // Aviso (não bloqueia a linha) para {{token}} sem parâmetro cadastrado —
   // só acontece se o usuário escolheu "Import anyway" no painel de resolução
