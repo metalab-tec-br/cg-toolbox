@@ -685,13 +685,34 @@ function buildFolderSectionFromCards(items, folderId, folderName, key, withActio
   // Delete (linhas abaixo, que continuam olhando só pra `editMode`, sem
   // checar depth) e seus itens ficam arrastáveis (ver `active` mais abaixo)
   // — mas nenhuma subpasta tem um botão próprio pra ligar/desligar isso.
-  const editBtn = (withActions && depth === 0)
-    ? `<button type="button" class="sec-folder-btn sec-folder-edit-btn${editMode ? ' on' : ''}" onmousedown="event.preventDefault()" onclick="toggleFolderEditMode(${folderId}, event)" title="${editMode ? 'Done editing' : 'Edit folder'}">✎</button>`
+  // Pedido do usuário (com print do cabeçalho atual): "vamos ajustar esses
+  // botões durante a edição de pastas. deixe um botão para Accept, Cancel e
+  // Delete Folder. deixe os botões no mesmo estilo atual do botão delete."
+  // Fora do modo de edição, a RAIZ mostra só o ✎ (entra no modo). DENTRO do
+  // modo de edição, o ✎ dá lugar a dois botões — "✓ Accept" e "✕ Cancel" —
+  // ambos no mesmo componente visual "pill" do Delete (.sec-folder-pill-btn,
+  // ver css/components.css), só com cor diferente por modificador
+  // (.pill-accept/.pill-cancel). Os dois só chamam toggleFolderEditMode
+  // pra sair do modo de edição — não existe "desfazer" de verdade porque
+  // renomear (blur/Enter) e reordenar (drag) já salvam ao vivo, sem nenhum
+  // estado pendente pra descartar; a distinção Accept/Cancel é só pra dar
+  // uma saída clara e não deixar um único botão ambíguo (era um "✎"/"Done
+  // editing" só, meio escondido). Só existem na RAIZ (depth 0), igual o ✎
+  // que substituem.
+  const editControls = (withActions && depth === 0)
+    ? (editMode
+        ? `<button type="button" class="sec-folder-pill-btn pill-accept" onmousedown="event.preventDefault()" onclick="toggleFolderEditMode(${folderId}, event)" title="Accept and finish editing">✓ Accept</button>`
+          + `<button type="button" class="sec-folder-pill-btn pill-cancel" onmousedown="event.preventDefault()" onclick="toggleFolderEditMode(${folderId}, event)" title="Cancel editing">✕ Cancel</button>`
+        : `<button type="button" class="sec-folder-btn sec-folder-edit-btn" onmousedown="event.preventDefault()" onclick="toggleFolderEditMode(${folderId}, event)" title="Edit folder">✎</button>`)
     : '';
+  // Delete Folder continua em QUALQUER profundidade (cada subpasta exclui só
+  // a si mesma — herda editMode da raiz, mas não o botão Accept/Cancel
+  // acima, que só existe nela); mesmo componente .sec-folder-pill-btn,
+  // modificador .pill-delete (cores iguais ao antigo .sec-folder-delete-btn).
   const deleteTag = (withActions && editMode && !isFavorites)
-    ? `<button type="button" class="sec-folder-delete-btn" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${folderId}, '${jsEsc}', event)" title="Delete folder">✕ Delete</button>`
+    ? `<button type="button" class="sec-folder-pill-btn pill-delete" onmousedown="event.preventDefault()" onclick="deleteFolderConfirm(${folderId}, '${jsEsc}', event)" title="Delete folder">✕ Delete Folder</button>`
     : '';
-  const leftActions = (editBtn || deleteTag) ? `<span class="sec-folder-actions">${editBtn}${deleteTag}</span>` : '';
+  const leftActions = (editControls || deleteTag) ? `<span class="sec-folder-actions">${editControls}${deleteTag}</span>` : '';
 
   // "+ Add note" voltou pro cabeçalho (2º giro: tinha saído pro corpo da
   // seção por ser pouco visível como botão pequeno "+" no canto — virou um
