@@ -647,7 +647,15 @@ document.addEventListener('dragover', ev => {
     if (draggedType === 'folder' && String(targetFolderId) === String(draggedId)) return; // não entra em si mesma
     if (draggedType === 'folder' && _fldDragRow.contains(header)) return; // nem em uma de suas próprias descendentes (cicraria)
     const bodyEl = targetSection.querySelector(`:scope > .sec-body[data-folder-body-id="${targetFolderId}"]`);
-    if (!bodyEl || bodyEl.contains(_fldDragRow)) return; // já está lá dentro — nada a fazer
+    // Bug reportado pelo usuário: "estou tentando mover um serviço da
+    // subpasta para pasta pai e não está movendo" — `bodyEl.contains(...)`
+    // (Node.contains) dá match em QUALQUER descendente, não só filho direto.
+    // Um item dentro de uma subpasta É descendente do corpo da pasta-mãe
+    // (a seção da subpasta mora dentro do corpo dela), então soltar no
+    // cabeçalho da pasta-mãe era sempre visto como "já está lá dentro" e
+    // ignorado silenciosamente. O que importa é se já é FILHO DIRETO deste
+    // corpo — daí `parentElement === bodyEl`.
+    if (!bodyEl || _fldDragRow.parentElement === bodyEl) return; // já está lá dentro — nada a fazer
     ev.preventDefault();
     bodyEl.appendChild(_fldDragRow);
     _fldTargetContainerId = targetFolderId;
