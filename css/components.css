@@ -736,13 +736,15 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 .section.section-editing { border: 1px dashed var(--teal); border-radius: 8px; padding: 10px 12px; }
 .section.section-editing > .sec-title .sec-folder-actions { display: flex; }
 
-/* Drag-to-reorder dos comandos DENTRO de uma pasta (task #458, ver
-   wrapCardsForFolderDrag em db-render-engine.js e _fcArmDrag em
-   js/folders.js) — mesmo espírito visual do .ln-drag-handle usado no editor
-   de comandos para reordenar linhas, só que aqui embrulhando um .card
-   inteiro em vez de uma linha de texto. */
-.folder-card-row { display: flex; align-items: flex-start; gap: 4px; }
-.folder-card-row-body { flex: 1; min-width: 0; }
+/* Wrapper ÚNICO de drag-and-drop pra QUALQUER item dentro de uma pasta —
+   comando, nota OU a seção inteira de uma SUBPASTA (ver
+   wrapItemForFolderDrag em db-render-engine.js e _fldArmDrag/dragover/
+   dragend em js/folders.js). Um único mecanismo cobre tanto reordenar
+   (soltar entre irmãos) quanto mover pra dentro/fora de uma subpasta
+   (pedido do usuário) — antes eram duas classes/handlers separados
+   (.folder-card-row pra cards, .folder-section-row pra subpastas). */
+.folder-item-row { display: flex; align-items: flex-start; gap: 4px; }
+.folder-item-row-body { flex: 1; min-width: 0; }
 .folder-drag-handle {
   display: flex; align-items: center; color: var(--muted); flex-shrink: 0;
   cursor: grab; padding: 2px; border-radius: 4px; margin-top: 10px;
@@ -750,15 +752,7 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 }
 .folder-drag-handle:hover { color: var(--text); background: var(--surf); }
 .folder-drag-handle:active { cursor: grabbing; }
-.folder-card-row.dragging { opacity: .45; }
-
-/* Mesma mecânica de .folder-card-row acima, só que embrulhando a seção
-   INTEIRA de uma SUBPASTA (não um .card) — ver wrapFolderChildForDrag em
-   db-render-engine.js e _ffArmDrag em js/folders.js. Reutiliza o mesmo
-   .folder-drag-handle (ícone ⠿) pela consistência visual. */
-.folder-section-row { display: flex; align-items: flex-start; gap: 4px; }
-.folder-section-row-body { flex: 1; min-width: 0; }
-.folder-section-row.dragging { opacity: .45; }
+.folder-item-row.dragging { opacity: .45; }
 
 /* Bloco recolhível por Versão/Ambiente (modo "Agrupar por Versão") — mesma mecânica de
    .section, com um destaque visual próprio (borda + fundo) para se diferenciar das

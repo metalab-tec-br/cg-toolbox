@@ -454,39 +454,29 @@ function buildTopicSection(rows, topic, icon, title, values, hasIPs, key) {
   return section(icon, title, cards, key);
 }
 
-// Envolve cada card já pronto num ".folder-card-row" com uma alça de
-// arrastar (⠿, ver _fcArmDrag em js/folders.js) — só usado dentro de uma
-// pasta do PRÓPRIO usuário (reordenar a pasta de outra pessoa não é
-// permitido pelo backend, ver PUT /api/folders/:id/reorder). `data-folder-id`
-// na própria row (em vez de num wrapper comum) é o que o handler de
-// dragend usa pra saber pra qual pasta mandar a nova ordem — mais simples
-// que subir até o pai, e funciona igual estejamos numa única seção
-// "Folders" ou numa sub-seção de "User folders". Funciona tanto para cards
-// de comando (data-cmd-id) quanto de nota (data-note-id, ver
-// buildNoteCardHtml abaixo) — o handler de dragend em js/folders.js lê
-// qualquer um dos dois pra saber o tipo do item arrastado.
-function wrapCardsForFolderDrag(cards, folderId) {
-  return cards.map(html => `<div class="folder-card-row" data-folder-id="${folderId}">
-    <span class="folder-drag-handle" onmousedown="_fcArmDrag(this)" title="Drag to reorder">⠿</span>
-    <div class="folder-card-row-body">${html}</div>
-  </div>`).join('');
-}
-
-// Mesma ideia de wrapCardsForFolderDrag acima, só que embrulhando a seção
-// HTML já pronta de UMA SUBPASTA inteira (cabeçalho + corpo, incluindo suas
-// próprias subpastas aninhadas, se houver) em vez de um .card — pedido do
-// usuário: "permitir ordenar as subpastas igual os comandos com clica e
-// arrasta". Chamado por renderFolderNode em js/render.js, uma vez por
-// filho, só quando a pasta-MÃE está em modo de edição (reordenar filhas é
-// uma ação sobre o conteúdo da pasta-mãe, não da subpasta em si — o botão
-// ✎ Edit de cada subpasta continua controlando só o drag/exclusão dos
-// PRÓPRIOS cards dela). Ver _ffArmDrag/reorderSubfolders em js/folders.js
-// para o restante do mecanismo (dragstart/dragover/dragend + persistência
-// via PUT /api/folders/:id/reorder, type:'folder').
-function wrapFolderChildForDrag(html, parentFolderId, childFolderId) {
-  return `<div class="folder-section-row" data-parent-folder-id="${parentFolderId}" data-child-folder-id="${childFolderId}">
-    <span class="folder-drag-handle" onmousedown="_ffArmDrag(this)" title="Drag to reorder">⠿</span>
-    <div class="folder-section-row-body">${html}</div>
+// Envolve um item (card de comando/nota OU a seção HTML inteira de uma
+// SUBPASTA) num ".folder-item-row" com alça de arrastar (⠿) — usado dentro
+// de uma pasta do PRÓPRIO usuário (reordenar/mover na pasta de outra pessoa
+// não é permitido pelo backend). Unifica o que antes eram dois mecanismos
+// separados (wrapCardsForFolderDrag para cards + wrapFolderChildForDrag
+// para subpastas) — pedido do usuário: "poder reordenar as subpastas entre
+// os comandos e notas" e "arrastar comandos, notas e subpastas para dentro
+// e fora da subpasta". Com os três tipos usando o MESMO wrapper, um único
+// mecanismo de drag (ver _fldArmDrag/dragover/dragend em js/folders.js)
+// resolve tanto reordenar (soltar entre irmãos do mesmo `containerId`)
+// quanto mover entre pasta-mãe/subpasta (soltar num item de OUTRO
+// container, ou diretamente no cabeçalho de uma subpasta — ver
+// data-folder-header-id em buildFolderSectionFromCards abaixo).
+// `containerId` = id da pasta cujo corpo contém esta row AGORA (pode mudar
+// depois de um "mover"). `itemType`/`itemId` identificam o item (command_id
+// é string; note/folder id são number). `rootFolderId` é o id da pasta de
+// TOPO da árvore inteira — usado só pra IMPEDIR que o drag solte um item
+// fora dela (pedido do usuário: "a subpastas e seus itens não podem sair da
+// pasta pai"), nunca muda entre pai/filhas da mesma árvore.
+function wrapItemForFolderDrag(html, containerId, itemType, itemId, rootFolderId) {
+  return `<div class="folder-item-row" data-container-id="${containerId}" data-item-type="${itemType}" data-item-id="${itemId}" data-root-folder-id="${rootFolderId}">
+    <span class="folder-drag-handle" onmousedown="_fldArmDrag(this)" title="Drag to reorder">⠿</span>
+    <div class="folder-item-row-body">${html}</div>
   </div>`;
 }
 
@@ -548,36 +538,57 @@ function buildNoteCardHtml(note, ownFolder) {
   // específico o bastante sem mexer na classe.
   // `data-note-id` (em vez de data-cmd-id) também já é suficiente pra
   // distinguir nota de comando em qualquer seletor/handler que precise (ver
-  // wrapCardsForFolderDrag/_fcArmDrag em js/folders.js).
+  // wrapItemForFolderDrag/_fldArmDrag em js/folders.js).
   return `<div class="card" data-note-id="${note.id}">
     ${actions}
     <div class="note-flat-body">${content}</div>
   </div>`;
 }
 
-// Intercala comandos e notes de UMA pasta na ordem combinada que o usuário
-// definiu (task Notes) — `orderTagged` é o array {type:'command'|'note', id}
-// que o servidor já devolve pronto (ver GET /api/folders[/all] em
-// server/index.js, e folder.order em js/folders.js). Itens sem posição
-// salva (comando/nota nova, ou pasta antiga de antes desta feature) vão pro
-// FIM, comandos antes de notes, nunca desaparecem — mesmo critério que
-// buildFolderSection já usava só para comandos antes desta mudança.
+// Intercala comandos, notes E SUBPASTAS de UMA pasta na ordem combinada que
+// o usuário definiu — `orderTagged` é o array {type:'command'|'note'|
+// 'folder', id} que o servidor já devolve pronto (ver
+// loadFolderOrderAndNotes em server/index.js, e folder.order em
+// js/folders.js) — subpastas entraram nessa MESMA escala a pedido do
+// usuário: "a posição inicial da subpasta deve ser logo abaixo da pasta
+// pai" e "poder reordenar as subpastas entre os comandos e notas". Itens
+// sem posição salva (comando/nota/subpasta nova, ou pasta antiga de antes
+// desta feature) vão pro FIM, nunca desaparecem — mesmo critério que já
+// existia só para comandos/notas antes desta mudança.
 // `cmdById`/`notesById` são Maps já filtrados para o conteúdo desta pasta
-// especificamente (quem chama decide o que entra).
-function buildFolderItemsCards(cmdById, notesById, orderTagged, values, hasIPs, ownFolder) {
-  const seenCmd = new Set(), seenNote = new Set();
-  (orderTagged || []).forEach(o => { if (o && o.type === 'note') seenNote.add(o.id); else if (o) seenCmd.add(o.id); });
+// especificamente (quem chama decide o que entra); `childSectionById` é um
+// Map<folderId, htmlDaSeçãoJáMontada> das subpastas DIRETAS desta pasta
+// (montadas recursivamente por quem chama — ver renderFolderNode em
+// js/render.js). Devolve objetos {type, id, html} (não só a string) — quem
+// chama (buildFolderSectionFromCards) precisa do type/id pra embrulhar cada
+// item com wrapItemForFolderDrag.
+function buildFolderItemsCards(cmdById, notesById, childSectionById, orderTagged, values, hasIPs, ownFolder) {
+  const seenCmd = new Set(), seenNote = new Set(), seenFolder = new Set();
+  (orderTagged || []).forEach(o => {
+    if (!o) return;
+    if (o.type === 'note') seenNote.add(o.id);
+    else if (o.type === 'folder') seenFolder.add(o.id);
+    else seenCmd.add(o.id);
+  });
   const extra = [
     ...[...cmdById.keys()].filter(id => !seenCmd.has(id)).map(id => ({ type: 'command', id })),
     ...[...notesById.keys()].filter(id => !seenNote.has(id)).map(id => ({ type: 'note', id })),
+    ...[...(childSectionById ? childSectionById.keys() : [])].filter(id => !seenFolder.has(id)).map(id => ({ type: 'folder', id })),
   ];
   const finalOrder = (orderTagged || [])
-    .filter(o => o && (o.type === 'note' ? notesById.has(o.id) : cmdById.has(o.id)))
+    .filter(o => o && (
+      o.type === 'note' ? notesById.has(o.id) :
+      o.type === 'folder' ? !!(childSectionById && childSectionById.has(o.id)) :
+      cmdById.has(o.id)
+    ))
     .concat(extra);
-  return finalOrder.map(o => o.type === 'note'
-    ? buildNoteCardHtml(notesById.get(o.id), ownFolder)
-    : buildCardHtmlForRow(cmdById.get(o.id), values, hasIPs)
-  ).filter(Boolean);
+  return finalOrder.map(o => {
+    let html;
+    if (o.type === 'note') html = buildNoteCardHtml(notesById.get(o.id), ownFolder);
+    else if (o.type === 'folder') html = childSectionById.get(o.id);
+    else html = buildCardHtmlForRow(cmdById.get(o.id), values, hasIPs);
+    return html ? { type: o.type, id: o.id, html } : null;
+  }).filter(Boolean);
 }
 
 // Cabeçalho + corpo de uma seção de PASTA a partir de uma lista de CARDS já
@@ -603,7 +614,7 @@ function buildFolderItemsCards(cmdById, notesById, orderTagged, values, hasIPs, 
 // `cards`), só que sem NENHUM botão de ação — ver buildNoteCardHtml.
 // `editMode` (task #461/#463) — só dentro desse modo (toggle "✎ Edit
 // folder" no cabeçalho) é que: (a) os cards ficam arrastáveis (embrulhados
-// em .folder-card-row, ver wrapCardsForFolderDrag), e (b) aparece Excluir.
+// em .folder-item-row, ver wrapItemForFolderDrag), e (b) aparece Excluir.
 // Fora desse modo, mesmo numa pasta própria, a seção mostra só os cards +
 // os botões sempre visíveis (✎ Edit / + Note) — arrastar/excluir por
 // acidente não deveria ser possível sem o usuário ter entrado
@@ -620,26 +631,27 @@ function buildFolderItemsCards(cmdById, notesById, orderTagged, values, hasIPs, 
 // explícito (`.sec-title-divider`, substitui o ::after padrão de
 // `.sec-title` só nas seções de pasta, ver `.section-folder` em
 // components.css) em vez de ficar espremido do lado do nome/contagem.
-// `childrenHtml` (subpastas, aninhamento ilimitado): HTML já pronto das
-// seções de subpasta desta pasta (montado recursivamente por quem chama —
-// ver buildFolderSection abaixo e os 3 ramos de VIEW_FOLDERS_HOME em
-// render.js), inserido no CORPO desta seção, depois dos cards. `depth`
-// (0 = pasta de topo) só controla a indentação visual (margin-left inline —
-// ver o wrapper abaixo), simples o bastante pra funcionar em qualquer
-// profundidade sem precisar de uma classe CSS por nível.
-function buildFolderSectionFromCards(cards, folderId, folderName, key, withActions, copyable, editMode, childrenHtml, depth) {
-  childrenHtml = childrenHtml || '';
+// `items` (comandos + notas + subpastas, TODOS já intercalados na ordem
+// certa — ver buildFolderItemsCards acima): array de {type, id, html}.
+// `depth` (0 = pasta de topo) só controla a indentação visual (margin-left
+// inline — ver o wrapper abaixo), simples o bastante pra funcionar em
+// qualquer profundidade sem precisar de uma classe CSS por nível.
+// `rootFolderId` (opcional, default = o próprio folderId — usado quando
+// ESTA seção É a raiz) identifica a pasta de TOPO da árvore inteira, pra
+// que o mecanismo de drag (_fldArmDrag/js/folders.js) recuse soltar um item
+// fora dela (pedido do usuário: "a subpastas e seus itens não podem sair da
+// pasta pai").
+function buildFolderSectionFromCards(items, folderId, folderName, key, withActions, copyable, editMode, depth, rootFolderId) {
+  items = items || [];
   depth = depth || 0;
+  rootFolderId = rootFolderId || folderId;
   // Pastas do próprio usuário (withActions) SEMPRE aparecem, mesmo vazias
-  // (0 comandos e 0 notas) — antes voltavam '' e a pasta recém-criada
-  // simplesmente não aparecia em lugar nenhum até o usuário adicionar algo
-  // a ela, o que parecia um bug ("criei a pasta e ela não aparece"). Uma
-  // pasta com subpastas mas 0 cards próprios também precisa continuar
-  // aparecendo — senão a árvore de subpastas dela ficaria inacessível.
-  // Pastas de OUTRO usuário (copyable, só leitura) continuam escondidas
-  // quando vazias (sem cards E sem subpastas) — não haveria nada útil pra
-  // fazer com elas ali.
-  if (!cards.length && !withActions && !childrenHtml) return '';
+  // (0 comandos, 0 notas, 0 subpastas) — antes voltavam '' e a pasta recém-
+  // criada simplesmente não aparecia em lugar nenhum até o usuário
+  // adicionar algo a ela, o que parecia um bug ("criei a pasta e ela não
+  // aparece"). Pastas de OUTRO usuário (copyable, só leitura) continuam
+  // escondidas quando vazias — não haveria nada útil pra fazer com elas ali.
+  if (!items.length && !withActions) return '';
   const nameEsc = escAttr(folderName);
   const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(folderName) : nameEsc;
 
@@ -721,24 +733,42 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
   const nameHtml = (withActions && editMode && !isFavorites)
     ? `<input type="text" class="sec-folder-name-input" value="${nameEsc}" data-folder-id="${folderId}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()" onkeydown="_folderNameInputKeydown(event)" onblur="_folderNameInputBlur(event)">`
     : nameEsc;
-  const headerHtml = `${folderIcon(true, 12)} ${nameHtml} <span class="sec-count">${cards.length}</span>${leftActions}${divider}${rightAction}`;
-  // Pasta própria recém-criada, ainda sem nenhum comando/nota — mostra um
-  // aviso discreto em vez de deixar o corpo da seção parecendo vazio/quebrado
-  // (o botão "+ Add" agora mora no cabeçalho, não mais aqui no corpo). Não
-  // aparece se já existe alguma subpasta dentro — nesse caso o corpo não
-  // fica vazio de verdade, só sem comandos/notas PRÓPRIOS desta pasta.
-  const emptyMsg = (withActions && !cards.length && !childrenHtml)
+  // Contagem no cabeçalho: só comandos/notas PRÓPRIOS desta pasta (não conta
+  // subpastas — cada subpasta já mostra a contagem dela própria no cabeçalho
+  // dela, contar de novo aqui ficaria redundante/confuso).
+  const cardCount = items.filter(it => it.type !== 'folder').length;
+  const headerHtml = `${folderIcon(true, 12)} ${nameHtml} <span class="sec-count">${cardCount}</span>${leftActions}${divider}${rightAction}`;
+  // Pasta própria recém-criada, ainda sem nenhum comando/nota/subpasta —
+  // mostra um aviso discreto em vez de deixar o corpo da seção parecendo
+  // vazio/quebrado (o botão "+ Add" agora mora no cabeçalho, não mais aqui
+  // no corpo).
+  const emptyMsg = (withActions && !items.length)
     ? `<p class="sec-folder-empty-msg">This folder is empty — add a note, a subfolder, or a command to it from the card's folder menu.</p>`
     : '';
   const active = withActions && editMode;
-  const body = emptyMsg + (active ? wrapCardsForFolderDrag(cards, folderId) : cards.join('')) + childrenHtml;
+  const body = emptyMsg + items.map(it => active
+    ? wrapItemForFolderDrag(it.html, folderId, it.type, it.id, rootFolderId)
+    : it.html
+  ).join('');
   // Indentação por profundidade (subpastas, aninhamento ilimitado) — inline
   // em vez de uma classe CSS por nível, já que a profundidade não tem limite
-  // fixo. depth=0 (pasta de topo) não recebe estilo nenhum extra.
+  // fixo. depth=0 (pasta de topo) não recebe margin extra, mas TODAS as
+  // profundidades ganham os atributos data-folder-id/data-folder-header-id/
+  // data-folder-body-id abaixo — o mecanismo de drag (js/folders.js) precisa
+  // deles tanto pra soltar DENTRO de uma subpasta (via o cabeçalho ou o
+  // corpo dela) quanto pra soltar de volta na pasta-mãe (que pode ser a
+  // própria raiz, depth 0).
   const style = depth > 0 ? ` style="margin-left:${depth * 18}px"` : '';
   const extraClass = active ? 'section-folder section-editing' : 'section-folder';
-  const html = collapsibleGroup(key || `folder${folderId}`, headerHtml, body, extraClass);
-  return depth > 0 ? html.replace('<div class="section', `<div${style} class="section`) : html;
+  let html = collapsibleGroup(key || `folder${folderId}`, headerHtml, body, extraClass);
+  // `data-root-folder-id` também vai no próprio wrapper da seção (não só nos
+  // itens dentro dela) — necessário pro drag detectar a raiz mesmo quando o
+  // alvo é o CABEÇALHO da seção raiz (depth 0), que não está dentro de
+  // nenhum .folder-item-row (só itens ANINHADOS ficam dentro de um).
+  html = html.replace('<div class="section', `<div data-folder-id="${folderId}" data-root-folder-id="${rootFolderId}"${style} class="section`);
+  html = html.replace('<div class="sec-title">', `<div class="sec-title" data-folder-header-id="${folderId}">`);
+  html = html.replace('<div class="sec-body">', `<div class="sec-body" data-folder-body-id="${folderId}">`);
+  return html;
 }
 
 // Uma seção de PASTA do usuário ATUAL (ícone de pasta + nome + seus
@@ -760,11 +790,12 @@ function buildFolderSectionFromCards(cards, folderId, folderName, key, withActio
 // buildFolderSectionFromCards acima), visíveis só no hover (exceto ⚙
 // quando já ativo — ver .section-editing em components.css).
 // `editMode` (task #461/#463, opcional): repassado direto pra
-// buildFolderSectionFromCards — ver comentário lá. `childrenHtml`/`depth`
-// (subpastas, opcionais): idem, ver comentário em buildFolderSectionFromCards.
-function buildFolderSection(rows, folderId, folderName, values, hasIPs, key, notes, order, editMode, childrenHtml, depth) {
+// buildFolderSectionFromCards — ver comentário lá. `childSectionById`/
+// `depth`/`rootFolderId` (subpastas, opcionais): idem, ver comentário em
+// buildFolderItemsCards/buildFolderSectionFromCards.
+function buildFolderSection(rows, folderId, folderName, values, hasIPs, key, notes, order, editMode, childSectionById, depth, rootFolderId) {
   const cmdById = new Map(rows.filter(r => (r.folder_ids || []).includes(folderId)).map(r => [r.id, r]));
   const notesById = new Map((notes || []).map(n => [n.id, n]));
-  const cards = buildFolderItemsCards(cmdById, notesById, order, values, hasIPs, true);
-  return buildFolderSectionFromCards(cards, folderId, folderName, key, true, false, editMode, childrenHtml, depth);
+  const items = buildFolderItemsCards(cmdById, notesById, childSectionById, order, values, hasIPs, true);
+  return buildFolderSectionFromCards(items, folderId, folderName, key, true, false, editMode, depth, rootFolderId);
 }

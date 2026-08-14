@@ -261,24 +261,24 @@ async function render() {
       // Subpastas (aninhamento ilimitado, ver buildFolderTree em
       // js/folders.js): monta a árvore a partir de FOLDERS (cada pasta com
       // seu parent_id) e desenha só as RAÍZES aqui — cada nó desenha suas
-      // próprias subpastas recursivamente (renderFolderNode abaixo) e as
-      // embute no CORPO da própria seção (childrenHtml, ver
-      // buildFolderSection/buildFolderSectionFromCards em
-      // db-render-engine.js), em vez de uma lista plana de seções lado a lado.
+      // próprias subpastas recursivamente (renderFolderNode abaixo) e
+      // devolve pra quem a chamou um Map<childId, htmlDaSeção> em vez de uma
+      // string já concatenada — é isso que permite ao pai intercalar cada
+      // subpasta na posição CERTA dentro da ordem combinada de comandos/
+      // notas/subpastas (ver buildFolderItemsCards em db-render-engine.js),
+      // em vez de sempre jogá-las no fim. `rootFolderId` (mesmo valor em
+      // toda a recursão, = o id da própria RAIZ) viaja junto só pra marcar
+      // até onde o drag-and-drop pode mover um item (não pode sair da
+      // árvore, pedido do usuário).
       const tree = buildFolderTree(typeof FOLDERS !== 'undefined' ? FOLDERS : []);
-      const renderFolderNode = (folder, depth) => {
+      const renderFolderNode = (folder, depth, rootFolderId) => {
         const editMode = typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(folder.id);
-        // Subpastas ganham a alça de arrastar (wrapFolderChildForDrag) só
-        // quando ESTA pasta (a mãe) está em modo de edição — reordenar
-        // filhas é uma ação sobre o conteúdo dela, igual ao drag dos cards
-        // (ver wrapCardsForFolderDrag em db-render-engine.js).
-        const childrenHtml = tree.childrenOf(folder.id).map(child => {
-          const childHtml = renderFolderNode(child, depth + 1);
-          return editMode ? wrapFolderChildForDrag(childHtml, folder.id, child.id) : childHtml;
-        }).join('');
-        return buildFolderSection(commandsByFolder.get(folder.id) || [], folder.id, folder.name, values, hasIPs, `${kp}folder${folder.id}`, folder.notes, folder.order, editMode, childrenHtml, depth);
+        const childSectionById = new Map(
+          tree.childrenOf(folder.id).map(child => [child.id, renderFolderNode(child, depth + 1, rootFolderId)])
+        );
+        return buildFolderSection(commandsByFolder.get(folder.id) || [], folder.id, folder.name, values, hasIPs, `${kp}folder${folder.id}`, folder.notes, folder.order, editMode, childSectionById, depth, rootFolderId);
       };
-      folderGroups = tree.roots.map(folder => renderFolderNode(folder, 0)).join('');
+      folderGroups = tree.roots.map(folder => renderFolderNode(folder, 0, folder.id)).join('');
     } else {
       const allFolders = typeof ALL_USERS_FOLDERS !== 'undefined' ? ALL_USERS_FOLDERS : [];
       const targetUsername = scope.startsWith('user:') ? scope.slice('user:'.length) : null;
@@ -307,18 +307,17 @@ async function render() {
           // server/index.js), então buildFolderTree roda sobre userFolders,
           // não sobre `relevant`/`allFolders` inteiro.
           const tree = buildFolderTree(byUser.get(username));
-          const renderFolderNode = (f, depth) => {
+          const renderFolderNode = (f, depth, rootFolderId) => {
             const cmdById = new Map(commands.filter(c => f.command_ids.has(c.id)).map(c => [c.id, c]));
             const notesById = new Map((f.notes || []).map(n => [n.id, n]));
             const editMode = canManage && typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(f.id);
-            const cards = buildFolderItemsCards(cmdById, notesById, f.order, values, hasIPs, isOwn);
-            const childrenHtml = tree.childrenOf(f.id).map(child => {
-              const childHtml = renderFolderNode(child, depth + 1);
-              return editMode ? wrapFolderChildForDrag(childHtml, f.id, child.id) : childHtml;
-            }).join('');
-            return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}scope_${userKey}__folder${f.id}`, canManage, !isOwn, editMode, childrenHtml, depth);
+            const childSectionById = new Map(
+              tree.childrenOf(f.id).map(child => [child.id, renderFolderNode(child, depth + 1, rootFolderId)])
+            );
+            const items = buildFolderItemsCards(cmdById, notesById, childSectionById, f.order, values, hasIPs, isOwn);
+            return buildFolderSectionFromCards(items, f.id, f.name, `${kp}scope_${userKey}__folder${f.id}`, canManage, !isOwn, editMode, depth, rootFolderId);
           };
-          const folderSections = tree.roots.map(f => renderFolderNode(f, 0)).join('');
+          const folderSections = tree.roots.map(f => renderFolderNode(f, 0, f.id)).join('');
           const cardCount = (folderSections.match(/<div class="card"/g) || []).length;
           // Mesma correção do bug "pasta vazia não aparece" (buildFolderSectionFromCards):
           // uma pasta PRÓPRIA vazia ainda tem o botão "+ Add" (só pastas
@@ -339,18 +338,17 @@ async function render() {
         // Subpastas: mesma árvore por dono do ramo "all" acima — `relevant`
         // já é só as pastas dessa pessoa (filtro logo no início do bloco).
         const tree = buildFolderTree(relevant);
-        const renderFolderNode = (f, depth) => {
+        const renderFolderNode = (f, depth, rootFolderId) => {
           const cmdById = new Map(commands.filter(c => f.command_ids.has(c.id)).map(c => [c.id, c]));
           const notesById = new Map((f.notes || []).map(n => [n.id, n]));
           const editMode = canManage && typeof FOLDER_EDIT_MODE !== 'undefined' && FOLDER_EDIT_MODE.has(f.id);
-          const cards = buildFolderItemsCards(cmdById, notesById, f.order, values, hasIPs, isOwn);
-          const childrenHtml = tree.childrenOf(f.id).map(child => {
-            const childHtml = renderFolderNode(child, depth + 1);
-            return editMode ? wrapFolderChildForDrag(childHtml, f.id, child.id) : childHtml;
-          }).join('');
-          return buildFolderSectionFromCards(cards, f.id, f.name, `${kp}scopeuser__folder${f.id}`, canManage, !isOwn, editMode, childrenHtml, depth);
+          const childSectionById = new Map(
+            tree.childrenOf(f.id).map(child => [child.id, renderFolderNode(child, depth + 1, rootFolderId)])
+          );
+          const items = buildFolderItemsCards(cmdById, notesById, childSectionById, f.order, values, hasIPs, isOwn);
+          return buildFolderSectionFromCards(items, f.id, f.name, `${kp}scopeuser__folder${f.id}`, canManage, !isOwn, editMode, depth, rootFolderId);
         };
-        folderGroups = tree.roots.map(f => renderFolderNode(f, 0)).join('');
+        folderGroups = tree.roots.map(f => renderFolderNode(f, 0, f.id)).join('');
       }
     }
     if (!folderGroups) return '';

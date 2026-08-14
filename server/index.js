@@ -212,6 +212,24 @@ const AUDIT_LOG_RETENTION_DAYS = 30;
 // existiria e o INSERT bateria em 409), o nome sozinho identifica a pasta
 // protegida sem precisar de uma coluna extra tipo `is_protected`.
 const FAVORITES_FOLDER_NAME = 'Favorites';
+
+// Sobe a cadeia de parent_id até achar a pasta de TOPO (raiz) da árvore de
+// uma pasta — usado pra validar "arrastar comando/nota/subpasta para dentro
+// ou fora de uma subpasta, mas sem deixar sair da pasta-mãe" (pedido do
+// usuário): tanto a origem quanto o destino de um "mover" (PUT
+// /api/folders/:id/move, PUT /api/notes/:id/move abaixo) precisam resolver
+// pra MESMA raiz. Limite de 100 saltos só por segurança (nunca deveria
+// ciclar de verdade — POST /api/folders já valida posse do pai na criação,
+// e o próprio PUT /api/folders/:id/move abaixo recusa criar um ciclo).
+async function getRootAncestorId(folderId) {
+  let current = folderId;
+  for (let i = 0; i < 100; i++) {
+    const { rows } = await pool.query('SELECT parent_id FROM folders WHERE id = $1', [current]);
+    if (!rows.length || rows[0].parent_id === null) return current;
+    current = rows[0].parent_id;
+  }
+  return current;
+}
 async function logAudit(username, action, entityType, entityId, entityName, details) {
   try {
     await pool.query(
@@ -768,13 +786,16 @@ app.get('/api/me', async (req, res) => {
 // usuário que está fazendo a requisição.
 // ════════════════════════════════════════════════
 
-// Junta folder_commands + notes de um conjunto de pastas num único array
-// `order` por pasta — {type:'command'|'note', id} na sequência de
-// sort_order (a MESMA escala numérica pras duas tabelas dentro de uma
-// pasta, ver comentário em schema.sql) — é assim que o front-end sabe
-// intercalar comandos e notas na ordem que o usuário definiu, em vez de
-// sempre mostrar os comandos primeiro. `notesById` sai já pronto pra virar
-// o campo `notes` de cada pasta na resposta.
+// Junta folder_commands + notes + SUBPASTAS DIRETAS de um conjunto de
+// pastas num único array `order` por pasta — {type:'command'|'note'|
+// 'folder', id} na sequência de sort_order (a MESMA escala numérica pras
+// TRÊS fontes dentro de uma pasta — ver comentário em schema.sql e em
+// POST/PUT /api/folders/:id/reorder abaixo) — é assim que o front-end sabe
+// intercalar comandos, notas E subpastas na ordem que o usuário definiu
+// (pedido do usuário: "poder reordenar as subpastas entre os comandos e
+// notas"), em vez de sempre mostrar as subpastas separadas no fim.
+// `notesById` sai já pronto pra virar o campo `notes` de cada pasta na
+// resposta.
 async function loadFolderOrderAndNotes(folderIds) {
   if (!folderIds.length) return { orderByFolder: new Map(), notesByFolder: new Map() };
   const [itemsQ, notesQ] = await Promise.all([
@@ -782,6 +803,8 @@ async function loadFolderOrderAndNotes(folderIds) {
       `SELECT folder_id, command_id::text AS item_id, sort_order, 'command' AS item_type FROM folder_commands WHERE folder_id = ANY($1)
        UNION ALL
        SELECT folder_id, id::text AS item_id, sort_order, 'note' AS item_type FROM notes WHERE folder_id = ANY($1)
+       UNION ALL
+       SELECT parent_id AS folder_id, id::text AS item_id, sort_order, 'folder' AS item_type FROM folders WHERE parent_id = ANY($1)
        ORDER BY folder_id, sort_order, item_type`,
       [folderIds]
     ),
@@ -796,7 +819,7 @@ async function loadFolderOrderAndNotes(folderIds) {
     if (!orderByFolder.has(r.folder_id)) orderByFolder.set(r.folder_id, []);
     orderByFolder.get(r.folder_id).push({
       type: r.item_type,
-      id: r.item_type === 'note' ? Number(r.item_id) : r.item_id,
+      id: r.item_type === 'command' ? r.item_id : Number(r.item_id),
     });
   });
   const notesByFolder = new Map();
@@ -893,17 +916,30 @@ app.post('/api/folders', async (req, res) => {
       return res.status(400).json({ error: 'validation_error', message: '"parent_id" must be an integer' });
     }
     const username = getCurrentUsername(req);
-    // Nova subpasta entra no TOPO da pasta-mãe (pedido do usuário) — sort_order
-    // menor que a menor já existente entre as irmãs, em vez do padrão 0 (que a
-    // deixaria misturada/alfabética junto das demais). Só se aplica a
-    // subpastas de verdade (parentId != null); pasta de topo continua com
-    // sort_order 0 (ordem de raiz é Favorites-primeiro + alfabética, decidida
-    // em buildFolderTree, js/folders.js — não depende de sort_order).
+    // Nova subpasta entra logo ABAIXO da pasta-mãe (pedido do usuário: "a
+    // posição inicial da subpasta deve ser logo abaixo da pasta pai") — ou
+    // seja, no TOPO da lista combinada de itens da pasta-mãe (comandos +
+    // notas + subpastas, MESMA escala de sort_order — ver
+    // loadFolderOrderAndNotes acima), não só entre as demais subpastas.
+    // sort_order menor que o menor já existente entre QUALQUER um dos três
+    // tipos, em vez do padrão 0. Só se aplica a subpastas de verdade
+    // (parentId != null); pasta de topo continua com sort_order 0 (ordem de
+    // raiz é Favorites-primeiro + alfabética, decidida em buildFolderTree,
+    // js/folders.js — não depende de sort_order).
     let sortOrder = 0;
     if (parentId !== null) {
       const parent = await pool.query('SELECT id FROM folders WHERE id = $1 AND username = $2', [parentId, username]);
       if (!parent.rows.length) return res.status(404).json({ error: 'not_found', message: `Parent folder '${parentId}' not found` });
-      const minRes = await pool.query('SELECT COALESCE(MIN(sort_order), 0) AS m FROM folders WHERE parent_id = $1', [parentId]);
+      const minRes = await pool.query(
+        `SELECT COALESCE(MIN(sort_order), 0) AS m FROM (
+           SELECT sort_order FROM folder_commands WHERE folder_id = $1
+           UNION ALL
+           SELECT sort_order FROM notes WHERE folder_id = $1
+           UNION ALL
+           SELECT sort_order FROM folders WHERE parent_id = $1
+         ) combined`,
+        [parentId]
+      );
       sortOrder = minRes.rows[0].m - 1;
     }
     const { rows } = await pool.query(
@@ -952,6 +988,77 @@ app.put('/api/folders/:id', async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'conflict', message: `A folder named "${name}" already exists for that folder's owner` });
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// Move (reparenta) uma SUBPASTA para dentro de outra pasta do mesmo dono —
+// pedido do usuário: "pode arrastar ... subpastas para dentro e fora da
+// subpasta. A subpastas e seus itens não podem sair da pasta pai". Só
+// aceita mover uma subpasta que JÁ TEM um pai (parent_id não nulo) — pastas
+// de topo não usam esta rota (não há como arrastá-las na UI, ver
+// wrapItemForFolderDrag em db-render-engine.js, só usado dentro do corpo de
+// uma pasta-mãe). `parent_id` no body é o novo pai (obrigatório, precisa
+// existir e ser do mesmo usuário). Duas validações extras, além da posse:
+// (1) não pode virar pai de si mesma nem de um dos próprios descendentes
+// (cicraria um ciclo na árvore — checado subindo a cadeia de parent_id do
+// novo pai até achar :id ou a raiz); (2) a raiz (topo da árvore) do novo pai
+// tem que ser a MESMA raiz de onde a subpasta já estava — é isso que
+// impede o usuário de arrastar uma subpasta (e os itens dela) pra fora da
+// pasta-mãe original, mesmo que arraste para outra pasta seguramente
+// própria (ver getRootAncestorId acima). sort_order do novo pai é só um
+// valor provisório (MAX+1) — o front-end sempre manda um PUT
+// /api/folders/:novoPai/reorder logo em seguida com a posição exata em que
+// o usuário soltou (ver moveFolderItem em js/folders.js).
+app.put('/api/folders/:id/move', async (req, res) => {
+  try {
+    const username = getCurrentUsername(req);
+    const { id } = req.params;
+    const newParentId = Number(req.body && req.body.parent_id);
+    if (!Number.isInteger(newParentId)) {
+      return res.status(400).json({ error: 'validation_error', message: '"parent_id" must be an integer' });
+    }
+    const folderRes = await pool.query('SELECT id, parent_id, username FROM folders WHERE id = $1', [id]);
+    if (!folderRes.rows.length || folderRes.rows[0].username !== username) {
+      return res.status(404).json({ error: 'not_found', message: `Folder '${id}' not found` });
+    }
+    if (folderRes.rows[0].parent_id === null) {
+      return res.status(400).json({ error: 'validation_error', message: 'Only subfolders (folders with a parent) can be moved this way' });
+    }
+    const newParentRes = await pool.query('SELECT id, username FROM folders WHERE id = $1', [newParentId]);
+    if (!newParentRes.rows.length || newParentRes.rows[0].username !== username) {
+      return res.status(404).json({ error: 'not_found', message: `Parent folder '${newParentId}' not found` });
+    }
+    if (newParentId === Number(id)) {
+      return res.status(400).json({ error: 'validation_error', message: 'A folder cannot be its own parent' });
+    }
+    // Ciclo: o novo pai não pode ser um DESCENDENTE de :id (senão :id
+    // passaria a ser ancestral de si mesma através dele).
+    let cursor = newParentId;
+    for (let i = 0; i < 100; i++) {
+      if (cursor === Number(id)) {
+        return res.status(400).json({ error: 'validation_error', message: 'Cannot move a folder into one of its own subfolders' });
+      }
+      const r = await pool.query('SELECT parent_id FROM folders WHERE id = $1', [cursor]);
+      if (!r.rows.length || r.rows[0].parent_id === null) break;
+      cursor = r.rows[0].parent_id;
+    }
+    const [oldRoot, newRoot] = await Promise.all([
+      getRootAncestorId(folderRes.rows[0].parent_id),
+      getRootAncestorId(newParentId),
+    ]);
+    if (oldRoot !== newRoot) {
+      return res.status(400).json({ error: 'validation_error', message: 'Cannot move a subfolder outside of its top-level parent folder' });
+    }
+    const maxRes = await pool.query('SELECT COALESCE(MAX(sort_order), -1) AS m FROM folders WHERE parent_id = $1', [newParentId]);
+    const { rows } = await pool.query(
+      'UPDATE folders SET parent_id = $1, sort_order = $2 WHERE id = $3 AND username = $4 RETURNING id, name, sort_order, parent_id',
+      [newParentId, maxRes.rows[0].m + 1, id, username]
+    );
+    await logAudit(username, 'update', 'folder', String(rows[0].id), rows[0].name, `Moved into folder #${newParentId}`);
+    res.json(rows[0]);
+  } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'internal_error', message: err.message });
   }
@@ -1043,14 +1150,13 @@ app.delete('/api/folders/:id/commands/:commandId', async (req, res) => {
 // estendido pela task Notes e depois por subpastas) — body
 // { order: [{type, id}, ...] } é a lista COMPLETA na nova ordem desejada
 // (type: 'command'|'note'|'folder'); o índice de cada item no array vira o
-// novo sort_order. 'command'/'note' compartilham a MESMA escala (ver
-// schema.sql), o que é o que permite intercalar as duas — 'folder'
-// (subpastas diretas desta pasta, pedido do usuário: "permitir ordenar as
-// subpastas igual os comandos com clica e arrasta") usa a escala PRÓPRIA de
-// `folders.sort_order`, independente, então o front-end manda só as
-// subpastas nesse caso (não precisa misturar com comandos/notas no mesmo
-// array — ver reorderSubfolders em js/folders.js). 404 se a pasta não
-// existir/não for do usuário (mesmo tratamento das outras rotas de folder).
+// novo sort_order. 'command'/'note'/'folder' compartilham a MESMA escala
+// dentro de uma pasta (ver loadFolderOrderAndNotes acima e schema.sql) —
+// pedido do usuário: "poder reordenar as subpastas entre os comandos e
+// notas" — então o front-end manda a lista COMBINADA dos três tipos numa
+// única chamada (ver persistFolderContainerOrder/reorderFolderItems em
+// js/folders.js). 404 se a pasta não existir/não for do usuário (mesmo
+// tratamento das outras rotas de folder).
 // Mantém compatibilidade com o formato antigo { command_ids: [...] } (só
 // comandos) — front-ends antigos ou chamadas externas via API key continuam
 // funcionando. IDs que não pertencerem de fato à pasta (ou, no caso de
@@ -1272,6 +1378,61 @@ app.put('/api/notes/:id', async (req, res) => {
     // Sem diff de conteúdo (description é HTML rico, pode ser longo — ver
     // sanitizeNoteHtml acima) — só registra que a nota foi editada.
     await logAudit(username, 'update', 'note', String(rows[0].id), title || '(untitled)');
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// Move uma nota para outra pasta (própria) — usado pelo drag-and-drop de
+// "arrastar para dentro/fora de uma subpasta" (pedido do usuário). Mesma
+// regra de raiz do PUT /api/folders/:id/move acima: só deixa mover entre a
+// pasta-mãe e suas subpastas (ou entre subpastas irmãs), nunca pra fora da
+// árvore de topo onde a nota já estava — senão o usuário poderia "vazar"
+// uma nota de uma pasta pra outra completamente sem relação por engano
+// durante um drag. sort_order fica provisório (MAX+1); o front-end sempre
+// manda um PUT /api/folders/:novaPasta/reorder logo em seguida com a
+// posição exata (ver moveFolderItem em js/folders.js).
+app.put('/api/notes/:id/move', async (req, res) => {
+  try {
+    const username = getCurrentUsername(req);
+    const newFolderId = Number(req.body && req.body.folder_id);
+    if (!Number.isInteger(newFolderId)) {
+      return res.status(400).json({ error: 'validation_error', message: '"folder_id" must be an integer' });
+    }
+    const noteRes = await pool.query('SELECT id, folder_id, username FROM notes WHERE id = $1', [req.params.id]);
+    if (!noteRes.rows.length || noteRes.rows[0].username !== username) {
+      return res.status(404).json({ error: 'not_found', message: `Note '${req.params.id}' not found` });
+    }
+    const newFolderRes = await pool.query('SELECT id, username FROM folders WHERE id = $1', [newFolderId]);
+    if (!newFolderRes.rows.length || newFolderRes.rows[0].username !== username) {
+      return res.status(404).json({ error: 'not_found', message: `Folder '${newFolderId}' not found` });
+    }
+    const [oldRoot, newRoot] = await Promise.all([
+      getRootAncestorId(noteRes.rows[0].folder_id),
+      getRootAncestorId(newFolderId),
+    ]);
+    if (oldRoot !== newRoot) {
+      return res.status(400).json({ error: 'validation_error', message: 'Cannot move a note outside of its top-level parent folder' });
+    }
+    const maxRes = await pool.query(
+      `SELECT COALESCE(MAX(sort_order), -1) AS m FROM (
+         SELECT sort_order FROM folder_commands WHERE folder_id = $1
+         UNION ALL
+         SELECT sort_order FROM notes WHERE folder_id = $1
+         UNION ALL
+         SELECT sort_order FROM folders WHERE parent_id = $1
+       ) combined`,
+      [newFolderId]
+    );
+    const { rows } = await pool.query(
+      `UPDATE notes SET folder_id = $1, sort_order = $2, updated_at = NOW()
+       WHERE id = $3 AND username = $4
+       RETURNING id, folder_id, title, description, sort_order, created_at, updated_at`,
+      [newFolderId, maxRes.rows[0].m + 1, req.params.id, username]
+    );
+    await logAudit(username, 'update', 'note', String(rows[0].id), rows[0].title || '(untitled)', `Moved into folder #${newFolderId}`);
     res.json(rows[0]);
   } catch (err) {
     console.error(err);

@@ -39,8 +39,8 @@ let FOLDERS = [];
 // essa constante, então repetimos o literal), e as demais em ordem
 // alfabética — independente de sort_order, que pra pastas de topo nem é
 // gerenciado pelo usuário. Já as SUBPASTAS (qualquer grupo com pid != null)
-// usam sort_order (ordem manual, arraste-e-solte — ver _ffArmDrag/
-// reorderSubfolders abaixo, e PUT /api/folders/:id/reorder com
+// usam sort_order (ordem manual, arraste-e-solte — ver _fldArmDrag/
+// persistFolderContainerOrder abaixo, e PUT /api/folders/:id/reorder com
 // type:'folder' em server/index.js): uma subpasta nova entra com
 // sort_order NEGATIVO (MIN-1, ver POST /api/folders) pra aparecer no topo
 // da pasta-mãe, e o usuário pode reordenar as demais livremente depois. O
@@ -573,8 +573,8 @@ function deleteFolderConfirm(id, name, ev) {
 // ── Modo de edição da pasta (task #461, consolidado na task #463) ──
 // Um único botão "⚙ Edit folder" no cabeçalho liga/desliga esse modo por
 // pasta — SÓ dentro dele é que aparecem Renomear (✎)/Excluir (✕) e os
-// cards ficam arrastáveis (embrulhados em .folder-card-row, ver
-// wrapCardsForFolderDrag em db-render-engine.js). Fora desse modo, mesmo
+// itens (cards E subpastas) ficam arrastáveis (embrulhados em
+// .folder-item-row, ver wrapItemForFolderDrag em db-render-engine.js). Fora desse modo, mesmo
 // numa pasta própria, a seção mostra só os cards + os botões "+ Note"/"⚙
 // Edit" sempre visíveis — renomear/excluir/reordenar por acidente (rolar a
 // tela, clicar num card) não deveria ser possível sem entrar deliberadamente
@@ -592,77 +592,177 @@ function toggleFolderEditMode(folderId, ev) {
   render();
 }
 
-// ── Reordenar os comandos DENTRO de uma pasta (task #458) ──
-// Drag-to-reorder nos cards de uma seção de pasta — mesmo padrão de
-// _ceArmLineDrag em js/command-editor.js (linhas do editor de comandos):
-// `draggable` só é setado no mousedown do handle (⠿, ver
-// wrapCardsForFolderDrag em db-render-engine.js), não na row inteira, pra
-// não interferir com cliques nos botões/links dentro do card. Só existe
-// handle em pastas do PRÓPRIO usuário (withActions=true, ver
-// buildFolderSectionFromCards) — a pasta de outro usuário (Group by "User
-// folders") é só leitura, e o backend recusaria a requisição de qualquer
-// forma (PUT /api/folders/:id/reorder só aceita WHERE username = usuário
-// atual).
-function _fcArmDrag(handle) {
-  const row = handle.closest('.folder-card-row');
+// ── Reordenar/mover comandos, notas E subpastas dentro da árvore de uma
+// pasta (task #458, estendida) ── pedido do usuário: "poder reordenar as
+// subpastas entre os comandos e notas" e "pode arrastar comandos, notas e
+// subpastas para dentro e fora da subpasta. A subpastas e seus itens não
+// podem sair da pasta pai". Um único mecanismo substitui os dois que
+// existiam antes (um pra cards, outro pra subpastas) — todo item (card OU
+// seção de subpasta inteira) vira um `.folder-item-row` (ver
+// wrapItemForFolderDrag em db-render-engine.js) com `data-container-id`
+// (pasta que o contém AGORA — muda se o item for movido), `data-item-type`
+// ('command'|'note'|'folder'), `data-item-id` e `data-root-folder-id` (raiz
+// da árvore inteira, NUNCA muda — usado só pra bloquear soltar fora dela).
+// `draggable` só é setado no mousedown do handle (⠿), não na row inteira,
+// pra não interferir com cliques nos botões/links dentro do card. Só existe
+// handle em pastas do PRÓPRIO usuário — a pasta de outro usuário (Group by
+// "User folders") é só leitura, e o backend recusaria a requisição de
+// qualquer forma.
+function _fldArmDrag(handle) {
+  const row = handle.closest('.folder-item-row');
   if (row) row.setAttribute('draggable', 'true');
 }
 document.addEventListener('mouseup', () => {
-  document.querySelectorAll('.folder-card-row[draggable="true"]').forEach(r => r.removeAttribute('draggable'));
+  document.querySelectorAll('.folder-item-row[draggable="true"]').forEach(r => r.removeAttribute('draggable'));
 });
-let _fcDragRow = null;
+let _fldDragRow = null;
+let _fldOriginContainerId = null;
+let _fldTargetContainerId = null;
 document.addEventListener('dragstart', ev => {
-  const row = ev.target.closest && ev.target.closest('.folder-card-row');
+  const row = ev.target.closest && ev.target.closest('.folder-item-row');
   if (!row || !row.hasAttribute('draggable')) return;
-  _fcDragRow = row;
+  _fldDragRow = row;
+  _fldOriginContainerId = row.dataset.containerId;
+  _fldTargetContainerId = row.dataset.containerId;
   row.classList.add('dragging');
   ev.dataTransfer.effectAllowed = 'move';
   ev.dataTransfer.setData('text/plain', ''); // exigido pelo Firefox para permitir o drag
 });
 document.addEventListener('dragover', ev => {
-  if (!_fcDragRow) return;
-  const overRow = ev.target.closest && ev.target.closest('.folder-card-row');
-  // Só reordena dentro da MESMA pasta (data-folder-id) — arrastar um card
-  // pra dentro da seção de outra pasta na mesma tela (ex.: um comando que
-  // está em duas pastas, cada uma com sua seção) não move nada entre elas.
-  if (!overRow || overRow === _fcDragRow || overRow.dataset.folderId !== _fcDragRow.dataset.folderId) return;
+  if (!_fldDragRow) return;
+  const rootId = _fldDragRow.dataset.rootFolderId;
+  const draggedType = _fldDragRow.dataset.itemType;
+  const draggedId = _fldDragRow.dataset.itemId;
+
+  // Alvo A (mais específico): o CABEÇALHO de uma pasta (a própria pasta-mãe
+  // raiz OU qualquer subpasta visível na tela) — soltar aqui manda o item
+  // pra DENTRO dela, no fim da lista — é o jeito de mirar uma subpasta
+  // vazia/recolhida (ou a própria raiz) sem precisar acertar uma row
+  // específica dentro dela.
+  const header = ev.target.closest && ev.target.closest('[data-folder-header-id]');
+  if (header) {
+    const targetFolderId = header.dataset.folderHeaderId;
+    const targetSection = header.closest('[data-folder-id]');
+    if (!targetSection || targetSection.dataset.rootFolderId !== rootId) return; // fora da árvore — recusa
+    if (draggedType === 'folder' && String(targetFolderId) === String(draggedId)) return; // não entra em si mesma
+    if (draggedType === 'folder' && _fldDragRow.contains(header)) return; // nem em uma de suas próprias descendentes (cicraria)
+    const bodyEl = targetSection.querySelector(`:scope > .sec-body[data-folder-body-id="${targetFolderId}"]`);
+    if (!bodyEl || bodyEl.contains(_fldDragRow)) return; // já está lá dentro — nada a fazer
+    ev.preventDefault();
+    bodyEl.appendChild(_fldDragRow);
+    _fldTargetContainerId = targetFolderId;
+    return;
+  }
+
+  // Alvo B: outra row — reordena por posição (antes/depois dela). Pode ser
+  // da MESMA pasta (reorder simples) ou de OUTRA pasta dentro da MESMA
+  // árvore (move) — `overRow.dataset.containerId` vira o novo container.
+  const overRow = ev.target.closest && ev.target.closest('.folder-item-row');
+  if (!overRow || overRow === _fldDragRow || _fldDragRow.contains(overRow)) return;
+  if (overRow.dataset.rootFolderId !== rootId) return; // fora da árvore — recusa
   ev.preventDefault();
   const rect = overRow.getBoundingClientRect();
   const before = (ev.clientY - rect.top) < rect.height / 2;
-  overRow.parentElement.insertBefore(_fcDragRow, before ? overRow : overRow.nextSibling);
+  overRow.parentElement.insertBefore(_fldDragRow, before ? overRow : overRow.nextSibling);
+  _fldTargetContainerId = overRow.dataset.containerId;
 });
-document.addEventListener('drop', ev => { if (_fcDragRow) ev.preventDefault(); });
+document.addEventListener('drop', ev => { if (_fldDragRow) ev.preventDefault(); });
 document.addEventListener('dragend', ev => {
-  const row = ev.target.closest && ev.target.closest('.folder-card-row');
+  const row = _fldDragRow;
   if (row) {
     row.classList.remove('dragging');
     row.removeAttribute('draggable');
-    const folderId = Number(row.dataset.folderId);
-    const container = row.parentElement;
-    if (folderId && container) {
-      // Cada row embrulha OU um card de comando (data-cmd-id) OU um card de
-      // nota (data-note-id, ver buildNoteCardHtml em db-render-engine.js) —
-      // lê qualquer um dos dois pra remontar o array combinado {type,id} na
-      // ordem em que ficaram no DOM depois do drag.
-      const orderedTagged = [...container.querySelectorAll(`.folder-card-row[data-folder-id="${folderId}"]`)]
-        .map(r => {
-          const card = r.querySelector('.card');
-          if (!card) return null;
-          if (card.dataset.noteId) return { type: 'note', id: Number(card.dataset.noteId) };
-          if (card.dataset.cmdId) return { type: 'command', id: card.dataset.cmdId };
-          return null;
-        })
-        .filter(Boolean);
-      if (orderedTagged.length) reorderFolderItems(folderId, orderedTagged);
+    const newContainerId = Number(_fldTargetContainerId || row.dataset.containerId);
+    const oldContainerId = Number(_fldOriginContainerId);
+    const itemType = row.dataset.itemType;
+    const rawId = row.dataset.itemId;
+    const itemId = itemType === 'command' ? rawId : Number(rawId);
+
+    if (!newContainerId || newContainerId === oldContainerId) {
+      // Reorder simples: mesma pasta, só mudou de posição entre os irmãos.
+      persistFolderContainerOrder(oldContainerId || newContainerId);
+    } else {
+      // Mover pra OUTRA pasta (dentro/fora de uma subpasta) — pedido do
+      // usuário. Captura a ordem final do DESTINO a partir do DOM AGORA
+      // (antes de qualquer reload substituir esses elementos) — é
+      // exatamente onde o usuário soltou. Depois muda a membership/parent
+      // de verdade no backend, recarrega FOLDERS/ALL_USERS_FOLDERS (fonte
+      // da verdade, evita reimplementar a cirurgia de estado local à mão) e
+      // só então persiste essa ordem — server/index.js já garante que o
+      // "mover" nunca sai da árvore de topo (getRootAncestorId), então o
+      // pior caso de uma tentativa inválida é o item simplesmente voltar
+      // pro lugar de origem depois do reload.
+      const orderedTagged = _fldReadContainerOrderFromDom(newContainerId);
+      _fldMoveItemAcrossFolders(itemType, itemId, oldContainerId, newContainerId)
+        .catch(e => console.warn('Falha ao mover item entre pastas', e))
+        .then(() => Promise.all([
+          reloadFoldersFromServer(),
+          typeof reloadAllUsersFoldersFromServer === 'function' ? reloadAllUsersFoldersFromServer() : Promise.resolve(),
+        ]))
+        .then(() => {
+          if (orderedTagged.length) reorderFolderItems(newContainerId, orderedTagged);
+          render();
+        });
     }
   }
-  _fcDragRow = null;
+  _fldDragRow = null;
+  _fldOriginContainerId = null;
+  _fldTargetContainerId = null;
 });
-// Persiste a nova ordem (comandos E notas — task Notes) — otimista (atualiza
-// FOLDERS/ALL_USERS_FOLDERS local na hora; a UI já está com a ordem certa,
-// já que veio de um reorder no próprio DOM) + PUT em segundo plano. Não
-// chama render() — reconstruir o HTML aqui destruiria a própria row que
-// acabou de ser soltada. `orderedTagged` é um array de {type, id}.
+// Lê a ordem ATUAL (pós-drag) dos itens diretos do corpo de uma pasta a
+// partir do DOM — `:scope >` importa aqui: sem ele, pegaria também os itens
+// de uma subpasta ANINHADA dentro de um dos irmãos (uma subpasta é ela
+// mesma embrulhada num .folder-item-row, cujo corpo interno tem seus
+// PRÓPRIOS .folder-item-row — sem escopar, ambos os níveis bateriam no
+// mesmo seletor).
+function _fldReadContainerOrderFromDom(containerId) {
+  const container = document.querySelector(`.sec-body[data-folder-body-id="${containerId}"]`);
+  if (!container) return [];
+  return [...container.querySelectorAll(':scope > .folder-item-row')]
+    .map(r => {
+      const type = r.dataset.itemType;
+      const rawId = r.dataset.itemId;
+      if (!type) return null;
+      return { type, id: type === 'command' ? rawId : Number(rawId) };
+    })
+    .filter(Boolean);
+}
+function persistFolderContainerOrder(containerId) {
+  const orderedTagged = _fldReadContainerOrderFromDom(containerId);
+  if (orderedTagged.length) reorderFolderItems(containerId, orderedTagged);
+}
+// Muda de verdade, no backend, a "casa" de um item — comando (membership
+// N:N, ver folder_commands em schema.sql: "mover" = tirar da origem e pôr
+// no destino), nota (folder_id único, PUT /api/notes/:id/move) ou subpasta
+// (parent_id, PUT /api/folders/:id/move). Os dois últimos endpoints
+// recusam (400) se o destino estiver fora da árvore de topo de onde o item
+// já estava — ver getRootAncestorId em server/index.js.
+function _fldMoveItemAcrossFolders(itemType, itemId, oldContainerId, newContainerId) {
+  if (itemType === 'note') {
+    return fetch(`/api/notes/${itemId}/move`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder_id: newContainerId }),
+    }).then(res => { if (!res.ok) throw new Error('move note failed: ' + res.status); });
+  }
+  if (itemType === 'folder') {
+    return fetch(`/api/folders/${itemId}/move`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ parent_id: newContainerId }),
+    }).then(res => { if (!res.ok) throw new Error('move folder failed: ' + res.status); });
+  }
+  return Promise.all([
+    fetch(`/api/folders/${newContainerId}/commands/${encodeURIComponent(itemId)}`, { method: 'POST' }),
+    fetch(`/api/folders/${oldContainerId}/commands/${encodeURIComponent(itemId)}`, { method: 'DELETE' }),
+  ]).then(([addRes, delRes]) => {
+    if (!addRes.ok) throw new Error('add command to folder failed: ' + addRes.status);
+    if (!delRes.ok) throw new Error('remove command from folder failed: ' + delRes.status);
+  });
+}
+// Persiste a nova ordem (comandos, notas E subpastas, task Notes/subpastas)
+// — otimista (atualiza FOLDERS/ALL_USERS_FOLDERS local na hora; a UI já
+// está com a ordem certa, já que veio de um reorder no próprio DOM) + PUT
+// em segundo plano. Não chama render() — reconstruir o HTML aqui destruiria
+// a própria row que acabou de ser soltada (só o caminho de "mover entre
+// pastas", acima, chama render() depois — nesse caso o reload já trocou o
+// DOM de qualquer forma). `orderedTagged` é um array de {type, id}.
 function reorderFolderItems(folderId, orderedTagged) {
   const folder = FOLDERS.find(f => f.id === folderId);
   if (folder) folder.order = orderedTagged.slice();
@@ -672,81 +772,6 @@ function reorderFolderItems(folderId, orderedTagged) {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: orderedTagged }),
   }).catch(e => {
     console.warn('Falha ao salvar a nova ordem da pasta no servidor (mantida localmente)', e);
-  });
-}
-
-// ── Reordenar SUBPASTAS dentro da pasta-mãe por clicar-e-arrastar ──
-// Mesmo padrão de _fcArmDrag/reorderFolderItems acima, só que embrulhando a
-// seção INTEIRA de uma subpasta (cabeçalho + corpo, incluindo suas próprias
-// subpastas aninhadas) em vez de um único .card — ver wrapFolderChildForDrag
-// em db-render-engine.js, chamado por renderFolderNode em js/render.js uma
-// vez por filho, só quando a pasta-MÃE está em modo de edição (reordenar
-// filhas é uma ação sobre o conteúdo da pasta-mãe, não da subpasta em si).
-// `data-parent-folder-id` escopa o reorder só entre irmãs (mesma pasta-mãe);
-// `data-child-folder-id` identifica a subpasta arrastada.
-function _ffArmDrag(handle) {
-  const row = handle.closest('.folder-section-row');
-  if (row) row.setAttribute('draggable', 'true');
-}
-document.addEventListener('mouseup', () => {
-  document.querySelectorAll('.folder-section-row[draggable="true"]').forEach(r => r.removeAttribute('draggable'));
-});
-let _ffDragRow = null;
-document.addEventListener('dragstart', ev => {
-  const row = ev.target.closest && ev.target.closest('.folder-section-row');
-  if (!row || !row.hasAttribute('draggable')) return;
-  _ffDragRow = row;
-  row.classList.add('dragging');
-  ev.dataTransfer.effectAllowed = 'move';
-  ev.dataTransfer.setData('text/plain', ''); // exigido pelo Firefox para permitir o drag
-});
-document.addEventListener('dragover', ev => {
-  if (!_ffDragRow) return;
-  const overRow = ev.target.closest && ev.target.closest('.folder-section-row');
-  // Só reordena entre IRMÃS de verdade (mesma pasta-mãe, data-parent-folder-id)
-  // — evita que soltar sobre uma subpasta ANINHADA mais fundo (netos, com um
-  // data-parent-folder-id diferente: o da subpasta arrastada, não o da
-  // pasta-avó) mova algo pro nível errado.
-  if (!overRow || overRow === _ffDragRow || overRow.dataset.parentFolderId !== _ffDragRow.dataset.parentFolderId) return;
-  ev.preventDefault();
-  const rect = overRow.getBoundingClientRect();
-  const before = (ev.clientY - rect.top) < rect.height / 2;
-  overRow.parentElement.insertBefore(_ffDragRow, before ? overRow : overRow.nextSibling);
-});
-document.addEventListener('drop', ev => { if (_ffDragRow) ev.preventDefault(); });
-document.addEventListener('dragend', ev => {
-  const row = ev.target.closest && ev.target.closest('.folder-section-row');
-  if (row) {
-    row.classList.remove('dragging');
-    row.removeAttribute('draggable');
-    const parentFolderId = Number(row.dataset.parentFolderId);
-    const container = row.parentElement;
-    if (parentFolderId && container) {
-      const orderedChildIds = [...container.querySelectorAll(`.folder-section-row[data-parent-folder-id="${parentFolderId}"]`)]
-        .map(r => Number(r.dataset.childFolderId))
-        .filter(Boolean);
-      if (orderedChildIds.length) reorderSubfolders(parentFolderId, orderedChildIds);
-    }
-  }
-  _ffDragRow = null;
-});
-// Persiste a nova ordem das subpastas — otimista (atualiza FOLDERS/
-// ALL_USERS_FOLDERS local na hora) + PUT em segundo plano (type:'folder',
-// escala PRÓPRIA de folders.sort_order — ver server/index.js). Não chama
-// render() pelo mesmo motivo de reorderFolderItems acima: destruiria a
-// própria seção que acabou de ser solta.
-function reorderSubfolders(parentFolderId, orderedChildIds) {
-  orderedChildIds.forEach((childId, i) => {
-    const f = FOLDERS.find(x => x.id === childId);
-    if (f) f.sort_order = i;
-    const g = ALL_USERS_FOLDERS.find(x => x.id === childId);
-    if (g) g.sort_order = i;
-  });
-  fetch(`/api/folders/${parentFolderId}/reorder`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ order: orderedChildIds.map(id => ({ type: 'folder', id })) }),
-  }).catch(e => {
-    console.warn('Falha ao salvar a nova ordem das subpastas no servidor (mantida localmente)', e);
   });
 }
 
