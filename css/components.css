@@ -144,7 +144,12 @@
   display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--bdr);
   justify-content: space-between; align-items: center; flex-shrink: 0;
 }
-.wiz-required-note { font-size: 10px; color: var(--dim); white-space: nowrap; }
+/* margin-left:auto (não space-between no .modal-foot, que é compartilhado com
+   vários outros modais) empurra só esta nota pro canto direito, deixando os
+   botões (Delete/Cancel/Back/Next/Save) sempre agrupados à esquerda no editor
+   de comandos — ver override justify-content:flex-start no próprio modal-foot
+   em index.html. */
+.wiz-required-note { font-size: 10px; color: var(--dim); white-space: nowrap; margin-left: auto; }
 .btn {
   padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 700;
   cursor: pointer; border: 1px solid var(--bdr); background: var(--surf2); color: var(--text);

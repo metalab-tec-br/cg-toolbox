@@ -102,11 +102,12 @@ function _ceRenderWizardState() {
   // Delete só aparece no último passo (Command lines) — nos passos anteriores
   // fica oculto mesmo que o usuário tenha permissão (CMD_EDITOR_CAN_DELETE),
   // para não competir visualmente com Next/Cancel antes da revisão final.
-  // Usa visibility (não display) para manter o espaço reservado no rodapé —
-  // assim o grupo Cancel/Back/Next/Save não muda de posição conforme o
-  // Delete aparece/some (ex.: New command nunca o mostra, Edit só no passo 3).
-  _ce('cmdEditorDeleteBtn').style.visibility =
-    (CMD_EDITOR_CAN_DELETE && CMD_WIZ_STEP === CMD_WIZ_TOTAL_STEPS) ? 'visible' : 'hidden';
+  // display (não visibility): junto com o justify-content:flex-start do
+  // modal-foot (ver index.html), isso mantém Delete/Cancel/Back/Next/Save
+  // sempre agrupados à esquerda — quando Delete some, o grupo simplesmente
+  // ocupa o espaço dele, igual à tela de New command (que nunca o mostra).
+  _ce('cmdEditorDeleteBtn').style.display =
+    (CMD_EDITOR_CAN_DELETE && CMD_WIZ_STEP === CMD_WIZ_TOTAL_STEPS) ? '' : 'none';
 }
 
 // Jump to an already-unlocked step (indicator click) — no-op if the target

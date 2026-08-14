@@ -1187,12 +1187,15 @@
         </div>
       </div>
     </div>
-    <div class="modal-foot">
-      <!-- visibility (não display) para não mudar a posição do grupo
-           Cancel/Back/Next/Save quando o Delete está oculto (New command,
-           ou steps 1-2 do Edit) — ver _ceRenderWizardState em
-           js/command-editor.js. -->
-      <button class="btn btn-ghost" id="cmdEditorDeleteBtn" style="visibility:hidden;color:var(--red);" onclick="cmdEditorDelete()">🗑️ Delete command</button>
+    <!-- justify-content:flex-start (em vez do space-between padrão de
+         .modal-foot, compartilhado com vários outros modais) mantém
+         Delete/Cancel/Back/Next/Save sempre agrupados à esquerda — igual ao
+         layout histórico da tela de cadastro (New command, que nunca mostra
+         Delete), em vez de espalhados pelo rodapé como no Edit antigo. A nota
+         "* required field" continua no canto direito via margin-left:auto
+         (ver .wiz-required-note em css/components.css). -->
+    <div class="modal-foot" style="justify-content:flex-start;">
+      <button class="btn btn-ghost" id="cmdEditorDeleteBtn" style="display:none;color:var(--red);" onclick="cmdEditorDelete()">🗑️ Delete command</button>
       <div style="display:flex;gap:8px;">
         <button class="btn" onclick="closeCommandEditor()">Cancel</button>
         <button class="btn" id="cmdWizBackBtn" onclick="cmdWizBack()" style="display:none;">← Back</button>
