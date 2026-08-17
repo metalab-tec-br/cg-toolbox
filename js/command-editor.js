@@ -96,16 +96,22 @@ function _ceRenderWizardState() {
     b.classList.toggle('done', s !== CMD_WIZ_STEP && s <= CMD_WIZ_MAX_STEP);
     b.disabled = s > CMD_WIZ_MAX_STEP;
   });
-  _ce('cmdWizBackBtn').style.display = CMD_WIZ_STEP > 1 ? '' : 'none';
+  // Pedido do usuário: "mantenha sempre na mesma posição os botões back e
+  // next" — Back fica SEMPRE renderizado (nunca display:none), só desabilitado
+  // no passo 1 (não existe passo anterior). Antes ele sumia (display:none) no
+  // passo 1, o que deslocava o Next pra esquerda ali e criava uma posição
+  // inconsistente entre os passos — .disabled aplica .btn:disabled (opacidade
+  // reduzida, cursor not-allowed, ver css/components.css) sem tirar o botão
+  // do layout.
+  _ce('cmdWizBackBtn').disabled = CMD_WIZ_STEP <= 1;
   _ce('cmdWizNextBtn').style.display = CMD_WIZ_STEP < CMD_WIZ_TOTAL_STEPS ? '' : 'none';
   _ce('cmdWizSaveBtn').style.display = CMD_WIZ_STEP === CMD_WIZ_TOTAL_STEPS ? '' : 'none';
   // Delete só aparece no último passo (Command lines) — nos passos anteriores
   // fica oculto mesmo que o usuário tenha permissão (CMD_EDITOR_CAN_DELETE),
-  // para não competir visualmente com Next/Cancel antes da revisão final.
-  // display (não visibility): junto com o justify-content:flex-start do
-  // modal-foot (ver index.html), isso mantém Delete/Cancel/Back/Next/Save
-  // sempre agrupados à esquerda — quando Delete some, o grupo simplesmente
-  // ocupa o espaço dele, igual à tela de New command (que nunca o mostra).
+  // para não competir visualmente com Next antes da revisão final. Ele mora
+  // separado do grupo Back/Next/Save (ver index.html), depois da nota "*
+  // required field" — quando aparece, fica isolado no canto direito do
+  // rodapé, sem afetar a posição de Back/Next.
   _ce('cmdEditorDeleteBtn').style.display =
     (CMD_EDITOR_CAN_DELETE && CMD_WIZ_STEP === CMD_WIZ_TOTAL_STEPS) ? '' : 'none';
 }

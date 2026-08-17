@@ -1225,22 +1225,30 @@
         </div>
       </div>
     </div>
-    <!-- justify-content:flex-start (em vez do space-between padrão de
-         .modal-foot, compartilhado com vários outros modais) mantém
-         Delete/Cancel/Back/Next/Save sempre agrupados à esquerda — igual ao
-         layout histórico da tela de cadastro (New command, que nunca mostra
-         Delete), em vez de espalhados pelo rodapé como no Edit antigo. A nota
-         "* required field" continua no canto direito via margin-left:auto
-         (ver .wiz-required-note em css/components.css). -->
+    <!-- Pedido do usuário: "mantenha sempre na mesma posição os botões back e
+         next" — Back agora fica sempre renderizado (só desabilitado no passo
+         1 via .disabled, em vez de escondido com display:none), pra não
+         deslocar o Next entre os passos. O botão Cancel foi removido: o X no
+         cabeçalho (.modal-close acima) já fecha o modal sem salvar, então
+         tinha dois controles fazendo a mesma coisa. Delete saiu do grupo
+         Back/Next/Save e agora fica depois da nota "* required field",
+         separado e empurrado pro canto direito do rodapé — a nota mantém seu
+         próprio margin-left:auto (ver .wiz-required-note em
+         css/components.css), então quando Delete aparece (só no 3º passo,
+         ver _ceRenderWizardState em js/command-editor.js) ele simplesmente
+         ocupa o espaço logo depois dela, sem disputar posição com Back/Next.
+         justify-content:flex-start (em vez do space-between padrão de
+         .modal-foot, compartilhado com vários outros modais) é o que mantém
+         Back/Next/Save agrupados à esquerda independente do que mais
+         apareça à direita. -->
     <div class="modal-foot" style="justify-content:flex-start;">
-      <button class="btn btn-ghost" id="cmdEditorDeleteBtn" style="display:none;color:var(--red);" onclick="cmdEditorDelete()">🗑️ Delete command</button>
       <div style="display:flex;gap:8px;">
-        <button class="btn" onclick="closeCommandEditor()">Cancel</button>
-        <button class="btn" id="cmdWizBackBtn" onclick="cmdWizBack()" style="display:none;">← Back</button>
+        <button class="btn" id="cmdWizBackBtn" onclick="cmdWizBack()">← Back</button>
         <button class="btn btn-primary" id="cmdWizNextBtn" onclick="cmdWizNext()">Next →</button>
         <button class="btn btn-primary" id="cmdWizSaveBtn" onclick="cmdEditorSave()" style="display:none;">Save</button>
       </div>
       <span class="wiz-required-note">* required field</span>
+      <button class="btn btn-ghost" id="cmdEditorDeleteBtn" style="display:none;color:var(--red);" onclick="cmdEditorDelete()">🗑️ Delete command</button>
     </div>
   </div>
 </div>
