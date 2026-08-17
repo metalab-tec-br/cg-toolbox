@@ -367,9 +367,9 @@ function ipcRenderNetworkBlock(n, indexLabel, wrapBlock) {
   let out = wrapBlock ? '<div class="ipc-block">' : '<div class="ipc-block-inner">';
   if (indexLabel) out += `<div class="ipc-subnet-index">${indexLabel}</div>`;
   out += ipcLine('Network', n.cidr, ipcBinHtml(n.networkLong, n.prefix, 'net'), `Class ${n.ipClass}`, n.cidr);
-  out += ipcLine('HostMin', longToIp(n.firstHostLong), ipcBinHtml(n.firstHostLong, n.prefix, 'net'), null, longToIp(n.firstHostLong));
-  out += ipcLine('HostMax', longToIp(n.lastHostLong), ipcBinHtml(n.lastHostLong, n.prefix, 'net'), null, longToIp(n.lastHostLong));
-  out += ipcLine('Broadcast', longToIp(n.broadcastLong), ipcBinHtml(n.broadcastLong, n.prefix, 'net'), null, longToIp(n.broadcastLong));
+  out += ipcLine('HostMin', longToIp(n.firstHostLong), ipcBinHtml(n.firstHostLong, n.prefix, 'net'));
+  out += ipcLine('HostMax', longToIp(n.lastHostLong), ipcBinHtml(n.lastHostLong, n.prefix, 'net'));
+  out += ipcLine('Broadcast', longToIp(n.broadcastLong), ipcBinHtml(n.broadcastLong, n.prefix, 'net'));
   out += ipcLine('Hosts/Net', n.usableHosts.toLocaleString('pt-BR'), '', n.ipType);
   out += '</div>';
   return out;
@@ -404,13 +404,13 @@ function ipcRunCalculate() {
   // (ver .ipc-subnets-section logo abaixo), que aí sim vira um segundo
   // bloco distinto.
   let out = '<div class="ipc-block">';
-  out += ipcLine('Address', r.ip, ipcBinHtml(r.ipLong, r.prefix, 'net'), null, r.ip);
+  out += ipcLine('Address', r.ip, ipcBinHtml(r.ipLong, r.prefix, 'net'));
   out += ipcLine('Network', r.cidr, ipcBinHtml(r.networkLong, r.prefix, 'net'), `Class ${r.ipClass}`, r.cidr);
   out += ipcNetmaskLine(r.maskDotted, r.prefix, ipcBinHtml(r.maskLong, r.prefix, 'mask'));
   out += ipcLine('Wildcard', r.wildcardDotted, ipcBinHtml(r.wildcardLong, r.prefix, 'plain'));
-  out += ipcLine('HostMin', longToIp(r.firstHostLong), ipcBinHtml(r.firstHostLong, r.prefix, 'net'), null, longToIp(r.firstHostLong));
-  out += ipcLine('HostMax', longToIp(r.lastHostLong), ipcBinHtml(r.lastHostLong, r.prefix, 'net'), null, longToIp(r.lastHostLong));
-  out += ipcLine('Broadcast', longToIp(r.broadcastLong), ipcBinHtml(r.broadcastLong, r.prefix, 'net'), null, longToIp(r.broadcastLong));
+  out += ipcLine('HostMin', longToIp(r.firstHostLong), ipcBinHtml(r.firstHostLong, r.prefix, 'net'));
+  out += ipcLine('HostMax', longToIp(r.lastHostLong), ipcBinHtml(r.lastHostLong, r.prefix, 'net'));
+  out += ipcLine('Broadcast', longToIp(r.broadcastLong), ipcBinHtml(r.broadcastLong, r.prefix, 'net'));
   out += ipcLine('Hosts/Net', r.usableHosts.toLocaleString('pt-BR'), '', r.ipType);
   out += '</div>';
 
@@ -462,9 +462,9 @@ function ipcRunCalculate() {
       subnetsOut += '<div class="ipc-block">';
       subnetsOut += ipcLine('Network', sr.cidr, ipcBinHtml(sr.networkLong, sr.prefix, 'net'), `Class ${sr.ipClass}`, sr.cidr);
       subnetsOut += ipcNetmaskLine(sr.maskDotted, sr.prefix, ipcBinHtml(sr.maskLong, sr.prefix, 'mask'));
-      subnetsOut += ipcLine('HostMin', longToIp(sr.firstHostLong), ipcBinHtml(sr.firstHostLong, sr.prefix, 'net'), null, longToIp(sr.firstHostLong));
-      subnetsOut += ipcLine('HostMax', longToIp(sr.lastHostLong), ipcBinHtml(sr.lastHostLong, sr.prefix, 'net'), null, longToIp(sr.lastHostLong));
-      subnetsOut += ipcLine('Broadcast', longToIp(sr.broadcastLong), ipcBinHtml(sr.broadcastLong, sr.prefix, 'net'), null, longToIp(sr.broadcastLong));
+      subnetsOut += ipcLine('HostMin', longToIp(sr.firstHostLong), ipcBinHtml(sr.firstHostLong, sr.prefix, 'net'));
+      subnetsOut += ipcLine('HostMax', longToIp(sr.lastHostLong), ipcBinHtml(sr.lastHostLong, sr.prefix, 'net'));
+      subnetsOut += ipcLine('Broadcast', longToIp(sr.broadcastLong), ipcBinHtml(sr.broadcastLong, sr.prefix, 'net'));
       subnetsOut += ipcLine('Hosts/Net', sr.usableHosts.toLocaleString('pt-BR'), '', sr.ipType);
       subnetsOut += '</div>';
     }
