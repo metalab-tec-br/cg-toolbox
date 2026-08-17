@@ -141,7 +141,15 @@ function _ceRenderWizardState() {
   // reduzida, cursor not-allowed, ver css/components.css) sem tirar o botão
   // do layout.
   _ce('cmdWizBackBtn').disabled = CMD_WIZ_STEP <= 1;
-  _ce('cmdWizNextBtn').style.display = CMD_WIZ_STEP < CMD_WIZ_TOTAL_STEPS ? '' : 'none';
+  // Pedido do usuário: "deixe os tres botões nas tres telas de edição" — em
+  // modo 'edit', Next fica SEMPRE renderizado (mesmo padrão do Back acima),
+  // só desabilitado no último passo (não há próximo passo pra ir; clicar ali
+  // já era um no-op em cmdWizNext(), então desabilitar é só feedback visual).
+  // Em 'create'/'duplicate' mantém o comportamento antigo: Next some no
+  // último passo, dando lugar ao Save sozinho ali (ver abaixo).
+  _ce('cmdWizNextBtn').style.display =
+    (CMD_EDITOR_MODE === 'edit' || CMD_WIZ_STEP < CMD_WIZ_TOTAL_STEPS) ? '' : 'none';
+  _ce('cmdWizNextBtn').disabled = CMD_EDITOR_MODE === 'edit' && CMD_WIZ_STEP >= CMD_WIZ_TOTAL_STEPS;
   // Pedido do usuário: "deixe o botão de save após o next nas tres telas ao
   // editar o comando" — em modo 'edit' (comando já existente, todos os
   // passos já começam válidos/desbloqueados — ver openCommandEditor), Save
