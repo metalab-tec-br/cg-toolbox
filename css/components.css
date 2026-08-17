@@ -1571,8 +1571,9 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    colunas, pensadas pro log de auditoria) com a MESMA especificidade
    (classe + nth-child); a ordem no arquivo (esta regra vem depois) decide
    quem vence. ─── */
-.ipc-rfc-table { font-size: 10.5px; }
-.ipc-rfc-table td { white-space: normal; overflow: visible; text-overflow: clip; }
+.ipc-rfc-table { font-size: 9px; }
+.ipc-rfc-table th { padding: 5px 8px; font-size: 8px; }
+.ipc-rfc-table td { padding: 4px 8px; white-space: normal; overflow: visible; text-overflow: clip; }
 .ipc-rfc-table th:nth-child(1), .ipc-rfc-table td:nth-child(1) { width: 44%; font-family: var(--mono); }
 .ipc-rfc-table th:nth-child(2), .ipc-rfc-table td:nth-child(2) { width: 26%; font-family: var(--mono); }
 .ipc-rfc-table th:nth-child(3), .ipc-rfc-table td:nth-child(3) { width: 30%; }
