@@ -1449,3 +1449,25 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
   border: 1px solid var(--bdr); border-radius: 50%; width: 28px; height: 28px;
   display: flex; align-items: center; justify-content: center;
 }
+
+/* ─── IP CALCULATOR MODAL (botão #ipcOpenBtn no header, ver js/ipcalc.js) ─── */
+.ipc-input-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ipc-input-row .set-input { flex: 1 1 160px; min-width: 120px; }
+.ipc-slash { font-family: var(--mono); font-weight: 700; color: var(--dim); }
+/* .ipc-info-table (2 col, label/valor) já recebe largura via style inline
+   em _ipcResultRow (js/ipcalc.js) — só precisa da fonte mono nas linhas de
+   valor, já feito inline também. Aqui só ajustamos o alinhamento vertical
+   do botão de copiar dentro da célula de valor. */
+.ipc-info-table td { vertical-align: middle; }
+/* As larguras nth-child de .audit-log-table (6 colunas, ver acima) não
+   servem pra estas tabelas (2/3/5 colunas) — sobrescritas aqui com a MESMA
+   especificidade (classe + nth-child), então a ordem no arquivo (esta regra
+   vem depois) decide quem vence. */
+.ipc-split-table th:nth-child(1), .ipc-split-table td:nth-child(1) { width: 24%; font-family: var(--mono); }
+.ipc-split-table th:nth-child(2), .ipc-split-table td:nth-child(2) { width: 19%; font-family: var(--mono); }
+.ipc-split-table th:nth-child(3), .ipc-split-table td:nth-child(3) { width: 19%; font-family: var(--mono); }
+.ipc-split-table th:nth-child(4), .ipc-split-table td:nth-child(4) { width: 26%; font-family: var(--mono); white-space: normal; }
+.ipc-split-table th:nth-child(5), .ipc-split-table td:nth-child(5) { width: 12%; }
+.ipc-rfc-table th:nth-child(1), .ipc-rfc-table td:nth-child(1) { width: 42%; font-family: var(--mono); white-space: normal; }
+.ipc-rfc-table th:nth-child(2), .ipc-rfc-table td:nth-child(2) { width: 28%; font-family: var(--mono); }
+.ipc-rfc-table th:nth-child(3), .ipc-rfc-table td:nth-child(3) { width: 30%; }

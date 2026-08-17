@@ -54,6 +54,14 @@
        nova página inicial da aplicação (ver o gate no topo do <head> deste
        arquivo e js/login.js) — de lá dá pra entrar com outra credencial
        local ou via Windows authentication. -->
+  <!-- Botão IPCalc — pedido do usuário: calculadora de rede (IP+máscara,
+       split de sub-rede, referência RFC 1918), num botão ao lado do menu de
+       conta, abrindo um modal (ver #ipCalcOverlay mais abaixo e
+       js/ipcalc.js). Mesmo estilo de botão-ícone do "Settings" (.theme-toggle,
+       ver logo abaixo), colocado ANTES do menu de usuário. -->
+  <button class="theme-toggle" id="ipcOpenBtn" onclick="openIpCalcModal()" title="IP Calculator" style="display:inline-flex;align-items:center;justify-content:center;">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10.5" x2="8" y2="10.5"/><line x1="12" y1="10.5" x2="12" y2="10.5"/><line x1="16" y1="10.5" x2="16" y2="10.5"/><line x1="8" y1="14" x2="8" y2="14"/><line x1="12" y1="14" x2="12" y2="14"/><line x1="16" y1="14" x2="16" y2="14"/><line x1="8" y1="17.5" x2="16" y2="17.5"/></svg>
+  </button>
   <div class="dd hdr-user-dd" id="hdrUserDD">
     <button type="button" class="hdr-user" id="hdrUser" onclick="toggleDropdown('hdrUserDD')" title="Account">
       <svg class="hdr-user-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18.5a6 6 0 0 1 11 0"/></svg><span id="currentUserLabel"></span>
@@ -1796,6 +1804,79 @@
   </div>
 </div>
 
+<!-- ══ IP CALCULATOR MODAL — ver botão #ipcOpenBtn no header e js/ipcalc.js.
+     Calcula rede/broadcast/máscara/wildcard/faixa de hosts a partir de
+     IP+máscara (CIDR ou dotted), faz split de sub-rede (ex.: /24 -> N x
+     /25) e traz a tabela de referência RFC 1918 (redes privadas). ══ -->
+<div class="modal-overlay" id="ipCalcOverlay">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <span class="modal-title" style="display:flex;align-items:center;gap:6px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="17.5" x2="16" y2="17.5"/></svg>
+        <span>IP Calculator</span>
+      </span>
+      <button class="modal-close" onclick="closeIpCalcModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="set-group">
+        <span class="set-label">IP address / Mask</span>
+        <div class="ipc-input-row">
+          <input type="text" class="set-input" id="ipcIp" placeholder="e.g. 192.168.1.10" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
+          <span class="ipc-slash">/</span>
+          <input type="text" class="set-input" id="ipcMask" placeholder="24 or 255.255.255.0" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
+          <button type="button" class="btn btn-primary" onclick="ipcRunCalculate()">Calculate</button>
+        </div>
+        <span class="set-hint" id="ipcError" style="display:none;color:var(--red);"></span>
+      </div>
+
+      <div class="set-group" id="ipcResultsGroup" style="display:none;">
+        <span class="set-label">Network information</span>
+        <div class="audit-log-wrap">
+          <table class="audit-log-table ipc-info-table">
+            <tbody id="ipcResultsTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="set-group" id="ipcSplitGroup" style="display:none;">
+        <span class="set-label">Subnet split</span>
+        <span class="set-hint">Split this network into smaller, equal-size subnets by choosing a new (longer) prefix.</span>
+        <div class="ipc-input-row">
+          <span class="set-hint" id="ipcSplitBaseLabel"></span>
+          <select class="set-input" id="ipcSplitPrefix" style="max-width:90px;"></select>
+          <button type="button" class="btn btn-primary" onclick="ipcRunSplit()">Split</button>
+          <button type="button" class="btn btn-ghost" id="ipcSplitCopyAllBtn" onclick="ipcCopyAllSplit()" style="display:none;">Copy all</button>
+        </div>
+        <span class="set-hint" id="ipcSplitNote"></span>
+        <div class="audit-log-wrap" id="ipcSplitWrap" style="display:none;max-height:240px;">
+          <table class="audit-log-table ipc-split-table">
+            <thead><tr><th>Subnet</th><th>Network</th><th>Broadcast</th><th>Host range</th><th>Usable</th></tr></thead>
+            <tbody id="ipcSplitTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <span class="set-label">RFC 1918 — Private address ranges</span>
+        <div class="audit-log-wrap">
+          <table class="audit-log-table ipc-rfc-table">
+            <thead><tr><th>Range</th><th>CIDR block</th><th>Addresses</th></tr></thead>
+            <tbody>
+              <tr><td>10.0.0.0 – 10.255.255.255</td><td>10.0.0.0/8</td><td>16,777,216</td></tr>
+              <tr><td>172.16.0.0 – 172.31.255.255</td><td>172.16.0.0/12</td><td>1,048,576</td></tr>
+              <tr><td>192.168.0.0 – 192.168.255.255</td><td>192.168.0.0/16</td><td>65,536</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div></div>
+      <button class="btn" onclick="closeIpCalcModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="ovl9x">
   <div class="cg-mark-box">
     <div class="cg-mark-txt" id="ovl9xTxt"></div>
@@ -1814,6 +1895,7 @@
 <script src="js/syntax-highlight.js"></script>
 <script src="js/terminal-renderer.js"></script>
 <script src="js/net-utils.js"></script>
+<script src="js/ipcalc.js"></script>
 <script src="js/query-bar.js"></script>
 <script src="js/api-client.js"></script>
 <script src="js/csv-export.js"></script>
