@@ -234,8 +234,15 @@ function ipcBinHtml(long, prefix, mode) {
 // Botão de copiar embutido inline no texto — os únicos valores que passam
 // por aqui são IPs/CIDRs já validados (só dígitos, pontos e "/"), então é
 // seguro embuti-los direto num atributo onclick com aspas simples.
+// IMPORTANTE: a classe base ".copy-btn" é "display:flex" (bloco), pensada
+// pro botão ficar no final de uma linha de comando isolada — dentro do
+// bloco de texto monoespaçado do IPCalc (white-space:pre) isso quebrava a
+// linha ao meio, empurrando o botão pra uma linha própria logo abaixo (com
+// um vão vazio enorme no meio). ".copy-btn-inline" é o modificador que já
+// existe no app pra isso (ver css/components.css), tornando o botão
+// "inline-flex" de verdade, fluindo junto do texto sem quebrar a linha.
 function ipcCopyBtnHtml(text) {
-  return ` <button type="button" class="copy-btn ipc-copy-btn" title="Copy" onclick="ipcCopyInline(this,'${text}')">${COPY_BTN_ICON}</button>`;
+  return `<button type="button" class="copy-btn copy-btn-inline ipc-copy-btn" title="Copy" onclick="ipcCopyInline(this,'${text}')">${COPY_BTN_ICON}</button>`;
 }
 function ipcCopyInline(btn, text) {
   if (typeof _doSingleCopy !== 'function') return;
@@ -243,14 +250,16 @@ function ipcCopyInline(btn, text) {
   _doSingleCopy(btn);
 }
 
-// Uma linha "Label:   valor              binário   (nota)  [copiar]".
+// Uma linha "Label:   valor  [copiar]   binário   (nota)". O botão de
+// copiar (quando existe) vem logo depois do valor — pedido do usuário —
+// e ANTES do binário, não no final da linha.
 function ipcLine(label, value, binHtml, note, copyText) {
   const lbl = `${label}:`.padEnd(IPC_LBL_W);
   const val = String(value).padEnd(IPC_VAL_W);
   let html = `<span class="ipc-label">${lbl}</span><span class="ipc-val">${val}</span>`;
+  if (copyText) html += ipcCopyBtnHtml(copyText);
   if (binHtml) html += binHtml;
   if (note) html += ` <span class="ipc-note">(${note})</span>`;
-  if (copyText) html += ipcCopyBtnHtml(copyText);
   return html + '\n';
 }
 

@@ -1478,7 +1478,9 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .ipc-bin-mask { color: var(--red); font-weight: 700; }
 .ipc-note { color: var(--blue); font-style: italic; }
 .ipc-subnets-header { color: var(--green); font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
-.ipc-copy-btn { vertical-align: -2px; margin-left: 2px; }
+/* .copy-btn-inline já cobre display:inline-flex + padding; aqui só um
+   ajuste fino de espaçamento pra caber bem entre o valor e o binário. */
+.ipc-copy-btn { vertical-align: -2px; margin: 0 8px 0 4px; }
 
 /* ─── RFC 1918 reference table — inalterada, só as larguras próprias (3
    colunas), sobrescrevendo as larguras nth-child de .audit-log-table (6
