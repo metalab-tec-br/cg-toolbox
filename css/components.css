@@ -1500,11 +1500,22 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 }
 .ipc-val { color: var(--blue); font-weight: 600; white-space: nowrap; }
 .ipc-bin-wrap { flex: 1 1 auto; }
+/* Pedido do usuário: binário inteiro na mesma cor (sem vermelho na
+   máscara nem destaque/esmaecido diferenciando rede de host, como era
+   antes — ver ipcBinHtml em js/ipcalc.js). */
 .ipc-bin { color: var(--text); }
-.ipc-bin-net { color: var(--text); font-weight: 700; }
-.ipc-bin-host { color: var(--muted); }
-.ipc-bin-mask { color: var(--red); font-weight: 700; }
 .ipc-note { color: var(--blue); font-style: italic; }
+/* Cabeçalho "Binary" acima da coluna de binário — mesmas classes
+   label/valwrap (vazias) da linha normal só pra empurrar o texto até o x
+   certo, reaproveitando o estilo de rótulo de coluna já usado no app
+   (.audit-log-table th: maiúsculas, cor apagada, letter-spacing). */
+.ipc-col-header-row {
+  margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid var(--bdr);
+}
+.ipc-col-header-row .ipc-bin-wrap {
+  font-size: 9px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .6px; color: var(--dim);
+}
 .ipc-note-line { margin: 6px 0; }
 .ipc-subnets-header-row { margin: 14px 0 6px; }
 .ipc-subnets-header { color: var(--green); font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }

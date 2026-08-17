@@ -199,36 +199,37 @@ function _ipcBits32(long) {
 }
 
 // Monta a representação binária pontuada (8.8.8.8 bits) de `long`, com um
-// espaço extra logo após o bit `prefix` (fronteira rede/host) — mesmo
-// quando esse ponto coincide com um dos pontos fixos entre octetos (nesse
-// caso o espaço vem ANTES do ponto, ex.: "...00000000 .00000001" pra /24).
+// espaço extra logo após o bit `prefix` (fronteira rede/host) — EXCETO
+// quando esse bit já coincide com um dos pontos fixos entre octetos (ex.:
+// /24, /16, /8): nesse caso o próprio ponto já separa visualmente os dois
+// lados, então o espaço extra é pulado (pedido do usuário — sem isso a
+// última fronteira ficava com um espaço duplo antes do ponto, "...0 .0...").
 // Devolve { str, splitIdx } — splitIdx é o índice de caractere logo após a
-// porção "de rede" dentro de `str`, usado por ipcBinHtml pra colorir os
-// dois pedaços separadamente.
+// porção "de rede" dentro de `str`, usado por ipcBinHtml pra separar os
+// dois pedaços (hoje ambos na mesma cor, mas a estrutura fica pronta caso
+// se volte a diferenciar rede/host no futuro).
 function _ipcDottedBinary(long, prefix) {
   const bits = _ipcBits32(long);
   let out = '';
   let splitIdx = (prefix <= 0) ? 0 : null;
   for (let i = 1; i <= 32; i++) {
     out += bits[i - 1];
-    if (i === prefix && prefix > 0 && prefix < 32) { out += ' '; splitIdx = out.length; }
-    if (i % 8 === 0 && i < 32) out += '.';
+    const atOctetBoundary = (i % 8 === 0 && i < 32);
+    if (i === prefix && prefix > 0 && prefix < 32 && !atOctetBoundary) { out += ' '; splitIdx = out.length; }
+    if (atOctetBoundary) out += '.';
+    if (i === prefix && prefix > 0 && prefix < 32 && atOctetBoundary) { splitIdx = out.length; }
   }
   if (splitIdx === null) splitIdx = out.length; // prefix >= 32
   return { str: out, splitIdx };
 }
 
-// mode: 'net' (padrão — porção de rede em destaque, porção de host
-// esmaecida), 'mask' (porção de rede inteira em vermelho — usado só nas
-// linhas Netmask, pra saltar aos olhos onde a máscara "corta"), ou 'plain'
-// (sem cor — usado na linha Wildcard, que já é auto-explicativa).
-function ipcBinHtml(long, prefix, mode) {
-  const { str, splitIdx } = _ipcDottedBinary(long, prefix);
-  if (mode === 'plain') return `<span class="ipc-bin">${str}</span>`;
-  const netPart = str.slice(0, splitIdx);
-  const hostPart = str.slice(splitIdx);
-  const netClass = mode === 'mask' ? 'ipc-bin ipc-bin-mask' : 'ipc-bin ipc-bin-net';
-  return `<span class="${netClass}">${netPart}</span><span class="ipc-bin ipc-bin-host">${hostPart}</span>`;
+// Pedido do usuário: uma cor só pro binário inteiro (sem vermelho na
+// máscara nem destaque/esmaecido rede vs. host, como era antes). O
+// parâmetro `prefix` continua recebido só pra manter a mesma assinatura
+// usada em todo o arquivo — não influencia mais a cor.
+function ipcBinHtml(long, prefix) {
+  const { str } = _ipcDottedBinary(long, prefix);
+  return `<span class="ipc-bin">${str}</span>`;
 }
 
 // Botão de copiar embutido inline no texto — os únicos valores que passam
@@ -286,6 +287,14 @@ function ipcNetmaskLine(maskDotted, prefix, binHtml) {
   return html;
 }
 
+// Cabeçalho "Binary" acima da coluna de binário — pedido do usuário.
+// Reaproveita as MESMAS classes flex de .ipc-line (label/valwrap vazios,
+// só pra empurrar o texto até o x exato onde o binário das linhas abaixo
+// começa) em vez de uma tabela, já que o resto do resultado não é uma.
+function ipcColumnHeaderRow() {
+  return `<div class="ipc-line ipc-col-header-row"><span class="ipc-label"></span><span class="ipc-valwrap"></span><span class="ipc-bin-wrap">Binary</span></div>`;
+}
+
 // Bloco de 5 linhas comum a qualquer rede já calculada (rede/base, sub-rede
 // individual de um split, ou supernet) — Network/HostMin/HostMax/Broadcast/
 // Hosts+tipo, com botão de copiar em todos os endereços (Network/HostMin/
@@ -328,7 +337,8 @@ function ipcRunCalculate() {
   IPC_LAST_RESULT = r;
   IPC_LAST_SUBNETS_TEXT = null;
 
-  let out = '<div class="ipc-block">';
+  let out = ipcColumnHeaderRow();
+  out += '<div class="ipc-block">';
   out += ipcLine('Address', r.ip, ipcBinHtml(r.ipLong, r.prefix, 'net'), null, r.ip);
   out += ipcNetmaskLine(r.maskDotted, r.prefix, ipcBinHtml(r.maskLong, r.prefix, 'mask'));
   out += ipcLine('Wildcard', r.wildcardDotted, ipcBinHtml(r.wildcardLong, r.prefix, 'plain'));
