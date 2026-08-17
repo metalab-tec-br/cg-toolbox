@@ -1614,7 +1614,12 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    quem vence. ─── */
 .ipc-rfc-table { font-size: 11px; }
 .ipc-rfc-table th { padding: 6px 9px; font-size: 9px; }
-.ipc-rfc-table td { padding: 6px 9px; white-space: normal; overflow: visible; text-overflow: clip; }
+/* Pedido do usuário: "a cor dos dados da RFC está forte. como é só
+   informação não precisa ficar tão forte" — sobrescreve o var(--text) (cor
+   forte, cheia, herdada de .audit-log-table td acima — pensada pra dado
+   real de auditoria) por var(--dim), a mesma cor discreta já usada pelo
+   cabeçalho desta tabela e por outros textos secundários (.ipc-slash etc.). */
+.ipc-rfc-table td { padding: 6px 9px; white-space: normal; overflow: visible; text-overflow: clip; color: var(--dim); }
 .ipc-rfc-table th:nth-child(1), .ipc-rfc-table td:nth-child(1) { width: 44%; font-family: var(--mono); }
 .ipc-rfc-table th:nth-child(2), .ipc-rfc-table td:nth-child(2) { width: 26%; font-family: var(--mono); }
 .ipc-rfc-table th:nth-child(3), .ipc-rfc-table td:nth-child(3) { width: 30%; }
