@@ -407,13 +407,31 @@ async function toggleCommandInFolder(cmdId, folderId, itemEl) {
 
 // ── CRUD de pastas — modal de nome compartilhado (create/rename), ver
 // #folderPromptOverlay em index.html ──
+// Reaproveitado também pra perguntar a URL de um link (ver neInsertLink
+// abaixo, modo 'link') — é só um prompt de texto genérico (título/rótulo/
+// texto do botão variam por `mode`), então dá pra usar pro mesmo fim em vez
+// de duplicar mais um modal quase idêntico ou usar o prompt() nativo do
+// navegador (sem estilo do tema, mostra o host da página).
 let _folderPromptResolve = null;
+let _folderPromptMode = 'create';
+const _FOLDER_PROMPT_CONFIG = {
+  create: { title: 'New folder', label: 'Name', ok: 'Create', type: 'text', placeholder: '', err: 'Enter a folder name.' },
+  rename: { title: 'Rename folder', label: 'Name', ok: 'Rename', type: 'text', placeholder: '', err: 'Enter a folder name.' },
+  subfolder: { title: 'New subfolder', label: 'Name', ok: 'Create', type: 'text', placeholder: '', err: 'Enter a folder name.' },
+  link: { title: 'Insert link', label: 'URL', ok: 'Insert', type: 'url', placeholder: 'https://example.com', err: 'Enter a URL.' },
+};
 function openFolderPromptModal(mode, currentName) {
   return new Promise(resolve => {
     _folderPromptResolve = resolve;
-    document.getElementById('folderPromptTitle').textContent = mode === 'rename' ? 'Rename folder' : (mode === 'subfolder' ? 'New subfolder' : 'New folder');
-    document.getElementById('folderPromptOkBtn').textContent = mode === 'rename' ? 'Rename' : 'Create';
+    _folderPromptMode = mode;
+    const cfg = _FOLDER_PROMPT_CONFIG[mode] || _FOLDER_PROMPT_CONFIG.create;
+    document.getElementById('folderPromptTitle').textContent = cfg.title;
+    document.getElementById('folderPromptOkBtn').textContent = cfg.ok;
+    const labelEl = document.getElementById('folderPromptLabel');
+    if (labelEl) labelEl.textContent = cfg.label;
     const input = document.getElementById('folderPromptInput');
+    input.type = cfg.type;
+    input.placeholder = cfg.placeholder;
     input.value = currentName || '';
     const errBox = document.getElementById('folderPromptError');
     if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
@@ -426,13 +444,14 @@ function closeFolderPromptModal(result) {
   if (_folderPromptResolve) { const r = _folderPromptResolve; _folderPromptResolve = null; r(result); }
 }
 function submitFolderPromptModal() {
-  const name = (document.getElementById('folderPromptInput').value || '').trim();
+  const value = (document.getElementById('folderPromptInput').value || '').trim();
   const errBox = document.getElementById('folderPromptError');
-  if (!name) {
-    if (errBox) { errBox.textContent = 'Enter a folder name.'; errBox.style.display = ''; }
+  if (!value) {
+    const cfg = _FOLDER_PROMPT_CONFIG[_folderPromptMode] || _FOLDER_PROMPT_CONFIG.create;
+    if (errBox) { errBox.textContent = cfg.err; errBox.style.display = ''; }
     return;
   }
-  closeFolderPromptModal(name);
+  closeFolderPromptModal(value);
 }
 document.getElementById('folderPromptInput') && document.getElementById('folderPromptInput').addEventListener('keydown', ev => {
   if (ev.key === 'Enter') submitFolderPromptModal();
@@ -1166,6 +1185,67 @@ function neSetColor(el, color) {
     const trigger = dd.querySelector('.ne-fmt-color-trigger-swatch');
     if (trigger) trigger.style.background = color;
   }
+}
+// Inserir link — pedido do usuário: "inclua uma opção para inserir link no
+// menu de detalhes e em notas também" (Details do editor de comandos e
+// Notes, mesmo botão/toolbar compartilhados — ver index.html/
+// db-render-engine.js). Diferente de bold/italic/tamanho/cor, este botão
+// NÃO usa onmousedown="event.preventDefault()": pedir a URL abre um modal
+// (openFolderPromptModal, reaproveitado — ver mode 'link' lá), que
+// necessariamente tira o foco do editor pra poder receber o texto digitado.
+// Por isso a seleção é lida de body._neLastRange (a mesma Range guardada
+// pelos listeners de mouseup/keyup do editor, delegados no topo deste
+// arquivo) ANTES de abrir o modal, em vez de depender do foco ainda estar no
+// editor no momento do clique — mesmo mecanismo já usado pelo <select> de
+// cor/tamanho das Notes, que também precisa ganhar foco.
+async function neInsertLink(btn) {
+  const wrap = btn.closest('.note-flat-body-editing');
+  const body = wrap && wrap.querySelector('.note-editor-body');
+  if (!body) return;
+  const savedRange = body._neLastRange ? body._neLastRange.cloneRange() : null;
+  const hasSelection = !!(savedRange && !savedRange.collapsed);
+  let url = await openFolderPromptModal('link');
+  if (!url) return;
+  url = url.trim();
+  // Sem esquema (ex.: usuário digitou "checkpoint.com") — assume https://,
+  // mesmo comportamento que a maioria dos editores de texto rico faz, pra
+  // não depender do usuário lembrar de digitar o protocolo. Mantém como está
+  // se já vier com um esquema (http/https/mailto/etc.) — sanitizeNoteHtml no
+  // servidor (ver server/index.js) só aceita http(s):// de qualquer forma,
+  // então um esquema diferente vira '#' lá, mas não é papel do front-end
+  // impedir o usuário de tentar.
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) url = 'https://' + url;
+  body.focus();
+  const sel = window.getSelection();
+  if (savedRange) { sel.removeAllRanges(); sel.addRange(savedRange); }
+  if (hasSelection) {
+    document.execCommand('createLink', false, url);
+  } else if (savedRange) {
+    // Sem texto selecionado: insere a própria URL como texto do link, na
+    // posição do cursor (via DOM/Range direto — não via execCommand
+    // insertHTML/string concatenada — não precisa escapar nada e não corre
+    // risco de quebrar com aspas/caracteres especiais na URL).
+    const a = document.createElement('a');
+    a.href = url;
+    a.textContent = url;
+    savedRange.deleteContents();
+    savedRange.insertNode(a);
+    const after = document.createRange();
+    after.setStartAfter(a);
+    after.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(after);
+  } else {
+    // Nunca houve uma posição de cursor registrada neste editor (ex.:
+    // clicou direto no botão sem nunca ter clicado dentro do texto) —
+    // acrescenta o link no final do conteúdo em vez de falhar silenciosamente.
+    const a = document.createElement('a');
+    a.href = url;
+    a.textContent = url;
+    body.appendChild(a);
+  }
+  _neSaveSelectionFor(body);
+  if (btn.closest('.ne-fmt-dd')) _neCloseFmtDropdowns();
 }
 // Substitui saveNoteEditor() — salva a nota (nova OU existente) a partir do
 // PRÓPRIO card em edição, localizado pelo id previsível do seu editor

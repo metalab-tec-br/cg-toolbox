@@ -516,6 +516,12 @@ function buildNoteCardHtml(note, ownFolder, editing) {
           <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyRight')" title="Align right">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M6 7h9M1 11h14M6 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           </button>
+          <span class="ne-fmt-sep"></span>
+          <!-- Inserir link — mesmo botão/mecânica do Details do editor de
+               comandos (ver index.html + neInsertLink em js/folders.js). -->
+          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neInsertLink(this)" title="Insert link">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6.5 9.5l3-3M7 4.5l1.3-1.3a2.6 2.6 0 013.7 3.7L10.5 8M9 11.5l-1.3 1.3a2.6 2.6 0 01-3.7-3.7L5.5 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
         </div>
         <div class="note-editor-body" id="${editorId}" data-note-draft-key="${draftKey}" contenteditable="true" data-placeholder="Write the note here — select text to format it, paste an image (Ctrl+V) to attach it.">${liveDescription}</div>
       </div>

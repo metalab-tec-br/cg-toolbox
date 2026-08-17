@@ -1138,6 +1138,18 @@
               <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyRight')" title="Align right">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M6 7h9M1 11h14M6 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
               </button>
+              <span class="ne-fmt-sep"></span>
+              <!-- Inserir link — pedido do usuário: "inclua uma opção para inserir
+                   link no menu de detalhes e em notas também" (além de tornar
+                   URLs digitadas cruas clicáveis automaticamente — ver
+                   linkifyPlainUrls em js/terminal-renderer.js/js/folders.js). Abre
+                   o mesmo modal de texto usado pra nome de pasta (agora genérico
+                   via `mode`, ver openFolderPromptModal em js/folders.js), pedindo
+                   a URL; ver neInsertLink em js/folders.js pra aplicar no texto
+                   selecionado (ou inserir a própria URL como link, sem seleção). -->
+              <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neInsertLink(this)" title="Insert link">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6.5 9.5l3-3M7 4.5l1.3-1.3a2.6 2.6 0 013.7 3.7L10.5 8M9 11.5l-1.3 1.3a2.6 2.6 0 01-3.7-3.7L5.5 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
             </div>
             <div class="note-editor-body" id="cmdDetailsEditor" contenteditable="true"></div>
           </div>
@@ -1547,8 +1559,8 @@
     </div>
     <div class="modal-body">
       <div class="set-group">
-        <span class="set-label">Name</span>
-        <input class="set-input" type="text" id="folderPromptInput" maxlength="80">
+        <span class="set-label" id="folderPromptLabel">Name</span>
+        <input class="set-input" type="text" id="folderPromptInput" maxlength="500">
       </div>
       <p class="confirm-msg" id="folderPromptError" style="display:none;color:var(--red);"></p>
     </div>
