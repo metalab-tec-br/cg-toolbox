@@ -395,7 +395,19 @@ async function toggleCommandInFolder(cmdId, folderId, itemEl) {
     if (card) {
       const inAnyFolder = FOLDERS.some(f => f.command_ids.has(cmdId));
       const btn = card.querySelector('.fav-wrap .fav-btn');
-      if (btn) btn.classList.toggle('on', inAnyFolder);
+      if (btn) {
+        btn.classList.toggle('on', inAnyFolder);
+        // Bug reportado: ícone ficava "vazado" (contorno, fill="none") mesmo
+        // já marcado numa pasta — só a cor (.on) era atualizada aqui, o SVG
+        // em si (gerado uma única vez na montagem do card, ver folderIcon()
+        // em js/terminal-renderer.js) nunca era trocado nessa atualização
+        // otimista (sem re-render completo). Um comando que passasse por
+        // render() de novo (ex.: F5, ou dentro de Folders) já mostrava certo
+        // — daí a inconsistência entre cards. Refazer o innerHTML do botão
+        // com o ícone certo resolve os dois casos da mesma forma.
+        if (typeof folderIcon === 'function') btn.innerHTML = folderIcon(inAnyFolder);
+        btn.title = inAnyFolder ? 'In folders' : 'Add to folder';
+      }
     }
   }
 
