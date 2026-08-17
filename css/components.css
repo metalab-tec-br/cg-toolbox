@@ -1486,9 +1486,12 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    ("as informações estão cortando"). Como .modal-box não tem transform/
    filter, um elemento fixed escapa do clipping dele e é posicionado
    livremente na tela (coordenadas via JS em ipcToggleNetmaskInfo,
-   js/ipcalc.js). max-height é só uma rede de segurança (viewports MUITO
-   baixos) — com a tabela em duas colunas (.ipc-cidr-cols) ela já cabe
-   inteira sem precisar de scroll interno no caso comum. */
+   js/ipcalc.js). Pedido do usuário: manter a tabela numa coluna só, mas
+   deixar o popover livre pra crescer quase até a altura toda da tela
+   (calc(100vh - 16px), bem mais folga que antes) — assim as 33 linhas
+   (/32 a /0) cabem inteiras sem precisar de scroll interno na maioria dos
+   casos; overflow-y:auto continua só como rede de segurança em viewports
+   muito baixos. */
 .ipc-info-pop {
   display: none; position: fixed;
   z-index: 9999; width: max-content;
@@ -1497,12 +1500,6 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
   box-shadow: 0 6px 18px rgba(0,0,0,.22); padding: 8px;
 }
 .ipc-info-icon.ipc-info-open .ipc-info-pop { display: block; }
-/* Pedido do usuário: "exibir a tabela toda" — as 33 linhas (/32 a /0) em
-   coluna única ficavam altas demais e sempre precisavam de scroll interno.
-   Divididas em duas colunas lado a lado (17 + 16 linhas cada), a altura
-   cai quase pela metade, com um divisor vertical fino entre elas. */
-.ipc-cidr-cols { display: flex; gap: 14px; }
-.ipc-cidr-cols table + table { border-left: 1px solid var(--bdr); padding-left: 14px; }
 .ipc-cidr-table { border-collapse: collapse; font-family: var(--mono); font-size: 10.5px; }
 .ipc-cidr-table th {
   text-align: left; color: var(--dim); font-weight: 800; text-transform: uppercase;
@@ -1593,9 +1590,9 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    colunas, pensadas pro log de auditoria) com a MESMA especificidade
    (classe + nth-child); a ordem no arquivo (esta regra vem depois) decide
    quem vence. ─── */
-.ipc-rfc-table { font-size: 9px; }
-.ipc-rfc-table th { padding: 5px 8px; font-size: 8px; }
-.ipc-rfc-table td { padding: 4px 8px; white-space: normal; overflow: visible; text-overflow: clip; }
+.ipc-rfc-table { font-size: 11px; }
+.ipc-rfc-table th { padding: 6px 9px; font-size: 9px; }
+.ipc-rfc-table td { padding: 6px 9px; white-space: normal; overflow: visible; text-overflow: clip; }
 .ipc-rfc-table th:nth-child(1), .ipc-rfc-table td:nth-child(1) { width: 44%; font-family: var(--mono); }
 .ipc-rfc-table th:nth-child(2), .ipc-rfc-table td:nth-child(2) { width: 26%; font-family: var(--mono); }
 .ipc-rfc-table th:nth-child(3), .ipc-rfc-table td:nth-child(3) { width: 30%; }

@@ -1833,58 +1833,44 @@
               <span class="set-label">Netmask</span>
               <span class="ipc-info-icon" tabindex="-1" role="button" aria-label="Subnet mask reference table" onclick="ipcToggleNetmaskInfo(event)">i
                 <span class="ipc-info-pop">
-                  <!-- Pedido do usuário: "exibir a tabela toda" sem cortar —
-                       a lista de /32 a /0 (33 linhas) inteira numa coluna só
-                       ficava alta demais e sempre precisava de scroll
-                       interno em telas mais baixas. Dividida em DUAS
-                       colunas lado a lado (17 + 16 linhas), a altura total
-                       cai praticamente pela metade e cabe inteira na tela
-                       sem precisar rolar, no caso comum. -->
-                  <div class="ipc-cidr-cols">
-                    <table class="ipc-cidr-table">
-                      <thead><tr><th>Prefix</th><th>Subnet Mask</th></tr></thead>
-                      <tbody>
-                        <tr><td>/32</td><td>255.255.255.255</td></tr>
-                        <tr><td>/31</td><td>255.255.255.254</td></tr>
-                        <tr><td>/30</td><td>255.255.255.252</td></tr>
-                        <tr><td>/29</td><td>255.255.255.248</td></tr>
-                        <tr><td>/28</td><td>255.255.255.240</td></tr>
-                        <tr><td>/27</td><td>255.255.255.224</td></tr>
-                        <tr><td>/26</td><td>255.255.255.192</td></tr>
-                        <tr><td>/25</td><td>255.255.255.128</td></tr>
-                        <tr><td>/24</td><td>255.255.255.0</td></tr>
-                        <tr><td>/23</td><td>255.255.254.0</td></tr>
-                        <tr><td>/22</td><td>255.255.252.0</td></tr>
-                        <tr><td>/21</td><td>255.255.248.0</td></tr>
-                        <tr><td>/20</td><td>255.255.240.0</td></tr>
-                        <tr><td>/19</td><td>255.255.224.0</td></tr>
-                        <tr><td>/18</td><td>255.255.192.0</td></tr>
-                        <tr><td>/17</td><td>255.255.128.0</td></tr>
-                        <tr><td>/16</td><td>255.255.0.0</td></tr>
-                      </tbody>
-                    </table>
-                    <table class="ipc-cidr-table">
-                      <thead><tr><th>Prefix</th><th>Subnet Mask</th></tr></thead>
-                      <tbody>
-                        <tr><td>/15</td><td>255.254.0.0</td></tr>
-                        <tr><td>/14</td><td>255.252.0.0</td></tr>
-                        <tr><td>/13</td><td>255.248.0.0</td></tr>
-                        <tr><td>/12</td><td>255.240.0.0</td></tr>
-                        <tr><td>/11</td><td>255.224.0.0</td></tr>
-                        <tr><td>/10</td><td>255.192.0.0</td></tr>
-                        <tr><td>/9</td><td>255.128.0.0</td></tr>
-                        <tr><td>/8</td><td>255.0.0.0</td></tr>
-                        <tr><td>/7</td><td>254.0.0.0</td></tr>
-                        <tr><td>/6</td><td>252.0.0.0</td></tr>
-                        <tr><td>/5</td><td>248.0.0.0</td></tr>
-                        <tr><td>/4</td><td>240.0.0.0</td></tr>
-                        <tr><td>/3</td><td>224.0.0.0</td></tr>
-                        <tr><td>/2</td><td>192.0.0.0</td></tr>
-                        <tr><td>/1</td><td>128.0.0.0</td></tr>
-                        <tr><td>/0</td><td>0.0.0.0</td></tr>
-                      </tbody>
-                    </table>
-                  </div>
+                  <table class="ipc-cidr-table">
+                    <thead><tr><th>Prefix</th><th>Subnet Mask</th></tr></thead>
+                    <tbody>
+                      <tr><td>/32</td><td>255.255.255.255</td></tr>
+                      <tr><td>/31</td><td>255.255.255.254</td></tr>
+                      <tr><td>/30</td><td>255.255.255.252</td></tr>
+                      <tr><td>/29</td><td>255.255.255.248</td></tr>
+                      <tr><td>/28</td><td>255.255.255.240</td></tr>
+                      <tr><td>/27</td><td>255.255.255.224</td></tr>
+                      <tr><td>/26</td><td>255.255.255.192</td></tr>
+                      <tr><td>/25</td><td>255.255.255.128</td></tr>
+                      <tr><td>/24</td><td>255.255.255.0</td></tr>
+                      <tr><td>/23</td><td>255.255.254.0</td></tr>
+                      <tr><td>/22</td><td>255.255.252.0</td></tr>
+                      <tr><td>/21</td><td>255.255.248.0</td></tr>
+                      <tr><td>/20</td><td>255.255.240.0</td></tr>
+                      <tr><td>/19</td><td>255.255.224.0</td></tr>
+                      <tr><td>/18</td><td>255.255.192.0</td></tr>
+                      <tr><td>/17</td><td>255.255.128.0</td></tr>
+                      <tr><td>/16</td><td>255.255.0.0</td></tr>
+                      <tr><td>/15</td><td>255.254.0.0</td></tr>
+                      <tr><td>/14</td><td>255.252.0.0</td></tr>
+                      <tr><td>/13</td><td>255.248.0.0</td></tr>
+                      <tr><td>/12</td><td>255.240.0.0</td></tr>
+                      <tr><td>/11</td><td>255.224.0.0</td></tr>
+                      <tr><td>/10</td><td>255.192.0.0</td></tr>
+                      <tr><td>/9</td><td>255.128.0.0</td></tr>
+                      <tr><td>/8</td><td>255.0.0.0</td></tr>
+                      <tr><td>/7</td><td>254.0.0.0</td></tr>
+                      <tr><td>/6</td><td>252.0.0.0</td></tr>
+                      <tr><td>/5</td><td>248.0.0.0</td></tr>
+                      <tr><td>/4</td><td>240.0.0.0</td></tr>
+                      <tr><td>/3</td><td>224.0.0.0</td></tr>
+                      <tr><td>/2</td><td>192.0.0.0</td></tr>
+                      <tr><td>/1</td><td>128.0.0.0</td></tr>
+                      <tr><td>/0</td><td>0.0.0.0</td></tr>
+                    </tbody>
+                  </table>
                 </span>
               </span>
             </span>
