@@ -450,7 +450,7 @@ function scopeTagsHtml(scope) {
   return `<span class="scope-tags">${vd}${sy}${ve}${en}</span>`;
 }
 
-function card({ id, name, desc, about, lines, folderIds = [], createdBy, modifiedBy, updatedAt, isSystem = false, vendors, systems, versions, environments }) {
+function card({ id, name, desc, details, lines, folderIds = [], createdBy, modifiedBy, updatedAt, isSystem = false, vendors, systems, versions, environments }) {
   const scopeHtml = scopeTagsHtml({ vendors, systems, versions, environments });
   const inAnyFolder = !!(folderIds && folderIds.length);
   // O botão agora abre um dropdown de pastas (toggleFolderMenu, ver
@@ -486,12 +486,11 @@ function card({ id, name, desc, about, lines, folderIds = [], createdBy, modifie
       <path d="M3.2 10.5H2.3a.8.8 0 01-.8-.8v-7A.8.8 0 012.3 2h7a.8.8 0 01.8.8v.9" stroke="currentColor" stroke-width="1.4"/>
     </svg>
   </button>` : '';
-  const aboutHtml = about ? `<div class="card-about">
-    <div class="about-body">
-      <span class="about-purpose">${about.purpose}</span>
-      ${about.when ? `<span class="about-when"><strong>When to use:</strong> ${about.when}</span>` : ''}
-      ${about.obs ? `<span class="about-when"><strong>Note:</strong> ${about.obs}</span>` : ''}
-    </div>
+  // `details` já vem sanitizado pelo servidor (sanitizeNoteHtml, mesma
+  // allow-list usada pela descrição das Notes) — inserido cru, mesmo modelo
+  // de confiança do note.description em buildNoteCardHtml.
+  const detailsHtml = (details && details.trim()) ? `<div class="card-about">
+    <div class="about-body">${details}</div>
   </div>` : '';
   return `<div class="card" data-cmd-id="${id || ''}">
     <div class="card-head">
@@ -500,7 +499,7 @@ function card({ id, name, desc, about, lines, folderIds = [], createdBy, modifie
       <span class="card-desc">${desc || ''}</span>
       <span class="card-actions">${favHtml}${duplicateHtml}${editHtml}</span>
     </div>
-    ${aboutHtml}
+    ${detailsHtml}
     ${termRender(lines, id)}
   </div>`;
 }

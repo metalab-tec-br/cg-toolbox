@@ -54,13 +54,25 @@ CREATE TABLE IF NOT EXISTS commands (
   name                TEXT NOT NULL,
   name_empty          TEXT,                 -- variante do nome quando requires_ip_port=1 (IP/Porta vazios) (opcional)
 
-  "desc"              TEXT NOT NULL DEFAULT '', -- nome entre aspas: "desc" é palavra reservada no PostgreSQL
+  "desc"              TEXT NOT NULL DEFAULT '', -- nome entre aspas: "desc" é palavra reservada no PostgreSQL (rótulo na UI: "Description")
   desc_empty          TEXT,
 
-  about_icon          TEXT NOT NULL DEFAULT 'ℹ️',
-  about_purpose       TEXT NOT NULL DEFAULT '',
-  about_when          TEXT NOT NULL DEFAULT '',
-  about_obs           TEXT NOT NULL DEFAULT '',
+  -- `details` — pedido do usuário: "vamos simplificar os campos de
+  -- informações do comando... criar um campo Details e migrar o conteúdo
+  -- dos campos Purpose/When to use/Note para esse campo... remover os
+  -- campos Purpose/When to use/Note... no campo Details permitir a
+  -- formatação igual em notes da pasta folders". Substitui os 4 campos
+  -- antigos about_icon/about_purpose/about_when/about_obs (removidos, ver
+  -- migração em server/db.js) por um único campo de texto RICO (HTML), no
+  -- mesmo modelo da feature Notes: editado num <div contenteditable> com
+  -- negrito/itálico/sublinhado/tamanho de fonte/cor/alinhamento (ver
+  -- neExec-equivalentes cdExec/cdSetFontSize/cdSetColor em
+  -- js/command-editor.js) e sanitizado no servidor antes de gravar
+  -- (sanitizeNoteHtml em server/index.js, a mesma função usada pelas notas).
+  -- Ainda passa por resolveTokens() no render (js/db-render-engine.js) —
+  -- {{ip}}/{{port}}/etc. continuam sendo substituídos dentro do HTML, exatamente
+  -- como já acontecia nos 3 campos antigos.
+  details             TEXT NOT NULL DEFAULT '',
 
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),

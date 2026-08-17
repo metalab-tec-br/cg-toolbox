@@ -495,12 +495,7 @@ async function shapeCommand(row, username) {
     name_empty: row.name_empty,
     desc: row.desc,
     desc_empty: row.desc_empty,
-    about: {
-      icon: row.about_icon,
-      purpose: row.about_purpose,
-      when: row.about_when,
-      obs: row.about_obs,
-    },
+    details: row.details,
     vendors,
     systems: systemList,
     versions,
@@ -605,12 +600,7 @@ async function shapeCommandsBatch(rows, username) {
       name_empty: row.name_empty,
       desc: row.desc,
       desc_empty: row.desc_empty,
-      about: {
-        icon: row.about_icon,
-        purpose: row.about_purpose,
-        when: row.about_when,
-        obs: row.about_obs,
-      },
+      details: row.details,
       vendors,
       systems: systemList,
       versions,
@@ -1853,7 +1843,7 @@ function validateBody(body) {
 }
 
 const NULLABLE_TEXT_FIELDS = ['name_empty', 'desc_empty'];
-const REQUIRED_TEXT_FIELDS = ['name', 'desc', 'about_purpose', 'about_when', 'about_obs'];
+const REQUIRED_TEXT_FIELDS = ['name', 'desc'];
 
 function buildCommandColumns(body) {
   const topics = resolveTopics(body);
@@ -1871,7 +1861,12 @@ function buildCommandColumns(body) {
     sort_order: Number.isInteger(body.sort_order) ? body.sort_order : 0,
     requires_ip_port: (body.requires_ip_port && hasEmptyLines) ? 1 : 0,
     placeholder_resolver: body.placeholder_resolver || null,
-    about_icon: body.about_icon || 'ℹ️',
+    // `details` substitui about_purpose/about_when/about_obs (removidos) —
+    // conteúdo rico (HTML) vindo do editor contenteditable de Details (ver
+    // js/command-editor.js), sanitizado aqui igual à descrição de uma Note
+    // (mesma função, mesma allow-list de tags/estilo — ver sanitizeNoteHtml
+    // acima), nunca confiado cru só porque veio autenticado.
+    details: sanitizeNoteHtml(body.details || ''),
   };
   for (const f of REQUIRED_TEXT_FIELDS) cols[f] = body[f] != null ? body[f] : '';
   for (const f of NULLABLE_TEXT_FIELDS) cols[f] = body[f] != null ? body[f] : null;
@@ -1950,14 +1945,14 @@ app.post('/api/commands', async (req, res) => {
         `INSERT INTO commands (
           id, topic, icon, sort_order, requires_ip_port, placeholder_resolver,
           name, name_empty, "desc", desc_empty,
-          about_icon, about_purpose, about_when, about_obs,
+          details,
           created_by, modified_by
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
         [
           cols.id, cols.topic, cols.icon, cols.sort_order, cols.requires_ip_port,
           cols.placeholder_resolver,
           cols.name, cols.name_empty, cols.desc, cols.desc_empty,
-          cols.about_icon, cols.about_purpose, cols.about_when, cols.about_obs,
+          cols.details,
           cols.created_by, cols.modified_by,
         ]
       );
@@ -2015,16 +2010,16 @@ app.put('/api/commands/:id', async (req, res) => {
           requires_ip_port = $4,
           placeholder_resolver = $5,
           name = $6, name_empty = $7, "desc" = $8, desc_empty = $9,
-          about_icon = $10, about_purpose = $11, about_when = $12, about_obs = $13,
-          modified_by = $14,
+          details = $10,
+          modified_by = $11,
           updated_at = NOW()
-        WHERE id = $15`,
+        WHERE id = $12`,
         [
           cols.topic, cols.icon, cols.sort_order,
           cols.requires_ip_port,
           cols.placeholder_resolver,
           cols.name, cols.name_empty, cols.desc, cols.desc_empty,
-          cols.about_icon, cols.about_purpose, cols.about_when, cols.about_obs,
+          cols.details,
           cols.modified_by,
           id,
         ]
@@ -2047,7 +2042,7 @@ app.put('/api/commands/:id', async (req, res) => {
     // sem sinal real).
     const changeDetails = summarizeChangedFields(found, cols, {
       name: 'name', topic: 'topic', desc: 'description',
-      about_purpose: 'purpose', about_when: 'when to use', about_obs: 'notes',
+      details: 'details',
       requires_ip_port: 'IP+Port pairing',
     });
     await logAudit(currentUser, 'update', 'command', id, cols.name, changeDetails);

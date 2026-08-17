@@ -377,6 +377,70 @@ async function runMigrations() {
   } catch (err) {
     console.error('[db] Falha ao remover raw_template/requires_ips/command_diffs:', err.message);
   }
+
+  // Simplificação dos campos de informação do comando — pedido do usuário:
+  // "criar um campo Details e migrar o conteúdo dos campos Purpose/When to
+  // use/Note para esse campo... remover os campos Purpose/When to use/Note".
+  // 1) Garante a coluna nova (idempotente, ADD COLUMN IF NOT EXISTS).
+  // 2) Backfill: só roda se as colunas ANTIGAS ainda existirem (guard via
+  //    information_schema) — depois do 1º boot bem-sucedido elas já foram
+  //    apagadas (passo 3 abaixo), então em todo boot seguinte esse SELECT
+  //    nem tentaria rodar (evita um erro "column does not exist" tentado a
+  //    cada subida do backend numa instalação já migrada). Só migra
+  //    comandos cujo `details` ainda esteja vazio (idempotente mesmo que o
+  //    guard acima não existisse) e que tenham pelo menos um dos 3 campos
+  //    antigos preenchido — nunca sobrescreve um `details` já escrito por um
+  //    usuário. O texto antigo era sempre PLAIN TEXT (nunca HTML) — por isso
+  //    é escapado (&/</>) antes de virar HTML, e quebras de linha viram
+  //    parágrafos/<br>, uma seção por campo (só as não-vazias), com um
+  //    cabeçalho em negrito igual ao rótulo antigo do campo — assim o
+  //    conteúdo já cadastrado não se perde nem fica ilegível dentro do novo
+  //    editor rico.
+  // 3) Remove as 4 colunas antigas (about_icon incluído — nunca teve campo
+  //    próprio no editor, era só um valor morto default 'ℹ️', ver comentário
+  //    em js/terminal-renderer.js: card() nunca lê about.icon).
+  try {
+    const { rows: oldCols } = await pool.query(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_name = 'commands' AND column_name IN ('about_purpose', 'about_when', 'about_obs')`
+    );
+    if (oldCols.length === 3) {
+      await pool.query(`ALTER TABLE commands ADD COLUMN IF NOT EXISTS details TEXT NOT NULL DEFAULT ''`);
+      const { rows: toMigrate } = await pool.query(`
+        SELECT id, about_purpose, about_when, about_obs FROM commands
+        WHERE trim(coalesce(details, '')) = ''
+          AND (trim(coalesce(about_purpose, '')) <> '' OR trim(coalesce(about_when, '')) <> '' OR trim(coalesce(about_obs, '')) <> '')
+      `);
+      const escapeHtml = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const toParagraphs = s => escapeHtml(s).split(/\n{2,}/).map(block => `<p>${block.replace(/\n/g, '<br>')}</p>`).join('');
+      const buildDetailsHtml = (purpose, when, obs) => {
+        const sections = [];
+        if (purpose && purpose.trim()) sections.push(`<p><strong>Purpose</strong></p>${toParagraphs(purpose)}`);
+        if (when && when.trim()) sections.push(`<p><strong>When to use</strong></p>${toParagraphs(when)}`);
+        if (obs && obs.trim()) sections.push(`<p><strong>Note</strong></p>${toParagraphs(obs)}`);
+        return sections.join('');
+      };
+      for (const row of toMigrate) {
+        await pool.query('UPDATE commands SET details = $1 WHERE id = $2', [
+          buildDetailsHtml(row.about_purpose, row.about_when, row.about_obs), row.id,
+        ]);
+      }
+      if (toMigrate.length) {
+        console.log(`[db] Purpose/When to use/Note migrados para o novo campo Details (rich text) em ${toMigrate.length} comando(s).`);
+      }
+      await pool.query(`ALTER TABLE commands DROP COLUMN IF EXISTS about_purpose`);
+      await pool.query(`ALTER TABLE commands DROP COLUMN IF EXISTS about_when`);
+      await pool.query(`ALTER TABLE commands DROP COLUMN IF EXISTS about_obs`);
+      await pool.query(`ALTER TABLE commands DROP COLUMN IF EXISTS about_icon`);
+    } else {
+      // Instalação nova, ou já migrada — só garante que `details` existe
+      // (schema.sql já cria com CREATE TABLE IF NOT EXISTS, então isto é
+      // redundante numa instalação 100% nova, mas inofensivo).
+      await pool.query(`ALTER TABLE commands ADD COLUMN IF NOT EXISTS details TEXT NOT NULL DEFAULT ''`);
+    }
+  } catch (err) {
+    console.error('[db] Falha ao migrar about_purpose/about_when/about_obs para details:', err.message);
+  }
 }
 
 // Garante que sempre existe pelo menos uma conta local com role='admin' —

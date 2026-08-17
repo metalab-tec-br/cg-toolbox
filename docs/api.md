@@ -111,10 +111,7 @@ Cria um comando. Corpo (campos obrigatórios em **negrito**):
   "topics": ["troubleshooting"],
   "requires_ip_port": false,
   "placeholder_resolver": null,
-  "about_icon": "ℹ️",
-  "about_purpose": "...",
-  "about_when": "...",
-  "about_obs": "...",
+  "details": "<p><strong>Purpose</strong></p><p>...</p>",
   "lines": [
     { "variant": "default", "sort_order": 0, "line_type": "cmd", "prompt": "[Expert@FW]#", "content": "fw monitor -e \"...\"", "supports_export": true }
   ]
@@ -124,6 +121,12 @@ Cria um comando. Corpo (campos obrigatórios em **negrito**):
 Campos obrigatórios: **`id`**, **`name`**, **`vendors`** (exatamente 1 item — um
 comando pertence a um único vendor), **`systems`** (≥1), **`versions`** (≥1),
 **`environments`** (≥1), **`topics`** (≥1 — ou o campo legado `topic`, string única).
+
+`details` (opcional, substitui os antigos `about_icon`/`about_purpose`/
+`about_when`/`about_obs`) é um único campo de rich text HTML — o mesmo editor
+de formatação usado nas Notes da pasta Folders (negrito/itálico/sublinhado,
+tamanho de fonte, 5 cores, alinhamento). O HTML enviado é sanitizado no
+servidor (mesma allow-list de tags/estilo usada em Notes) antes de gravar.
 
 `created_by`/`modified_by` são preenchidos automaticamente com o usuário atual —
 não são aceitos no corpo. **Exceção**: se o header `X-Save-As-System: 1` for enviado
@@ -175,7 +178,7 @@ não for admin.
   "name_empty": "fw monitor (fill SRC/DST)",
   "desc": "Captures traffic at kernel level",
   "desc_empty": null,
-  "about": { "icon": "ℹ️", "purpose": "...", "when": "...", "obs": "..." },
+  "details": "<p><strong>Purpose</strong></p><p>...</p>",
   "vendors": ["check-point"],
   "systems": ["gaia"],
   "versions": ["r8110"],

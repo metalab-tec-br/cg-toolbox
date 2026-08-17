@@ -923,23 +923,42 @@ const COMMANDS = [
 // migração ao vivo, com fallback para o português se o inglês estiver vazio.
 function canon(en, pt) { return (en !== undefined && en !== null && en !== '') ? en : (pt || ''); }
 
+// `details` substitui about_icon/about_purpose/about_when/about_obs (ver
+// schema.sql e a migração em db.js) — os literais COMMANDS abaixo continuam
+// definindo purpose/when/obs separados (mais fácil de manter aqui), mas na
+// hora de gravar são combinados num único bloco HTML, igual ao backfill que
+// db.js roda em bancos já existentes.
+function escapeHtml(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function toParagraphs(s) { return escapeHtml(s).split(/\n{2,}/).map(block => `<p>${block.replace(/\n/g, '<br>')}</p>`).join(''); }
+function buildDetailsHtml(purpose, when, obs) {
+  const sections = [];
+  if (purpose && purpose.trim()) sections.push(`<p><strong>Purpose</strong></p>${toParagraphs(purpose)}`);
+  if (when && when.trim()) sections.push(`<p><strong>When to use</strong></p>${toParagraphs(when)}`);
+  if (obs && obs.trim()) sections.push(`<p><strong>Note</strong></p>${toParagraphs(obs)}`);
+  return sections.join('');
+}
+
+// NOTA (pré-existente, fora do escopo desta mudança): esta query ainda
+// referencia raw_template/requires_ips, colunas já removidas do schema em
+// tarefa anterior (#596/#598) — este script não roda automaticamente (só via
+// `node seed.js` manual) e já estava quebrado contra o banco atual antes
+// desta alteração. Não corrigido aqui para não misturar escopos.
 const INSERT_COMMAND_SQL = `
   INSERT INTO commands (
     id, topic, icon, sort_order, requires_ips, requires_ip_port, placeholder_resolver, raw_template,
     name, name_empty, "desc", desc_empty,
-    about_icon, about_purpose, about_when, about_obs
+    details
   ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8,
     $9, $10, $11, $12,
-    $13, $14, $15, $16
+    $13
   )
   ON CONFLICT (id) DO UPDATE SET
     topic = EXCLUDED.topic, icon = EXCLUDED.icon, sort_order = EXCLUDED.sort_order,
     requires_ips = EXCLUDED.requires_ips, requires_ip_port = EXCLUDED.requires_ip_port,
     placeholder_resolver = EXCLUDED.placeholder_resolver, raw_template = EXCLUDED.raw_template,
     name = EXCLUDED.name, name_empty = EXCLUDED.name_empty, "desc" = EXCLUDED."desc", desc_empty = EXCLUDED.desc_empty,
-    about_icon = EXCLUDED.about_icon, about_purpose = EXCLUDED.about_purpose,
-    about_when = EXCLUDED.about_when, about_obs = EXCLUDED.about_obs
+    details = EXCLUDED.details
 `;
 
 async function seed() {
@@ -957,10 +976,11 @@ async function seed() {
         (c.name_empty_en || c.name_empty_pt) ? canon(c.name_empty_en, c.name_empty_pt) : null,
         canon(c.desc_en, c.desc_pt),
         (c.desc_empty_en || c.desc_empty_pt) ? canon(c.desc_empty_en, c.desc_empty_pt) : null,
-        c.about_icon || 'ℹ️',
-        canon(c.about_purpose_en, c.about_purpose_pt),
-        canon(c.about_when_en, c.about_when_pt),
-        canon(c.about_obs_en, c.about_obs_pt),
+        buildDetailsHtml(
+          canon(c.about_purpose_en, c.about_purpose_pt),
+          canon(c.about_when_en, c.about_when_pt),
+          canon(c.about_obs_en, c.about_obs_pt),
+        ),
       ]);
 
       // Um comando pode pertencer a mais de um Tópico (c.topics, opcional); por padrão

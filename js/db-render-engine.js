@@ -309,20 +309,17 @@ RESOLVERS.fwaccelconns = function (row, values) {
 // ════════════════════════════════════════════════
 // Row -> card() HTML
 // ════════════════════════════════════════════════
-function mapAbout(about, values) {
-  if (!about) return null;
-  return {
-    icon: about.icon,
-    purpose: resolveTokens(about.purpose, values),
-    when: resolveTokens(about.when, values),
-    obs: resolveTokens(about.obs, values),
-  };
+// `details` substitui about.purpose/when/obs (campo único de rich text HTML,
+// ver server/schema.sql e js/command-editor.js) — só precisa passar pelo
+// resolveTokens() de {{ip}}/{{port}}/etc., igual ao texto plano de antes.
+function resolveDetailsHtml(details, values) {
+  return details ? resolveTokens(details, values) : '';
 }
 
 // Bloco "placeholder" usado por requires_ip_port (IP/Porta genéricos vazios)
 // — mostra nome/desc/linhas alternativos quando o comando ainda não tem
 // IP/Porta preenchidos.
-function buildEmptyStateCard(row, values, about) {
+function buildEmptyStateCard(row, values, detailsHtml) {
   const emptyLines = (row.lines && row.lines.empty) || [];
   if (!emptyLines.length) return null; // e.g. conntable/nattable/routespecific: card omitido inteiramente
   const name = (row.name_empty !== null && row.name_empty !== undefined && row.name_empty !== '') ? row.name_empty : row.name;
@@ -331,7 +328,7 @@ function buildEmptyStateCard(row, values, about) {
     id: row.id,
     name: resolveTokens(name, values),
     desc: resolveTokens(desc, values),
-    about,
+    details: detailsHtml,
     lines: dbLinesToTerm(emptyLines, values),
     folderIds: row.folder_ids,
     createdBy: row.created_by, modifiedBy: row.modified_by, updatedAt: row.updated_at, isSystem: row.is_system,
@@ -340,14 +337,14 @@ function buildEmptyStateCard(row, values, about) {
 }
 
 function buildCardHtmlForRow(row, values, hasIPs) {
-  const about = mapAbout(row.about, values);
+  const detailsHtml = resolveDetailsHtml(row.details, values);
 
   // IP/Porta genéricos (sem direção — ver query-bar.js): usados por comandos como
   // "host <IP> and port <PORT>" que não distinguem origem/destino, ao contrário de
   // SRC/DST. Gatilho independente de hasIPs, lido direto de values.ip/values.port.
   const hasIpPort = !!(values.ip && values.port);
   if (row.requires_ip_port && !hasIpPort) {
-    return buildEmptyStateCard(row, values, about);
+    return buildEmptyStateCard(row, values, detailsHtml);
   }
 
   let lines;
@@ -363,7 +360,7 @@ function buildCardHtmlForRow(row, values, hasIPs) {
     id: row.id,
     name: resolveTokens(row.name, values),
     desc: resolveTokens(row.desc, values),
-    about, lines,
+    details: detailsHtml, lines,
     folderIds: row.folder_ids,
     createdBy: row.created_by, modifiedBy: row.modified_by, updatedAt: row.updated_at, isSystem: row.is_system,
     vendors: row.vendors, systems: row.systems, versions: row.versions, environments: row.environments,

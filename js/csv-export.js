@@ -68,9 +68,12 @@ const CSV_COLUMNS = [
   { key: 'versions', header: 'Versions', get: c => (c.versions || []).join(', ') },
   { key: 'environments', header: 'Environments', get: c => (c.environments || []).join(', ') },
   { key: 'command', header: 'Command', get: c => csvCommandLines(c.lines && c.lines.default) },
-  { key: 'purpose', header: 'Purpose', get: c => (c.about && c.about.purpose) || '' },
-  { key: 'when', header: 'When to use', get: c => (c.about && c.about.when) || '' },
-  { key: 'notes', header: 'Notes', get: c => (c.about && c.about.obs) || '' },
+  // `details` substitui Purpose/When to use/Notes (campo único de rich text
+  // HTML) — exportado cru (mesmo HTML sanitizado que o servidor grava), sem
+  // conversão extra: ver js/csv-import.js, o mesmo HTML volta intacto no
+  // reimport porque sanitizeNoteHtml (server/index.js) não mexe em texto que
+  // já está sem tags reconhecidas nem no que já tem as tags esperadas.
+  { key: 'details', header: 'Details', get: c => c.details || '' },
 ];
 
 // Lembra a última seleção de colunas entre sessões (por navegador/usuário,

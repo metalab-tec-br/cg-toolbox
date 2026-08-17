@@ -12,8 +12,8 @@ quanto de ponto de partida para quem quiser adaptar/estender.
 | `check-point.csv` | Check Point (Gaia) | 8 — status de processos, captura, debug de drops, versão/hotfixes, tabela de conexões, rotas, SecureXL, licenças |
 | `fortinet.csv` | Fortinet (FortiOS) | 8 — status geral, sniffer, debug flow, CPU/memória/sessões, memória de hardware, tabela de sessões, rotas, FortiGuard |
 
-Descrição, finalidade, quando usar e notas estão em português; comandos e
-prompts ficam no formato técnico original (não são traduzidos).
+Descrição e detalhes (finalidade, quando usar e notas) estão em português;
+comandos e prompts ficam no formato técnico original (não são traduzidos).
 
 ## Formato
 
@@ -22,8 +22,13 @@ template de lá — `Configurações → Cadastro → Import commands → Downlo
 template` — para conferir a lista atual e um exemplo preenchido):
 
 ```
-Name;Description;Vendor;System;Topics;Versions;Environments;Prompt;Command;Note;Purpose;When to use;Notes
+Name;Description;Vendor;System;Topics;Versions;Environments;Prompt;Command;Note;Details
 ```
+
+- `Details` substitui as antigas colunas separadas Purpose/When to use/Notes
+  — é um campo único de rich text (mesmo editor de formatação usado em Notes
+  da pasta Folders). Nestes templates .csv, o conteúdo de cada linha já vem
+  em HTML simples (`<p>`/`<strong>`), mas texto puro também funciona.
 
 - Sem coluna de ID — é um detalhe interno, sempre gerado automaticamente a
   partir do `Name` (igual ao editor manual de comandos).

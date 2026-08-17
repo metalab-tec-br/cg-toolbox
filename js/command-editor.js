@@ -603,9 +603,11 @@ function _ceReadLinesFrom(containerEl) {
 // ════════════════════════════════════════════════
 function _ceResetForm() {
   _ceSetMultiSeg('cmdTopicSeg', ['capture'], 'cmdTopicDDBtn', null, 'selected');
-  ['cmdName', 'cmdNameEmpty', 'cmdDesc', 'cmdDescEmpty',
-   'cmdAboutPurpose', 'cmdAboutWhen', 'cmdAboutObs']
+  ['cmdName', 'cmdNameEmpty', 'cmdDesc', 'cmdDescEmpty']
     .forEach(id => { _ce(id).value = ''; });
+  // `details` substitui about_purpose/when/obs (rich text, ver index.html) —
+  // não é um .value, é o innerHTML do editor contenteditable.
+  _ce('cmdDetailsEditor').innerHTML = '';
   _ceSetSingleSeg('cmdVendorSeg', [], 'cmdVendorDDBtn');
   _ceSetSingleSeg('cmdSysSeg', [], 'cmdSysDDBtn');
   _ceSetMultiSeg('cmdVersionsSeg', [], 'cmdVersionsDDBtn', null, 'selected');
@@ -630,9 +632,7 @@ async function _cePopulateForm(id) {
   _ce('cmdNameEmpty').value = row.name_empty || '';
   _ce('cmdDesc').value = row.desc || '';
   _ce('cmdDescEmpty').value = row.desc_empty || '';
-  _ce('cmdAboutPurpose').value = (row.about && row.about.purpose) || '';
-  _ce('cmdAboutWhen').value = (row.about && row.about.when) || '';
-  _ce('cmdAboutObs').value = (row.about && row.about.obs) || '';
+  _ce('cmdDetailsEditor').innerHTML = row.details || '';
 
   _ceSetSingleSeg('cmdVendorSeg', row.vendors || [], 'cmdVendorDDBtn');
   _ceSetSingleSeg('cmdSysSeg', row.systems || [], 'cmdSysDDBtn');
@@ -809,9 +809,7 @@ async function cmdEditorSave() {
     name_empty: _ce('cmdNameEmpty').value || null,
     desc: _ce('cmdDesc').value || '',
     desc_empty: _ce('cmdDescEmpty').value || '',
-    about_purpose: _ce('cmdAboutPurpose').value || '',
-    about_when: _ce('cmdAboutWhen').value || '',
-    about_obs: _ce('cmdAboutObs').value || '',
+    details: _ce('cmdDetailsEditor').innerHTML || '',
     vendors, systems, versions, environments,
     lines: [...defaultLines, ...emptyLines],
   };

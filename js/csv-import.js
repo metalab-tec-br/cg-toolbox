@@ -80,17 +80,21 @@ function normKey(s) { return String(s || '').trim().toLowerCase(); }
 function splitCell(cell) { return String(cell || '').split(',').map(s => s.trim()).filter(Boolean); }
 
 // ── Template para download — mesmas colunas usadas na exportação (Topic,
-// Versions, Environments, Purpose/When to use/Notes — ver CSV_COLUMNS em
-// csv-export.js), mais as colunas específicas de importação (Requires
-// IP/Port, Prompt, Command, Note). SEM coluna de ID — o id é sempre gerado
-// automaticamente a partir do Name (ver slugifyName/buildImportPayload
-// abaixo), é um detalhe interno, igual ao editor manual (ver
-// _ceBindSingleSeg em js/command-editor.js, onde o ID também é oculto/
-// auto-gerado). Uma linha de exemplo real ajuda mais que uma linha de
-// instruções — os detalhes ficam no texto do modal. ──
+// Versions, Environments, Details — ver CSV_COLUMNS em csv-export.js), mais
+// as colunas específicas de importação (Requires IP/Port, Prompt, Command,
+// Note). SEM coluna de ID — o id é sempre gerado automaticamente a partir do
+// Name (ver slugifyName/buildImportPayload abaixo), é um detalhe interno,
+// igual ao editor manual (ver _ceBindSingleSeg em js/command-editor.js, onde
+// o ID também é oculto/auto-gerado). Uma linha de exemplo real ajuda mais
+// que uma linha de instruções — os detalhes ficam no texto do modal.
+// `Details` substitui as antigas 3 colunas Purpose/When to use/Notes (agora
+// um campo único de rich text — ver server/schema.sql) — texto simples numa
+// célula do CSV funciona igual antes (sanitizeNoteHtml não mexe em texto sem
+// tags reconhecidas), e um .csv reexportado (com HTML de verdade na célula)
+// também reimporta corretamente, sem conversão adicional. ──
 const IMPORT_HEADERS = [
   'Name', 'Description', 'Vendor', 'System', 'Topics', 'Versions', 'Environments',
-  'Prompt', 'Command', 'Note', 'Purpose', 'When to use', 'Notes',
+  'Prompt', 'Command', 'Note', 'Details',
 ];
 // Vendor/System/Version/Environment/Topics são todos obrigatórios agora (ver
 // buildImportPayload abaixo) — "all" não é mais um valor aceito nestas 4
@@ -100,8 +104,7 @@ const IMPORT_EXAMPLE_ROW = [
   'Check Point', 'Gaia',
   'System Monitoring', 'R82', 'Standalone',
   '[Expert@FW]#', 'cpwd_admin list', '',
-  'Confirms a critical process (fwd, cpd, etc.) is being watched and running.',
-  'After a restart, or when troubleshooting a service that keeps failing.', '',
+  'Confirms a critical process (fwd, cpd, etc.) is being watched and running. After a restart, or when troubleshooting a service that keeps failing.',
 ];
 function downloadImportTemplate() {
   const csv = '﻿' + [IMPORT_HEADERS, IMPORT_EXAMPLE_ROW]
@@ -259,9 +262,10 @@ function buildImportPayload(obj, existingIdsInBatch) {
     id, name,
     desc: getCell(obj, 'Description', 'Desc'),
     topics, vendors, systems, versions, environments,
-    about_purpose: getCell(obj, 'Purpose'),
-    about_when: getCell(obj, 'When to use', 'When'),
-    about_obs: getCell(obj, 'Notes', 'Note (about)'),
+    // `Details` substitui Purpose/When to use/Notes — passado cru pro
+    // servidor, que sanitiza via sanitizeNoteHtml (mesma allow-list de
+    // Notes) em buildCommandColumns (server/index.js).
+    details: getCell(obj, 'Details'),
     lines,
   };
   return { payload, warnings };

@@ -1056,17 +1056,55 @@
         </div>
 
         <div class="set-group">
-          <span class="set-label">Short description</span><input class="set-input" id="cmdDesc">
+          <span class="set-label">Description</span><input class="set-input" id="cmdDesc">
         </div>
 
-        <div class="set-group">
-          <span class="set-label">Purpose</span><textarea class="set-input" id="cmdAboutPurpose"></textarea>
-        </div>
-        <div class="set-group">
-          <span class="set-label">When to use</span><textarea class="set-input" id="cmdAboutWhen"></textarea>
-        </div>
-        <div class="set-group">
-          <span class="set-label">Note</span><textarea class="set-input" id="cmdAboutObs"></textarea>
+        <!-- Details: substitui Purpose/When to use/Note (pedido do usuário) —
+             campo único de rich text, mesmo editor/toolbar usado em Notes da
+             pasta Folders (classes note-editor-toolbar/ne-fmt-*/note-editor-
+             body reaproveitadas de js/db-render-engine.js e js/folders.js).
+             Como o editor de comandos é sempre um único modal por vez (ao
+             contrário das Notes, que podem ter vários cards abertos ao mesmo
+             tempo), usamos um id fixo (#cmdDetailsEditor) em vez do padrão
+             delegado por card — mas as MESMAS funções neExec/neSetFontSize/
+             neSetColor funcionam aqui sem alteração, pois elas localizam o
+             editor via closest('.note-flat-body-editing') a partir do botão
+             clicado, não por id. -->
+        <div class="set-group set-group-details">
+          <span class="set-label">Details</span>
+          <div class="note-flat-body note-flat-body-editing">
+            <div class="note-editor-toolbar">
+              <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'bold')" title="Bold (Ctrl+B)"><b>B</b></button>
+              <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'italic')" title="Italic (Ctrl+I)"><i>I</i></button>
+              <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'underline')" title="Underline (Ctrl+U)"><u>U</u></button>
+              <span class="ne-fmt-sep"></span>
+              <select class="ne-fmt-size" onchange="neSetFontSize(this, this.value); this.value='';" title="Font size">
+                <option value="">Size</option>
+                <option value="11">11</option>
+                <option value="13">13</option>
+                <option value="17">17</option>
+                <option value="22">22</option>
+              </select>
+              <span class="ne-fmt-colors" title="Text color">
+                <button type="button" class="ne-fmt-color-swatch" style="background:#000000" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#000000')" title="Black"></button>
+                <button type="button" class="ne-fmt-color-swatch" style="background:#1565c0" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#1565c0')" title="Blue"></button>
+                <button type="button" class="ne-fmt-color-swatch" style="background:#2e7d32" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#2e7d32')" title="Green"></button>
+                <button type="button" class="ne-fmt-color-swatch" style="background:#c62828" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#c62828')" title="Red"></button>
+                <button type="button" class="ne-fmt-color-swatch" style="background:#f9a825" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#f9a825')" title="Yellow"></button>
+              </span>
+              <span class="ne-fmt-sep"></span>
+              <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyLeft')" title="Align left">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M1 7h9M1 11h14M1 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </button>
+              <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyCenter')" title="Align center">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M3.5 7h9M1 11h14M3.5 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </button>
+              <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyRight')" title="Align right">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M6 7h9M1 11h14M6 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <div class="note-editor-body" id="cmdDetailsEditor" contenteditable="true" data-placeholder="Purpose, when to use, notes..."></div>
+          </div>
         </div>
       </div>
 
