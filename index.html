@@ -1891,6 +1891,17 @@
         <div class="ipc-term" id="ipcTermOutput"></div>
       </div>
 
+      <!-- Pedido do usuário: "a supernet deve aparecer em um bloco separado,
+           assim como é o bloco da RFC" — Subnets/Supernet agora é um
+           .set-group próprio (rótulo + caixa .ipc-term independentes),
+           igual ao padrão já usado pela seção RFC 1918 logo abaixo, em vez
+           de ficar dentro da MESMA caixa do resultado principal só com uma
+           linha divisória. -->
+      <div class="set-group" id="ipcSubnetsGroup" style="display:none;">
+        <span class="set-label" id="ipcSubnetsLabel">Subnets</span>
+        <div class="ipc-term" id="ipcSubnetsOutput"></div>
+      </div>
+
       <div class="set-group">
         <span class="set-label">RFC 1918 — Private address ranges</span>
         <div class="audit-log-wrap">

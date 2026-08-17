@@ -1570,17 +1570,12 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
   letter-spacing: .6px; color: var(--dim); margin-bottom: 4px;
 }
 .ipc-note-line { margin: 6px 0; }
-/* Pedido do usuário: "separe o campo das subnets da net principal" — a
-   divisória fina de .ipc-block (mesma usada entre cada sub-rede) não
-   distinguia bem onde a rede base termina e a seção Subnets/Supernet
-   começa. Este wrapper usa uma borda mais grossa e destacada (cor de
-   acento) + mais respiro, tornando a seção visualmente separada. */
-.ipc-subnets-section {
-  margin-top: 18px; padding-top: 16px;
-  border-top: 2px solid var(--teal);
-}
-.ipc-subnets-header-row { margin: 0 0 6px; }
-.ipc-subnets-header { color: var(--green); font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
+/* Subnets/Supernet agora é um .set-group + .ipc-term PRÓPRIOS (ver
+   #ipcSubnetsGroup em index.html), igual ao padrão da seção RFC 1918 logo
+   abaixo — não precisa mais de wrapper/divisória/cabeçalho inline própria
+   (removidos: .ipc-subnets-section, .ipc-subnets-header-row,
+   .ipc-subnets-header — pedido do usuário: "a supernet deve aparecer em
+   um bloco separado, assim como é o bloco da RFC"). */
 /* .copy-btn-inline já cobre display:inline-flex + padding; aqui só zera a
    margem antiga (agora o espaçamento vem do .ipc-copy-slot, largura fixa). */
 .ipc-copy-btn { margin: 0; }

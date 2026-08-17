@@ -414,6 +414,16 @@ function ipcRunCalculate() {
   out += ipcLine('Hosts/Net', r.usableHosts.toLocaleString('pt-BR'), '', r.ipType);
   out += '</div>';
 
+  // Pedido do usuário: "a supernet deve aparecer em um bloco separado,
+  // assim como é o bloco da RFC" — Subnets/Supernet vai pro seu PRÓPRIO
+  // .set-group (#ipcSubnetsGroup/#ipcSubnetsOutput em index.html), com
+  // rótulo e caixa .ipc-term independentes da caixa do resultado
+  // principal — igual ao padrão já usado pela seção RFC 1918 logo abaixo,
+  // em vez de ficar dentro da MESMA caixa só separado por uma linha.
+  const subnetsGroup = document.getElementById('ipcSubnetsGroup');
+  const subnetsLabelEl = document.getElementById('ipcSubnetsLabel');
+  let subnetsOut = '';
+
   const moveTo = String(moveToRaw || '').trim();
   if (moveTo) {
     const newPrefix = ipcParseMaskInput(moveTo);
@@ -426,44 +436,37 @@ function ipcRunCalculate() {
       // Prefixo mais longo/específico = SPLIT: divide a rede atual em N
       // sub-redes menores (ex.: /24 -> 4 x /26).
       const res = ipcSplitSubnets(r.networkLong, r.prefix, newPrefix);
-      // Pedido do usuário: "separe o campo das subnets da net principal" —
-      // a seção inteira de Subnets fica dentro de um wrapper próprio
-      // (.ipc-subnets-section), com uma divisória mais forte que a usada
-      // entre blocos comuns, deixando claro onde a rede base termina e o
-      // resultado do split começa.
-      out += '<div class="ipc-subnets-section">';
-      out += '<div class="ipc-subnets-header-row"><span class="ipc-subnets-header">Subnets</span></div>';
-      out += '<div class="ipc-block">';
-      out += ipcNetmaskLine(longToIp(ipcPrefixToMaskLong(newPrefix)), newPrefix, ipcBinHtml(ipcPrefixToMaskLong(newPrefix), newPrefix, 'mask'));
-      out += ipcLine('Wildcard', longToIp((~ipcPrefixToMaskLong(newPrefix)) >>> 0), ipcBinHtml((~ipcPrefixToMaskLong(newPrefix)) >>> 0, newPrefix, 'plain'));
-      out += '</div>';
+      subnetsLabelEl.textContent = 'Subnets';
+      subnetsOut += '<div class="ipc-block">';
+      subnetsOut += ipcNetmaskLine(longToIp(ipcPrefixToMaskLong(newPrefix)), newPrefix, ipcBinHtml(ipcPrefixToMaskLong(newPrefix), newPrefix, 'mask'));
+      subnetsOut += ipcLine('Wildcard', longToIp((~ipcPrefixToMaskLong(newPrefix)) >>> 0), ipcBinHtml((~ipcPrefixToMaskLong(newPrefix)) >>> 0, newPrefix, 'plain'));
+      subnetsOut += '</div>';
       res.subnets.forEach((sn, i) => {
-        out += ipcRenderNetworkBlock({ ...sn, prefix: newPrefix }, `Subnet ${i + 1} of ${res.generated}`);
+        subnetsOut += ipcRenderNetworkBlock({ ...sn, prefix: newPrefix }, `Subnet ${i + 1} of ${res.generated}`);
       });
       if (res.truncated) {
-        out += `<div class="ipc-note-line"><span class="ipc-note">Showing the first ${res.generated} of ${res.count} subnets (safety limit).</span></div>`;
+        subnetsOut += `<div class="ipc-note-line"><span class="ipc-note">Showing the first ${res.generated} of ${res.count} subnets (safety limit).</span></div>`;
       }
       const totalHosts = res.subnets.reduce((sum, sn) => sum + sn.usableHosts, 0);
-      out += '<div class="ipc-block">';
-      out += ipcLine('Subnets', res.generated.toLocaleString('pt-BR'));
-      out += ipcLine('Hosts', totalHosts.toLocaleString('pt-BR'));
-      out += '</div>';
-      out += '</div>';
+      subnetsOut += '<div class="ipc-block">';
+      subnetsOut += ipcLine('Subnets', res.generated.toLocaleString('pt-BR'));
+      subnetsOut += ipcLine('Hosts', totalHosts.toLocaleString('pt-BR'));
+      subnetsOut += '</div>';
     } else {
       // Prefixo mais curto/genérico = SUPERNET: recalcula a rede que
       // contém o MESMO endereço, só que com uma máscara mais larga.
       const sr = ipcCalculate(r.ip, String(newPrefix));
-      out += '<div class="ipc-subnets-section">';
-      out += '<div class="ipc-subnets-header-row"><span class="ipc-subnets-header">Supernet</span></div>';
-      out += '<div class="ipc-block">';
-      out += ipcNetmaskLine(sr.maskDotted, sr.prefix, ipcBinHtml(sr.maskLong, sr.prefix, 'mask'));
-      out += ipcLine('Wildcard', sr.wildcardDotted, ipcBinHtml(sr.wildcardLong, sr.prefix, 'plain'));
-      out += '</div>';
-      out += ipcRenderNetworkBlock(sr);
-      out += '</div>';
+      subnetsLabelEl.textContent = 'Supernet';
+      subnetsOut += '<div class="ipc-block">';
+      subnetsOut += ipcNetmaskLine(sr.maskDotted, sr.prefix, ipcBinHtml(sr.maskLong, sr.prefix, 'mask'));
+      subnetsOut += ipcLine('Wildcard', sr.wildcardDotted, ipcBinHtml(sr.wildcardLong, sr.prefix, 'plain'));
+      subnetsOut += '</div>';
+      subnetsOut += ipcRenderNetworkBlock(sr);
     }
   }
 
   document.getElementById('ipcTermOutput').innerHTML = out;
   resultsGroup.style.display = '';
+  document.getElementById('ipcSubnetsOutput').innerHTML = subnetsOut;
+  subnetsGroup.style.display = subnetsOut ? '' : 'none';
 }
