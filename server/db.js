@@ -327,23 +327,35 @@ async function runMigrations() {
   // aqui foi removida junto com a própria feature "Differences by version"
   // — ver DROP TABLE logo abaixo — não fazia mais sentido migrar notas de
   // diff para uma tabela que está sendo apagada.)
+  // Guarda: `about_obs` só existe em bancos ainda não migrados para `details`
+  // (ver migração about_purpose/about_when/about_obs -> details logo abaixo,
+  // que roda DEPOIS desta e depende do conteúdo já estar consolidado aqui).
+  // Numa instalação nova (schema.sql sem about_obs) ou num banco que já
+  // passou por aquela migração, esta coluna não existe mais — sem esta
+  // checagem a query sempre falharia com "column does not exist" (capturado
+  // pelo catch, mas gerando um erro de log em todo boot, para sempre).
   try {
-    const { rowCount: movedCmdNotes } = await pool.query(`
-      UPDATE commands c SET about_obs = trim(both chr(10) from
-        c.about_obs || CASE WHEN c.about_obs <> '' THEN chr(10) || chr(10) ELSE '' END || agg.combined
-      )
-      FROM (
-        SELECT command_id, string_agg(content, chr(10) ORDER BY sort_order, id) AS combined
-        FROM command_lines
-        WHERE line_type = 'note' AND trim(content) <> ''
-        GROUP BY command_id
-      ) agg
-      WHERE c.id = agg.command_id
-    `);
-    const { rowCount: deletedCmdNotes } = await pool.query(`DELETE FROM command_lines WHERE line_type = 'note'`);
+    const { rows: obsCol } = await pool.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_name = 'commands' AND column_name = 'about_obs'`
+    );
+    if (obsCol.length) {
+      const { rowCount: movedCmdNotes } = await pool.query(`
+        UPDATE commands c SET about_obs = trim(both chr(10) from
+          c.about_obs || CASE WHEN c.about_obs <> '' THEN chr(10) || chr(10) ELSE '' END || agg.combined
+        )
+        FROM (
+          SELECT command_id, string_agg(content, chr(10) ORDER BY sort_order, id) AS combined
+          FROM command_lines
+          WHERE line_type = 'note' AND trim(content) <> ''
+          GROUP BY command_id
+        ) agg
+        WHERE c.id = agg.command_id
+      `);
+      const { rowCount: deletedCmdNotes } = await pool.query(`DELETE FROM command_lines WHERE line_type = 'note'`);
 
-    if (deletedCmdNotes) {
-      console.log(`[db] Categoria de texto 'note' migrada e removida: ${movedCmdNotes} comando(s) tiveram o texto movido para o campo Note; ${deletedCmdNotes} linha(s) de command_lines apagadas.`);
+      if (deletedCmdNotes) {
+        console.log(`[db] Categoria de texto 'note' migrada e removida: ${movedCmdNotes} comando(s) tiveram o texto movido para o campo Note; ${deletedCmdNotes} linha(s) de command_lines apagadas.`);
+      }
     }
   } catch (err) {
     console.error(`[db] Falha ao migrar linhas 'note' para about_obs:`, err.message);

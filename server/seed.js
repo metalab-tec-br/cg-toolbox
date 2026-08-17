@@ -7,9 +7,11 @@
 //
 // Content notes (see server README / migration report for details):
 // - Lines represent the "standalone environment / R82 version / single IP"
-//   rendering — the version-and-environment-agnostic default. Version-specific
-//   syntax is captured in command_diffs where the original app had a diffs
-//   block; Version/Environment applicability tables are left empty for these
+//   rendering — the version-and-environment-agnostic default. Version-
+//   specific syntax used to be captured in a `diffs` block (command_diffs/
+//   command_diff_lines), a feature removed from the schema in task #597 —
+//   the `diffs` literals below are now inert source data, not written to the
+//   DB. Version/Environment applicability tables are left empty for these
 //   (they apply to all), except the 5 "Ambiente: X" cards which are pinned to
 //   one specific environment each.
 // - Commands flagged with a placeholder_resolver use a single-IP fallback
@@ -914,9 +916,9 @@ const COMMANDS = [
 // ════════════════════════════════════════════════
 // Insert
 // ════════════════════════════════════════════════
-// NOTA: todo o texto do banco (commands.name/desc/about_*,
-// command_lines.content, command_diffs.note, command_diff_lines.content)
-// virou campo único (sem _pt/_en) e o sistema é 100% em inglês — a pedido do
+// NOTA: todo o texto do banco (commands.name/desc/details,
+// command_lines.content) virou campo único (sem _pt/_en) e o sistema é 100%
+// em inglês — a pedido do
 // usuário (ver schema.sql). Este script legado ainda guarda os literais de
 // COMMANDS em pares _pt/_en (mais fácil de ler/manter aqui), mas grava só o
 // valor único no banco — inglês como canônico, mesmo critério usado na
@@ -938,25 +940,27 @@ function buildDetailsHtml(purpose, when, obs) {
   return sections.join('');
 }
 
-// NOTA (pré-existente, fora do escopo desta mudança): esta query ainda
-// referencia raw_template/requires_ips, colunas já removidas do schema em
-// tarefa anterior (#596/#598) — este script não roda automaticamente (só via
-// `node seed.js` manual) e já estava quebrado contra o banco atual antes
-// desta alteração. Não corrigido aqui para não misturar escopos.
+// `raw_template`/`requires_ips` (colunas) e `command_diffs`/
+// `command_diff_lines` (tabelas) foram removidos do schema em tarefa
+// anterior (#596/#597/#598) — este script legado ainda gravava contra eles,
+// o que quebrava `node seed.js` (nunca rodado automaticamente, só manual).
+// Os literais `raw_template`/`requires_ips`/`diffs` continuam presentes nos
+// registros de COMMANDS abaixo como dado de origem histórico, mas não são
+// mais lidos por este INSERT/loop.
 const INSERT_COMMAND_SQL = `
   INSERT INTO commands (
-    id, topic, icon, sort_order, requires_ips, requires_ip_port, placeholder_resolver, raw_template,
+    id, topic, icon, sort_order, requires_ip_port, placeholder_resolver,
     name, name_empty, "desc", desc_empty,
     details
   ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8,
-    $9, $10, $11, $12,
-    $13
+    $1, $2, $3, $4, $5, $6,
+    $7, $8, $9, $10,
+    $11
   )
   ON CONFLICT (id) DO UPDATE SET
     topic = EXCLUDED.topic, icon = EXCLUDED.icon, sort_order = EXCLUDED.sort_order,
-    requires_ips = EXCLUDED.requires_ips, requires_ip_port = EXCLUDED.requires_ip_port,
-    placeholder_resolver = EXCLUDED.placeholder_resolver, raw_template = EXCLUDED.raw_template,
+    requires_ip_port = EXCLUDED.requires_ip_port,
+    placeholder_resolver = EXCLUDED.placeholder_resolver,
     name = EXCLUDED.name, name_empty = EXCLUDED.name_empty, "desc" = EXCLUDED."desc", desc_empty = EXCLUDED.desc_empty,
     details = EXCLUDED.details
 `;
@@ -969,9 +973,9 @@ async function seed() {
 
     for (const c of COMMANDS) {
       await client.query(INSERT_COMMAND_SQL, [
-        c.id, c.topic, c.icon, c.sort_order, c.requires_ips ? 1 : 0,
+        c.id, c.topic, c.icon, c.sort_order,
         c.requires_ip_port || 0,
-        c.placeholder_resolver || null, c.raw_template,
+        c.placeholder_resolver || null,
         canon(c.name_en, c.name_pt),
         (c.name_empty_en || c.name_empty_pt) ? canon(c.name_empty_en, c.name_empty_pt) : null,
         canon(c.desc_en, c.desc_pt),
@@ -1002,13 +1006,12 @@ async function seed() {
         await client.query('INSERT INTO command_lines (command_id, variant, sort_order, line_type, prompt, content) VALUES ($1, $2, $3, $4, $5, $6)', [c.id, 'empty', i, l.line_type, l.prompt, canon(l.content_en, l.content_pt)]);
       }
 
-      for (const [i, d] of (c.diffs || []).entries()) {
-        const diffResult = await client.query('INSERT INTO command_diffs (command_id, version, note, sort_order) VALUES ($1, $2, $3, $4) RETURNING id', [c.id, d.version, canon(d.note_en, d.note_pt), i]);
-        const diffId = diffResult.rows[0].id;
-        for (const [j, l] of (d.lines || []).entries()) {
-          await client.query('INSERT INTO command_diff_lines (diff_id, sort_order, line_type, prompt, content) VALUES ($1, $2, $3, $4, $5)', [diffId, j, l.line_type, l.prompt, canon(l.content_en, l.content_pt)]);
-        }
-      }
+      // `command_diffs`/`command_diff_lines` (feature "Differences by
+      // version") foram removidos do schema na tarefa #597 — os literais
+      // `c.diffs` continuam nos registros de COMMANDS acima (dado de origem
+      // histórico), mas não há mais tabela para gravá-los; nenhuma
+      // informação nova se perde aqui porque o dado já não existe no banco
+      // ao vivo desde aquela migração.
     }
   });
 
