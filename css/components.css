@@ -355,6 +355,14 @@
      border-box já vem do reset global (ver base.css, *{box-sizing:border-
      box}), repetido aqui só por clareza. */
   width: 100%; min-width: 0; align-self: stretch; box-sizing: border-box;
+  /* CAUSA REAL da largura "menor" que persistia mesmo com o width:100% acima:
+     .note-flat-body.note-flat-body-editing (regra genérica, compartilhada
+     com o editor de Notes) tem padding:8px 12px 10px — então a caixa com
+     borda visível (.note-editor-body, abaixo) ficava recuada 12px de cada
+     lado DENTRO deste wrapper, mesmo o wrapper em si tendo a largura certa.
+     Zerando o padding horizontal aqui (só dentro do editor de comandos) a
+     borda do campo alinha exatamente com a borda de Name/Description. */
+  padding-left: 0; padding-right: 0;
 }
 #cmdEditorOverlay .set-group-details .note-editor-body {
   flex: 1 1 auto; min-height: 0; max-height: none; width: 100%; box-sizing: border-box;

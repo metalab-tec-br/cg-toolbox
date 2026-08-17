@@ -1015,11 +1015,21 @@ function _neCurrentFontSizeAt(editor) {
 // (.on) a opção correspondente na lista de tamanhos pré-definidos (ver
 // .ne-fmt-size-opt em index.html — pedido do usuário: "coloque o menu de
 // tamanho do texto em menu dropdown, estilo da imagem anexa").
-function _neUpdateFontSizeDisplay(editor) {
+// `forceSize`: quando informado, usa esse valor em vez de redetectar via
+// _neCurrentFontSizeAt (ver neSetFontSize abaixo). Necessário porque, logo
+// depois de aplicar um tamanho, a seleção é recriada com setStartBefore/
+// setEndAfter sobre o(s) elemento(s) afetado(s) — isso posiciona o nó-âncora
+// da seleção no elemento PAI dos spans recém-formatados (com um offset
+// apontando pra eles), não DENTRO de um deles. _neCurrentFontSizeAt só sobe a
+// árvore a partir do nó-âncora (nunca desce pros filhos), então nesse caso
+// específico ela nunca alcança o style aplicado e sempre "acha" o tamanho
+// herdado do pai (12, o padrão do editor) — foi o que o usuário reportou:
+// "alterei o tamanho para 18, mas no menu continua exibindo 12".
+function _neUpdateFontSizeDisplay(editor, forceSize) {
   const wrap = editor.closest('.note-flat-body-editing');
   if (!wrap) return;
   const input = wrap.querySelector('input.ne-fmt-size');
-  const size = _neCurrentFontSizeAt(editor);
+  const size = (typeof forceSize === 'number') ? forceSize : _neCurrentFontSizeAt(editor);
   if (input) input.value = size;
   const label = wrap.querySelector('.ne-fmt-dd-btn-label');
   if (label) label.textContent = size;
@@ -1131,7 +1141,11 @@ function neSetFontSize(el, px) {
     _neSaveSelectionFor(body);
   }
   if (el && el.tagName === 'INPUT') el.value = n; // <select>/<input> legados das Notes, se algum dia usados aqui
-  _neUpdateFontSizeDisplay(body); // rótulo do botão + destaque (.on) da opção na lista
+  // Passa `n` (o tamanho que ACABAMOS de aplicar) em vez de deixar
+  // _neUpdateFontSizeDisplay redetectar sozinha — ver comentário na função
+  // sobre por que a redetecção falha logo após aplicar (nó-âncora fica no
+  // elemento pai dos spans afetados, não dentro deles).
+  _neUpdateFontSizeDisplay(body, n);
   // Fecha o dropdown ao escolher um tamanho — mesmo padrão de "fechar ao
   // selecionar" da cor, ver neSetColor abaixo.
   if (el && el.closest('.ne-fmt-dd')) _neCloseFmtDropdowns();
