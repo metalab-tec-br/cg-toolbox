@@ -1479,9 +1479,18 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .ipc-info-icon:hover, .ipc-info-icon:focus, .ipc-info-icon.ipc-info-open {
   border-color: var(--teal); color: var(--teal); outline: none;
 }
+/* position: fixed (não absolute) DE PROPÓSITO: o modal do IPCalc
+   (.modal-box) tem overflow-y:auto/max-height (pra rolar quando o
+   conteúdo é grande), e um popover absolute dentro dele fica CORTADO
+   assim que a tabela (33 linhas, /32 a /0) ultrapassa a área visível —
+   era exatamente o bug reportado ("as informações estão cortando").
+   Como .modal-box não tem transform/filter, um elemento fixed escapa do
+   clipping dele e é posicionado livremente na tela (coordenadas via JS
+   em ipcToggleNetmaskInfo, js/ipcalc.js). */
 .ipc-info-pop {
-  display: none; position: absolute; top: 100%; left: 0; margin-top: 6px;
-  z-index: 30; width: max-content;
+  display: none; position: fixed;
+  z-index: 9999; width: max-content;
+  max-height: min(420px, calc(100vh - 24px)); overflow-y: auto;
   background: var(--surf); border: 1px solid var(--bdr); border-radius: 7px;
   box-shadow: 0 6px 18px rgba(0,0,0,.22); padding: 8px;
 }

@@ -184,18 +184,48 @@ function closeIpCalcModal() {
 // lado do rótulo "Netmask") só deve aparecer quando o usuário CLICAR no
 // ícone — não mais ao passar o mouse. Clicar de novo no ícone, ou clicar
 // fora dele, fecha o popover.
+//
+// O popover (.ipc-info-pop) é position:fixed (não absolute) DE PROPÓSITO:
+// o .modal-box do IPCalc tem overflow-y:auto/max-height, então um popover
+// absolute dentro dele era cortado assim que a tabela (33 linhas) passava
+// da área visível ("as informações estão cortando" — bug reportado).
+// Sendo fixed, escapamos desse clipping, mas precisamos calcular a posição
+// em coordenadas de tela (getBoundingClientRect) na hora do clique.
 function ipcToggleNetmaskInfo(e) {
   e.stopPropagation();
   const icon = e.currentTarget;
+  const pop = icon.querySelector('.ipc-info-pop');
   const wasOpen = icon.classList.contains('ipc-info-open');
   document.querySelectorAll('.ipc-info-icon.ipc-info-open').forEach(el => el.classList.remove('ipc-info-open'));
-  if (!wasOpen) icon.classList.add('ipc-info-open');
+  if (wasOpen) return;
+  icon.classList.add('ipc-info-open');
+  if (!pop) return;
+  const rect = icon.getBoundingClientRect();
+  pop.style.top = (rect.bottom + 6) + 'px';
+  pop.style.left = rect.left + 'px';
+  // Corrige a posição horizontal/vertical depois de renderizado (agora que
+  // tem display:block e dimensões reais), caso estoure a borda da tela.
+  requestAnimationFrame(() => {
+    const pr = pop.getBoundingClientRect();
+    if (pr.right > window.innerWidth - 8) {
+      pop.style.left = Math.max(8, window.innerWidth - pr.width - 8) + 'px';
+    }
+    if (pr.bottom > window.innerHeight - 8) {
+      pop.style.top = Math.max(8, rect.top - pr.height - 6) + 'px';
+    }
+  });
 }
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.ipc-label-info-wrap')) {
     document.querySelectorAll('.ipc-info-icon.ipc-info-open').forEach(el => el.classList.remove('ipc-info-open'));
   }
 });
+// Fecha o popover se o usuário rolar qualquer área com scroll (ex.: o
+// próprio .modal-box) — como agora é fixed, ele não acompanharia a rolagem
+// e ficaria desalinhado do ícone "i".
+document.addEventListener('scroll', () => {
+  document.querySelectorAll('.ipc-info-icon.ipc-info-open').forEach(el => el.classList.remove('ipc-info-open'));
+}, true);
 
 // ── UI: saída em estilo "calculadora de terminal" ──
 // Pedido do usuário: reproduzir o estilo de uma calculadora de sub-rede
