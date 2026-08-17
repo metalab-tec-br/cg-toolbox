@@ -455,13 +455,18 @@ function ipcRunCalculate() {
     } else {
       // Prefixo mais curto/genérico = SUPERNET: recalcula a rede que
       // contém o MESMO endereço, só que com uma máscara mais larga.
+      // Pedido do usuário: ordem fixa Network, Netmask, HostMin, HostMax,
+      // Broadcast, Hosts/Net (sem Wildcard aqui).
       const sr = ipcCalculate(r.ip, String(newPrefix));
       subnetsLabelEl.textContent = 'Supernet';
       subnetsOut += '<div class="ipc-block">';
+      subnetsOut += ipcLine('Network', sr.cidr, ipcBinHtml(sr.networkLong, sr.prefix, 'net'), `Class ${sr.ipClass}`, sr.cidr);
       subnetsOut += ipcNetmaskLine(sr.maskDotted, sr.prefix, ipcBinHtml(sr.maskLong, sr.prefix, 'mask'));
-      subnetsOut += ipcLine('Wildcard', sr.wildcardDotted, ipcBinHtml(sr.wildcardLong, sr.prefix, 'plain'));
+      subnetsOut += ipcLine('HostMin', longToIp(sr.firstHostLong), ipcBinHtml(sr.firstHostLong, sr.prefix, 'net'), null, longToIp(sr.firstHostLong));
+      subnetsOut += ipcLine('HostMax', longToIp(sr.lastHostLong), ipcBinHtml(sr.lastHostLong, sr.prefix, 'net'), null, longToIp(sr.lastHostLong));
+      subnetsOut += ipcLine('Broadcast', longToIp(sr.broadcastLong), ipcBinHtml(sr.broadcastLong, sr.prefix, 'net'), null, longToIp(sr.broadcastLong));
+      subnetsOut += ipcLine('Hosts/Net', sr.usableHosts.toLocaleString('pt-BR'), '', sr.ipType);
       subnetsOut += '</div>';
-      subnetsOut += ipcRenderNetworkBlock(sr);
     }
   }
 
