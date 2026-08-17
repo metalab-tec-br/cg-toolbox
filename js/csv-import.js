@@ -97,10 +97,17 @@ function splitCell(cell) { return String(cell || '').split(',').map(s => s.trim(
 // Coluna `Note` REMOVIDA deste template (pedido do usuário) — o parser ainda
 // aceita uma coluna "Note" por compatibilidade retroativa com .csv antigos/
 // já preenchidos (ver getCell(obj, 'Note') abaixo), mas o arquivo baixado
-// agora não a inclui mais; use `Details` para qualquer observação. ──
+// agora não a inclui mais; use `Details` para qualquer observação.
+// `Exportable` — pedido do usuário: "incluir após o prompt o exportable".
+// Espelha o checkbox "Exportable" do editor manual (supports_export, ver
+// data-ln-export em js/command-editor.js) — como uma linha do CSV pode virar
+// VÁRIAS linhas de comando (uma por linha de texto dentro da célula
+// "Command"), o mesmo valor de `Exportable` se aplica a todas elas, igual ao
+// `Prompt` (ver parseExportableCell/buildImportPayload abaixo). Aceita
+// yes/true/1/x (e vazio/no/false/0 = não), sem diferenciar maiúsculas. ──
 const IMPORT_HEADERS = [
   'Name', 'Description', 'Details', 'Vendor', 'System', 'Topics', 'Versions', 'Environments',
-  'Prompt', 'Command',
+  'Prompt', 'Exportable', 'Command',
 ];
 // Vendor/System/Version/Environment/Topics são todos obrigatórios agora (ver
 // buildImportPayload abaixo) — "all" não é mais um valor aceito nestas 4
@@ -110,7 +117,7 @@ const IMPORT_EXAMPLE_ROW = [
   'Confirms a critical process (fwd, cpd, etc.) is being watched and running. After a restart, or when troubleshooting a service that keeps failing.',
   'Check Point', 'Gaia',
   'System Monitoring', 'R82', 'Standalone',
-  '[Expert@FW]#', 'cpwd_admin list',
+  '[Expert@FW]#', 'No', 'cpwd_admin list',
 ];
 function downloadImportTemplate() {
   const csv = '﻿' + [IMPORT_HEADERS, IMPORT_EXAMPLE_ROW]
@@ -185,6 +192,15 @@ function resolveTopics(cell, warnings) {
 // id a partir do nome quando a coluna ID vier vazia — mesma ideia de "slug"
 // usada em URLs; suficiente para o caso comum (o servidor rejeita com 409 se
 // já existir, e o resumo da importação mostra isso linha a linha).
+// Interpreta a célula `Exportable` como booleano. Aceita yes/true/1/x
+// (case-insensitive); qualquer outro valor (incluindo vazio/no/false/0) é
+// tratado como falso — mesmo padrão do checkbox "Exportable" (supports_export)
+// no editor manual, ver js/command-editor.js.
+function parseBooleanCell(value) {
+  const v = String(value || '').trim().toLowerCase();
+  return v === 'yes' || v === 'true' || v === '1' || v === 'x';
+}
+
 function slugifyName(name) {
   return String(name || '')
     .toLowerCase()
@@ -238,11 +254,12 @@ function buildImportPayload(obj, existingIdsInBatch) {
   const environments = resolveMultiCatalog(getCell(obj, 'Environments', 'Environment'), CATALOGS.environments || [], warnings, 'Environment', 'environment');
   if (!environments.length) return { error: 'No valid "Environment" (at least one is required — must match an existing environment)' };
   const prompt = getCell(obj, 'Prompt') || '[Expert@FW]#';
+  const supportsExport = parseBooleanCell(getCell(obj, 'Exportable', 'Export'));
   const commandCell = getCell(obj, 'Command');
   const noteCell = getCell(obj, 'Note');
 
   const cmdLines = commandCell.split('\n').map(s => s.trim()).filter(Boolean)
-    .map(content => ({ line_type: 'cmd', prompt, content }));
+    .map(content => ({ line_type: 'cmd', prompt, content, supports_export: supportsExport }));
   if (!cmdLines.length) return { error: 'Missing "Command"' };
   const lines = [...cmdLines];
   // A coluna "Note" do CSV virava uma linha de texto categoria 'note'

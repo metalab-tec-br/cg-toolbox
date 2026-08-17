@@ -26,12 +26,38 @@ function csvEscapeField(val) {
 }
 
 // Só as linhas de comando de fato (line_type 'cmd') — notas/avisos ficam fora
-// para manter a coluna "Comando" focada no que é executável no terminal.
+// para manter a coluna "Command" focada no que é executável no terminal.
+// Só o `content` de cada linha — o prompt NÃO é mais embutido aqui (ver
+// coluna "Prompt" separada, csvCommandPrompt abaixo); isso espelha o que o
+// template de import espera (js/csv-import.js: buildImportPayload aplica um
+// único Prompt de linha a TODAS as linhas de "Command"), permitindo
+// reimportar um .csv exportado sem duplicar o prompt dentro do conteúdo.
 function csvCommandLines(lines) {
   return (lines || [])
     .filter(l => l.line_type === 'cmd')
-    .map(l => `${l.prompt || ''} ${l.content || ''}`.trim())
+    .map(l => (l.content || '').trim())
+    .filter(Boolean)
     .join('\n');
+}
+
+// Prompt do comando — um valor por linha 'cmd', mas normalmente compartilhado
+// por todas (mesmo padrão assumido no import); junta os valores ÚNICOS com
+// ', ' caso a linha tenha prompts diferentes entre si (caso raro, cadastrado
+// manualmente linha a linha no editor).
+function csvCommandPrompt(lines) {
+  const cmdLines = (lines || []).filter(l => l.line_type === 'cmd');
+  const prompts = [...new Set(cmdLines.map(l => (l.prompt || '').trim()).filter(Boolean))];
+  return prompts.join(', ');
+}
+
+// "Exportable" (supports_export) agregado do comando: 'Yes' só quando TODAS
+// as linhas de comando têm o checkbox marcado — evita que um reimport marque
+// como exportável linhas que originalmente não eram (ver parseBooleanCell em
+// js/csv-import.js, que aplica o mesmo valor da célula a todas as linhas).
+function csvCommandExportable(lines) {
+  const cmdLines = (lines || []).filter(l => l.line_type === 'cmd');
+  if (!cmdLines.length) return 'No';
+  return cmdLines.every(l => !!l.supports_export) ? 'Yes' : 'No';
 }
 
 // Título de seção (mesmo texto usado nos cabeçalhos de tópico da tela principal
@@ -53,27 +79,96 @@ function csvSystemLabel(key) {
   return s ? s.label : key;
 }
 
+// ── Folder / Notes — pedido do usuário: "incluir o conteúdo de folders" no
+// export. Escopo: só as pastas do PRÓPRIO usuário atual (FOLDERS, ver
+// js/folders.js) — pastas de outros usuários (ALL_USERS_FOLDERS) não entram
+// aqui porque só são carregadas sob demanda (ao abrir Folders com escopo
+// diferente de "My folders"), então nem sempre estão disponíveis no momento
+// do export. ──
+
+// Caminho legível de uma pasta, incluindo a(s) pasta(s)-mãe em caso de
+// subpasta (ex.: "VPN / Site-to-Site"), mesmo padrão usado em outras partes
+// da UI para identificar subpastas sem ambiguidade.
+function csvFolderPath(folderId, foldersById) {
+  const f = foldersById.get(folderId);
+  if (!f) return '';
+  return (f.parent_id && foldersById.has(f.parent_id))
+    ? `${csvFolderPath(f.parent_id, foldersById)} / ${f.name}`
+    : f.name;
+}
+
+// Nome(s) da(s) pasta(s) que contêm este comando (folder.command_ids, ver
+// js/folders.js) — um comando pode estar em várias pastas ao mesmo tempo,
+// por isso o join(', ').
+function csvFoldersForCommand(cmdId) {
+  const all = (typeof FOLDERS !== 'undefined' && FOLDERS) || [];
+  const byId = new Map(all.map(f => [f.id, f]));
+  return all
+    .filter(f => f.command_ids && f.command_ids.has(cmdId))
+    .map(f => csvFolderPath(f.id, byId))
+    .join(', ');
+}
+
+// Reúne todas as Notes das pastas do usuário atual como "linhas" prontas para
+// o CSV — cada uma vira um objeto com `__isNote: true` (ver CSV_COLUMNS
+// abaixo: colunas que não fazem sentido para uma nota, como Vendor/Command,
+// simplesmente retornam vazio para esses objetos).
+function collectFolderNotesForExport() {
+  const all = (typeof FOLDERS !== 'undefined' && FOLDERS) || [];
+  const byId = new Map(all.map(f => [f.id, f]));
+  const rows = [];
+  all.forEach(f => {
+    (f.notes || []).forEach(n => {
+      rows.push({
+        __isNote: true,
+        id: n.id,
+        name: n.title || '',
+        details: n.description || '',
+        folder: csvFolderPath(f.id, byId),
+      });
+    });
+  });
+  return rows;
+}
+
 // ── Definição de colunas: uma entrada por coluna do CSV, na ordem em que
 // aparecem no arquivo. `header` é o rótulo exibido; `get(c)` extrai o valor
-// daquele comando `c` (mesmo shape retornado por fetchCommands()). O seletor
-// de colunas (modal) é construído dinamicamente a partir desta lista — para
-// adicionar uma coluna nova, basta adicionar uma entrada aqui. ──
+// daquele item `c` — ou um comando (mesmo shape retornado por
+// fetchCommands()), ou uma Note de pasta (objeto sintético `{__isNote:true,
+// ...}`, ver collectFolderNotesForExport acima). O seletor de colunas (modal)
+// é construído dinamicamente a partir desta lista — para adicionar uma
+// coluna nova, basta adicionar uma entrada aqui.
+//
+// A ordem das colunas Name..Command foi ajustada para bater com a mesma
+// ordem do template de import (ver IMPORT_HEADERS em js/csv-import.js) —
+// pedido do usuário: "ajustar o export na mesma ordem" — permitindo
+// reimportar um .csv exportado por aqui sem precisar reordenar colunas.
+// `Type`/`ID` (identificação interna) ficam antes, e `Folder` (não faz parte
+// do import) fica depois de `Command`. ──
 const CSV_COLUMNS = [
+  { key: 'type', header: 'Type', get: c => c.__isNote ? 'Note' : 'Command' },
   { key: 'id', header: 'ID', get: c => c.id },
-  { key: 'topic', header: 'Topic', get: c => (c.topics || [c.topic]).map(csvTopicLabel).join(', ') },
   { key: 'name', header: 'Name', get: c => c.name || '' },
-  { key: 'desc', header: 'Description', get: c => c.desc || '' },
-  { key: 'vendors', header: 'Vendor', get: c => (c.vendors || []).map(csvVendorLabel).join(', ') },
-  { key: 'systems', header: 'System', get: c => (c.systems || []).map(csvSystemLabel).join(', ') },
-  { key: 'versions', header: 'Versions', get: c => (c.versions || []).join(', ') },
-  { key: 'environments', header: 'Environments', get: c => (c.environments || []).join(', ') },
-  { key: 'command', header: 'Command', get: c => csvCommandLines(c.lines && c.lines.default) },
+  { key: 'desc', header: 'Description', get: c => c.__isNote ? '' : (c.desc || '') },
   // `details` substitui Purpose/When to use/Notes (campo único de rich text
   // HTML) — exportado cru (mesmo HTML sanitizado que o servidor grava), sem
   // conversão extra: ver js/csv-import.js, o mesmo HTML volta intacto no
   // reimport porque sanitizeNoteHtml (server/index.js) não mexe em texto que
   // já está sem tags reconhecidas nem no que já tem as tags esperadas.
+  // Para uma Note, `details` é o próprio corpo (description) da nota.
   { key: 'details', header: 'Details', get: c => c.details || '' },
+  { key: 'vendors', header: 'Vendor', get: c => c.__isNote ? '' : (c.vendors || []).map(csvVendorLabel).join(', ') },
+  { key: 'systems', header: 'System', get: c => c.__isNote ? '' : (c.systems || []).map(csvSystemLabel).join(', ') },
+  { key: 'topic', header: 'Topics', get: c => c.__isNote ? '' : (c.topics || [c.topic]).map(csvTopicLabel).join(', ') },
+  { key: 'versions', header: 'Versions', get: c => c.__isNote ? '' : (c.versions || []).join(', ') },
+  { key: 'environments', header: 'Environments', get: c => c.__isNote ? '' : (c.environments || []).join(', ') },
+  { key: 'prompt', header: 'Prompt', get: c => c.__isNote ? '' : csvCommandPrompt(c.lines && c.lines.default) },
+  { key: 'exportable', header: 'Exportable', get: c => c.__isNote ? '' : csvCommandExportable(c.lines && c.lines.default) },
+  { key: 'command', header: 'Command', get: c => c.__isNote ? '' : csvCommandLines(c.lines && c.lines.default) },
+  // Pedido do usuário: "incluir o conteúdo de folders" — nome da(s) pasta(s)
+  // que contêm o comando, ou a pasta que contém a Note (ver
+  // csvFoldersForCommand/collectFolderNotesForExport acima).
+  { key: 'folder', header: 'Folder', get: c => c.__isNote ? (c.folder || '') : csvFoldersForCommand(c.id) },
 ];
 
 // Lembra a última seleção de colunas entre sessões (por navegador/usuário,
@@ -192,8 +287,13 @@ async function exportCommandsCsv(selectedKeys, scope) {
   try {
     const allCommands = await fetchCommands();
     const commands = filterCommandsByExportScope(allCommands, scope || 'all');
+    // Notes de pastas entram junto (pedido do usuário: "incluir o conteúdo de
+    // folders") — de fora do escopo 'system', já que Notes são sempre
+    // conteúdo de usuário, nunca "System" (ver collectFolderNotesForExport
+    // acima: só pastas do usuário atual).
+    const noteRows = (scope === 'system') ? [] : collectFolderNotesForExport();
     const header = cols.map(col => col.header);
-    const rows = (commands || []).map(c => cols.map(col => col.get(c)));
+    const rows = [...(commands || []), ...noteRows].map(c => cols.map(col => col.get(c)));
     // BOM UTF-8 no início — garante acentuação correta ao abrir no Excel.
     const csv = '﻿' + [header, ...rows]
       .map(r => r.map(csvEscapeField).join(CSV_DELIMITER))
