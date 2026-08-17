@@ -5,7 +5,13 @@
 //    "255.255.255.0") — endereço de rede, broadcast, máscara, wildcard,
 //    faixa de hosts utilizáveis, classe (A/B/C/D/E) e tipo (privado
 //    RFC 1918 / público / loopback / link-local / multicast / etc.);
-// 2) split de uma rede em sub-redes menores (ex.: /24 em N /25, /26...);
+// 2) campo opcional "move to" — um segundo prefixo/máscara que tanto faz
+//    SPLIT (prefixo mais longo/específico -> lista todas as sub-redes,
+//    ex.: /24 em N x /25) quanto SUPERNET (prefixo mais curto -> recalcula
+//    a rede que contém o mesmo endereço com uma máscara mais larga) — os
+//    dois sentidos do mesmo campo, igual à calculadora de referência que o
+//    usuário pediu pra seguir de estilo (rótulos verdes, valores em azul,
+//    representação binária ponto-a-ponto com a máscara em vermelho);
 // 3) tabela de referência fixa com as faixas privadas da RFC 1918.
 // Reaproveita ipToLong/longToIp (js/net-utils.js, já carregado antes deste
 // arquivo) e o par _copyToClipboard/_doSingleCopy/COPY_BTN_ICON
@@ -51,18 +57,19 @@ function ipcIpClass(ipLong) {
   return 'E (Experimental)';
 }
 // Só as faixas mais relevantes pro dia a dia de suporte — não é uma lista
-// exaustiva de toda a IANA Special-Purpose Address Registry.
+// exaustiva de toda a IANA Special-Purpose Address Registry. Nomes curtos
+// de propósito — aparecem entre parênteses na mesma linha do resultado.
 function ipcIpType(ipLong) {
   const a = (ipLong >>> 24) & 255, b = (ipLong >>> 16) & 255;
-  if (a === 10) return 'Private (RFC 1918)';
-  if (a === 172 && b >= 16 && b <= 31) return 'Private (RFC 1918)';
-  if (a === 192 && b === 168) return 'Private (RFC 1918)';
+  if (a === 10) return 'Private Internet';
+  if (a === 172 && b >= 16 && b <= 31) return 'Private Internet';
+  if (a === 192 && b === 168) return 'Private Internet';
   if (a === 127) return 'Loopback';
-  if (a === 169 && b === 254) return 'Link-local (APIPA)';
-  if (a === 100 && b >= 64 && b <= 127) return 'Shared / CGN (RFC 6598)';
+  if (a === 169 && b === 254) return 'Link-Local';
+  if (a === 100 && b >= 64 && b <= 127) return 'Shared Address Space';
   if (a >= 224 && a <= 239) return 'Multicast';
   if (a >= 240) return 'Reserved';
-  return 'Public';
+  return 'Public Internet';
 }
 
 // ── Cálculo principal ─────────────────────────────
@@ -99,11 +106,17 @@ function ipcCalculate(ipRaw, maskRaw) {
 
   return {
     ip: longToIp(ipLong),
+    ipLong,
     prefix,
     networkLong,
+    broadcastLong,
+    firstHostLong,
+    lastHostLong,
     cidr: `${longToIp(networkLong)}/${prefix}`,
     maskDotted: longToIp(maskLong),
+    maskLong,
     wildcardDotted: longToIp(wildcardLong),
+    wildcardLong,
     network: longToIp(networkLong),
     broadcast: longToIp(broadcastLong),
     firstHost: longToIp(firstHostLong),
@@ -120,7 +133,7 @@ function ipcCalculate(ipRaw, maskRaw) {
 // newPrefix (ex.: /24 -> N x /25, /26...). MAX_SUBNETS é um teto de
 // segurança (mesmo espírito do MAX_ENUM/MAX_COMBOS em js/net-utils.js) pra
 // não travar a tela caso o usuário peça algo como /8 -> /30.
-const IPC_MAX_SUBNETS = 1024;
+const IPC_MAX_SUBNETS = 512;
 function ipcSplitSubnets(networkLong, basePrefix, newPrefix) {
   if (!(newPrefix > basePrefix)) return { error: 'The new prefix must be longer (a bigger number) than the current one.' };
   if (newPrefix > 32) return { error: 'Prefix cannot exceed /32.' };
@@ -136,12 +149,18 @@ function ipcSplitSubnets(networkLong, basePrefix, newPrefix) {
     else if (newPrefix === 31) { usable = 2; first = subNet; last = subBcast; }
     else { usable = blockSize - 2; first = subNet + 1; last = subBcast - 1; }
     subnets.push({
+      networkLong: subNet,
+      broadcastLong: subBcast,
+      firstHostLong: first,
+      lastHostLong: last,
       cidr: `${longToIp(subNet)}/${newPrefix}`,
       network: longToIp(subNet),
       broadcast: longToIp(subBcast),
       firstHost: longToIp(first),
       lastHost: longToIp(last),
       usableHosts: usable,
+      ipClass: ipcIpClass(subNet),
+      ipType: ipcIpType(subNet),
     });
   }
   return { subnets, count, truncated: count > genCount, generated: genCount };
@@ -163,142 +182,177 @@ document.addEventListener('keydown', ev => {
   if (ev.key === 'Escape' && document.getElementById('ipCalcOverlay').classList.contains('show')) closeIpCalcModal();
 });
 
-// ── UI: helpers de renderização ───────────────────
-// Constrói uma linha <tr> de resultado (label + valor), com um botão de
-// copiar opcional ao lado do valor — reaproveita _doSingleCopy/COPY_BTN_ICON
-// (js/terminal-renderer.js), a mesma máquina usada nos botões de copiar das
-// linhas de comando, em vez de duplicar a lógica de cópia aqui.
-function _ipcResultRow(label, value, copyable) {
-  const tr = document.createElement('tr');
-  const tdLabel = document.createElement('td');
-  tdLabel.textContent = label;
-  tdLabel.className = 'ipc-info-label';
-  const tdValue = document.createElement('td');
-  tdValue.className = 'ipc-info-value';
-  const valueSpan = document.createElement('span');
-  valueSpan.textContent = value;
-  tdValue.appendChild(valueSpan);
-  if (copyable && typeof _doSingleCopy === 'function') {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'copy-btn copy-btn-inline';
-    btn.title = 'Copy';
-    btn.innerHTML = COPY_BTN_ICON;
-    btn._copyText = value;
-    btn.addEventListener('click', () => _doSingleCopy(btn));
-    tdValue.appendChild(btn);
-  }
-  tr.appendChild(tdLabel);
-  tr.appendChild(tdValue);
-  return tr;
+// ── UI: saída em estilo "calculadora de terminal" ──
+// Pedido do usuário: reproduzir o estilo de uma calculadora de sub-rede
+// clássica (rótulo em verde + valor + a mesma dotted-quad em BINÁRIO ao
+// lado, com a porção de rede/host separada por um espaço extra bem na
+// fronteira do prefixo, e a máscara em vermelho) em vez da tabela simples
+// usada antes. Tudo é montado como uma única string monoespaçada (o
+// container #ipcTermOutput tem white-space:pre — ver css/components.css)
+// em vez de nós de DOM um a um, porque o layout depende de alinhamento por
+// espaços (padEnd), igual ao original.
+const IPC_LBL_W = 11; // "Broadcast: " etc. — largura fixa da coluna de rótulo
+const IPC_VAL_W = 20; // largura fixa da coluna de valor, antes do binário/nota
+
+function _ipcBits32(long) {
+  return (long >>> 0).toString(2).padStart(32, '0');
 }
 
-function ipcRunCalculate() {
-  const errEl = document.getElementById('ipcError');
-  const resultsGroup = document.getElementById('ipcResultsGroup');
-  const splitGroup = document.getElementById('ipcSplitGroup');
-  errEl.style.display = 'none';
-  errEl.textContent = '';
-
-  const ipRaw = document.getElementById('ipcIp').value;
-  const maskRaw = document.getElementById('ipcMask').value;
-  const result = ipcCalculate(ipRaw, maskRaw);
-  if (result.error) {
-    errEl.textContent = result.error;
-    errEl.style.display = '';
-    resultsGroup.style.display = 'none';
-    splitGroup.style.display = 'none';
-    return;
+// Monta a representação binária pontuada (8.8.8.8 bits) de `long`, com um
+// espaço extra logo após o bit `prefix` (fronteira rede/host) — mesmo
+// quando esse ponto coincide com um dos pontos fixos entre octetos (nesse
+// caso o espaço vem ANTES do ponto, ex.: "...00000000 .00000001" pra /24).
+// Devolve { str, splitIdx } — splitIdx é o índice de caractere logo após a
+// porção "de rede" dentro de `str`, usado por ipcBinHtml pra colorir os
+// dois pedaços separadamente.
+function _ipcDottedBinary(long, prefix) {
+  const bits = _ipcBits32(long);
+  let out = '';
+  let splitIdx = (prefix <= 0) ? 0 : null;
+  for (let i = 1; i <= 32; i++) {
+    out += bits[i - 1];
+    if (i === prefix && prefix > 0 && prefix < 32) { out += ' '; splitIdx = out.length; }
+    if (i % 8 === 0 && i < 32) out += '.';
   }
+  if (splitIdx === null) splitIdx = out.length; // prefix >= 32
+  return { str: out, splitIdx };
+}
 
-  IPC_LAST_RESULT = result;
+// mode: 'net' (padrão — porção de rede em destaque, porção de host
+// esmaecida), 'mask' (porção de rede inteira em vermelho — usado só nas
+// linhas Netmask, pra saltar aos olhos onde a máscara "corta"), ou 'plain'
+// (sem cor — usado na linha Wildcard, que já é auto-explicativa).
+function ipcBinHtml(long, prefix, mode) {
+  const { str, splitIdx } = _ipcDottedBinary(long, prefix);
+  if (mode === 'plain') return `<span class="ipc-bin">${str}</span>`;
+  const netPart = str.slice(0, splitIdx);
+  const hostPart = str.slice(splitIdx);
+  const netClass = mode === 'mask' ? 'ipc-bin ipc-bin-mask' : 'ipc-bin ipc-bin-net';
+  return `<span class="${netClass}">${netPart}</span><span class="ipc-bin ipc-bin-host">${hostPart}</span>`;
+}
 
-  const tbody = document.getElementById('ipcResultsTbody');
-  tbody.innerHTML = '';
-  tbody.appendChild(_ipcResultRow('IP address', result.ip, false));
-  tbody.appendChild(_ipcResultRow('CIDR notation', result.cidr, true));
-  tbody.appendChild(_ipcResultRow('Network address', result.network, true));
-  tbody.appendChild(_ipcResultRow('Broadcast address', result.broadcast, true));
-  tbody.appendChild(_ipcResultRow('Subnet mask', `${result.maskDotted} (/${result.prefix})`, true));
-  tbody.appendChild(_ipcResultRow('Wildcard mask', result.wildcardDotted, true));
-  tbody.appendChild(_ipcResultRow('Host range', `${result.firstHost} – ${result.lastHost}`, true));
-  tbody.appendChild(_ipcResultRow('Total addresses', result.totalAddresses.toLocaleString('en-US'), false));
-  tbody.appendChild(_ipcResultRow('Usable hosts', result.usableHosts.toLocaleString('en-US'), false));
-  tbody.appendChild(_ipcResultRow('IP class', result.ipClass, false));
-  tbody.appendChild(_ipcResultRow('Address type', result.ipType, false));
-  resultsGroup.style.display = '';
+// Botão de copiar embutido inline no texto — os únicos valores que passam
+// por aqui são IPs/CIDRs já validados (só dígitos, pontos e "/"), então é
+// seguro embuti-los direto num atributo onclick com aspas simples.
+function ipcCopyBtnHtml(text) {
+  return ` <button type="button" class="copy-btn ipc-copy-btn" title="Copy" onclick="ipcCopyInline(this,'${text}')">${COPY_BTN_ICON}</button>`;
+}
+function ipcCopyInline(btn, text) {
+  if (typeof _doSingleCopy !== 'function') return;
+  btn._copyText = text;
+  _doSingleCopy(btn);
+}
 
-  // Split: dropdown só com prefixos mais específicos que o atual (senão não
-  // é split, é supernet — fora do escopo deste recurso).
-  const splitSelect = document.getElementById('ipcSplitPrefix');
-  splitSelect.innerHTML = '';
-  for (let p = result.prefix + 1; p <= 32; p++) {
-    const opt = document.createElement('option');
-    opt.value = String(p);
-    opt.textContent = `/${p}`;
-    splitSelect.appendChild(opt);
-  }
-  document.getElementById('ipcSplitBaseLabel').textContent = `Split ${result.cidr} into:`;
-  document.getElementById('ipcSplitWrap').style.display = 'none';
-  document.getElementById('ipcSplitNote').textContent = '';
-  document.getElementById('ipcSplitCopyAllBtn').style.display = 'none';
-  splitGroup.style.display = result.prefix < 32 ? '' : 'none';
+// Uma linha "Label:   valor              binário   (nota)  [copiar]".
+function ipcLine(label, value, binHtml, note, copyText) {
+  const lbl = `${label}:`.padEnd(IPC_LBL_W);
+  const val = String(value).padEnd(IPC_VAL_W);
+  let html = `<span class="ipc-label">${lbl}</span><span class="ipc-val">${val}</span>`;
+  if (binHtml) html += binHtml;
+  if (note) html += ` <span class="ipc-note">(${note})</span>`;
+  if (copyText) html += ipcCopyBtnHtml(copyText);
+  return html + '\n';
+}
+
+// Bloco de 5 linhas comum a qualquer rede já calculada (rede/base, sub-rede
+// individual de um split, ou supernet) — Network/Broadcast/HostMin/HostMax/
+// Hosts+tipo. Recebe um objeto com os *Long (networkLong, broadcastLong,
+// firstHostLong, lastHostLong) + prefix/usableHosts/ipClass/ipType/cidr.
+function ipcRenderNetworkBlock(n) {
+  let out = '';
+  out += ipcLine('Network', n.cidr, ipcBinHtml(n.networkLong, n.prefix, 'net'), `Class ${n.ipClass}`, n.cidr);
+  out += ipcLine('Broadcast', longToIp(n.broadcastLong), ipcBinHtml(n.broadcastLong, n.prefix, 'net'), null, longToIp(n.broadcastLong));
+  out += ipcLine('HostMin', longToIp(n.firstHostLong), ipcBinHtml(n.firstHostLong, n.prefix, 'net'));
+  out += ipcLine('HostMax', longToIp(n.lastHostLong), ipcBinHtml(n.lastHostLong, n.prefix, 'net'));
+  out += ipcLine('Hosts/Net', n.usableHosts.toLocaleString('en-US'), '', n.ipType);
+  return out;
 }
 
 let IPC_LAST_RESULT = null;
-let IPC_LAST_SPLIT = null;
+let IPC_LAST_SUBNETS_TEXT = null;
 
-function ipcRunSplit() {
-  if (!IPC_LAST_RESULT) return;
-  const newPrefix = parseInt(document.getElementById('ipcSplitPrefix').value, 10);
-  const res = ipcSplitSubnets(IPC_LAST_RESULT.networkLong, IPC_LAST_RESULT.prefix, newPrefix);
-  const noteEl = document.getElementById('ipcSplitNote');
-  const wrap = document.getElementById('ipcSplitWrap');
-  const copyAllBtn = document.getElementById('ipcSplitCopyAllBtn');
-  if (res.error) {
-    noteEl.textContent = res.error;
-    wrap.style.display = 'none';
-    copyAllBtn.style.display = 'none';
+function ipcRunCalculate() {
+  const errEl = document.getElementById('ipcError');
+  const moveToErrEl = document.getElementById('ipcMoveToError');
+  const resultsGroup = document.getElementById('ipcResultsGroup');
+  errEl.style.display = 'none'; errEl.textContent = '';
+  moveToErrEl.style.display = 'none'; moveToErrEl.textContent = '';
+
+  const ipRaw = document.getElementById('ipcIp').value;
+  const maskRaw = document.getElementById('ipcMask').value;
+  const moveToRaw = document.getElementById('ipcMoveTo').value;
+
+  const r = ipcCalculate(ipRaw, maskRaw);
+  if (r.error) {
+    errEl.textContent = r.error;
+    errEl.style.display = '';
+    resultsGroup.style.display = 'none';
     return;
   }
-  IPC_LAST_SPLIT = res.subnets;
-  const tbody = document.getElementById('ipcSplitTbody');
-  tbody.innerHTML = '';
-  res.subnets.forEach(sn => {
-    const tr = document.createElement('tr');
-    const tdCidr = document.createElement('td');
-    tdCidr.style.fontFamily = 'var(--mono)';
-    tdCidr.textContent = sn.cidr;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'copy-btn copy-btn-inline';
-    btn.title = 'Copy';
-    btn.innerHTML = COPY_BTN_ICON;
-    btn._copyText = sn.cidr;
-    btn.addEventListener('click', () => _doSingleCopy(btn));
-    tdCidr.appendChild(btn);
-    const tdNet = document.createElement('td'); tdNet.style.fontFamily = 'var(--mono)'; tdNet.textContent = sn.network;
-    const tdBcast = document.createElement('td'); tdBcast.style.fontFamily = 'var(--mono)'; tdBcast.textContent = sn.broadcast;
-    const tdRange = document.createElement('td'); tdRange.style.fontFamily = 'var(--mono)'; tdRange.textContent = `${sn.firstHost} – ${sn.lastHost}`;
-    const tdHosts = document.createElement('td'); tdHosts.textContent = sn.usableHosts.toLocaleString('en-US');
-    tr.append(tdCidr, tdNet, tdBcast, tdRange, tdHosts);
-    tbody.appendChild(tr);
-  });
-  wrap.style.display = '';
-  noteEl.textContent = res.truncated
-    ? `Showing the first ${res.generated} of ${res.count} subnets (safety limit) — narrow the split if you need the rest.`
-    : `${res.generated} subnet${res.generated === 1 ? '' : 's'} of /${newPrefix}, ${res.subnets[0] ? res.subnets[0].usableHosts.toLocaleString('en-US') : 0} usable host(s) each.`;
-  copyAllBtn.style.display = res.subnets.length ? '' : 'none';
+  IPC_LAST_RESULT = r;
+  IPC_LAST_SUBNETS_TEXT = null;
+
+  let out = '';
+  out += ipcLine('Address', r.ip, ipcBinHtml(r.ipLong, r.prefix, 'net'), null, r.ip);
+  out += ipcLine('Netmask', `${r.maskDotted} = ${r.prefix}`, ipcBinHtml(r.maskLong, r.prefix, 'mask'));
+  out += ipcLine('Wildcard', r.wildcardDotted, ipcBinHtml(r.wildcardLong, r.prefix, 'plain'));
+  out += '\n=>\n';
+  out += ipcRenderNetworkBlock(r);
+
+  const copyAllWrap = document.getElementById('ipcCopyAllWrap');
+  copyAllWrap.style.display = 'none';
+
+  const moveTo = String(moveToRaw || '').trim();
+  if (moveTo) {
+    const newPrefix = ipcParseMaskInput(moveTo);
+    if (newPrefix === null) {
+      moveToErrEl.textContent = 'Invalid netmask/prefix for "move to".';
+      moveToErrEl.style.display = '';
+    } else if (newPrefix === r.prefix) {
+      out += `\n<span class="ipc-note">Same prefix as the netmask above — nothing to move to.</span>\n`;
+    } else if (newPrefix > r.prefix) {
+      // Prefixo mais longo/específico = SPLIT: divide a rede atual em N
+      // sub-redes menores (ex.: /24 -> 4 x /26).
+      const res = ipcSplitSubnets(r.networkLong, r.prefix, newPrefix);
+      out += '\n<span class="ipc-subnets-header">Subnets</span>\n\n';
+      out += ipcLine('Netmask', `${longToIp(ipcPrefixToMaskLong(newPrefix))} = ${newPrefix}`, ipcBinHtml(ipcPrefixToMaskLong(newPrefix), newPrefix, 'mask'));
+      out += ipcLine('Wildcard', longToIp((~ipcPrefixToMaskLong(newPrefix)) >>> 0), ipcBinHtml((~ipcPrefixToMaskLong(newPrefix)) >>> 0, newPrefix, 'plain'));
+      out += '\n';
+      res.subnets.forEach(sn => {
+        out += ipcRenderNetworkBlock({ ...sn, prefix: newPrefix });
+        out += '\n';
+      });
+      if (res.truncated) {
+        out += `<span class="ipc-note">Showing the first ${res.generated} of ${res.count} subnets (safety limit).</span>\n\n`;
+      }
+      const totalHosts = res.subnets.reduce((sum, sn) => sum + sn.usableHosts, 0);
+      out += ipcLine('Subnets', res.generated.toLocaleString('en-US'));
+      out += ipcLine('Hosts', totalHosts.toLocaleString('en-US'));
+      IPC_LAST_SUBNETS_TEXT = res.subnets.map(sn => sn.cidr).join('\n');
+      copyAllWrap.style.display = '';
+    } else {
+      // Prefixo mais curto/genérico = SUPERNET: recalcula a rede que
+      // contém o MESMO endereço, só que com uma máscara mais larga.
+      const sr = ipcCalculate(r.ip, String(newPrefix));
+      out += '\n<span class="ipc-subnets-header">Supernet</span>\n\n';
+      out += ipcLine('Netmask', `${sr.maskDotted} = ${sr.prefix}`, ipcBinHtml(sr.maskLong, sr.prefix, 'mask'));
+      out += ipcLine('Wildcard', sr.wildcardDotted, ipcBinHtml(sr.wildcardLong, sr.prefix, 'plain'));
+      out += '\n';
+      out += ipcRenderNetworkBlock(sr);
+    }
+  }
+
+  document.getElementById('ipcTermOutput').innerHTML = out;
+  resultsGroup.style.display = '';
 }
 
-// Copia todos os CIDRs da última divisão gerada, um por linha — mesmo
-// _copyToClipboard usado no resto do app (js/terminal-renderer.js), com
-// feedback simples trocando o texto do botão por um instante.
-function ipcCopyAllSplit() {
-  if (!IPC_LAST_SPLIT || !IPC_LAST_SPLIT.length) return;
-  const btn = document.getElementById('ipcSplitCopyAllBtn');
-  const text = IPC_LAST_SPLIT.map(sn => sn.cidr).join('\n');
-  _copyToClipboard(text).then(() => {
+// Copia todos os CIDRs da última divisão (split) gerada, um por linha —
+// mesmo _copyToClipboard usado no resto do app (js/terminal-renderer.js),
+// com feedback simples trocando o texto do botão por um instante.
+function ipcCopyAllSubnets() {
+  if (!IPC_LAST_SUBNETS_TEXT) return;
+  const btn = document.getElementById('ipcCopyAllBtn');
+  _copyToClipboard(IPC_LAST_SUBNETS_TEXT).then(() => {
     const original = btn.textContent;
     btn.textContent = 'Copied!';
     clearTimeout(btn._ipcRevertTimer);

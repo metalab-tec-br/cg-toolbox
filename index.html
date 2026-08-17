@@ -1819,41 +1819,40 @@
     </div>
     <div class="modal-body">
       <div class="set-group">
-        <span class="set-label">IP address / Mask</span>
         <div class="ipc-input-row">
-          <input type="text" class="set-input" id="ipcIp" placeholder="e.g. 192.168.1.10" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
+          <div class="ipc-field">
+            <span class="set-label">Address (Host or Network)</span>
+            <input type="text" class="set-input" id="ipcIp" placeholder="e.g. 192.168.0.1" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
+          </div>
           <span class="ipc-slash">/</span>
-          <input type="text" class="set-input" id="ipcMask" placeholder="24 or 255.255.255.0" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
+          <div class="ipc-field">
+            <span class="set-label">Netmask (i.e. 24)</span>
+            <input type="text" class="set-input" id="ipcMask" placeholder="24 or 255.255.255.0" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
+          </div>
+          <div class="ipc-field">
+            <span class="set-label">Netmask for sub/supernet (optional)</span>
+            <div class="ipc-moveto-row">
+              <span class="ipc-moveto-label">move to:</span>
+              <input type="text" class="set-input" id="ipcMoveTo" placeholder="e.g. 25" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
           <button type="button" class="btn btn-primary" onclick="ipcRunCalculate()">Calculate</button>
+          <span class="set-hint">A longer prefix in "move to" splits into all subnets; a shorter one shows the enclosing supernet.</span>
         </div>
         <span class="set-hint" id="ipcError" style="display:none;color:var(--red);"></span>
+        <span class="set-hint" id="ipcMoveToError" style="display:none;color:var(--red);"></span>
       </div>
 
       <div class="set-group" id="ipcResultsGroup" style="display:none;">
-        <span class="set-label">Network information</span>
-        <div class="audit-log-wrap">
-          <table class="audit-log-table ipc-info-table">
-            <tbody id="ipcResultsTbody"></tbody>
-          </table>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span class="set-label">Result</span>
+          <div id="ipcCopyAllWrap" style="display:none;">
+            <button type="button" class="btn btn-ghost btn-sm" id="ipcCopyAllBtn" onclick="ipcCopyAllSubnets()">Copy all subnet CIDRs</button>
+          </div>
         </div>
-      </div>
-
-      <div class="set-group" id="ipcSplitGroup" style="display:none;">
-        <span class="set-label">Subnet split</span>
-        <span class="set-hint">Split this network into smaller, equal-size subnets by choosing a new (longer) prefix.</span>
-        <div class="ipc-input-row">
-          <span class="set-hint" id="ipcSplitBaseLabel"></span>
-          <select class="set-input" id="ipcSplitPrefix" style="max-width:90px;"></select>
-          <button type="button" class="btn btn-primary" onclick="ipcRunSplit()">Split</button>
-          <button type="button" class="btn btn-ghost" id="ipcSplitCopyAllBtn" onclick="ipcCopyAllSplit()" style="display:none;">Copy all</button>
-        </div>
-        <span class="set-hint" id="ipcSplitNote"></span>
-        <div class="audit-log-wrap" id="ipcSplitWrap" style="display:none;max-height:240px;">
-          <table class="audit-log-table ipc-split-table">
-            <thead><tr><th>Subnet</th><th>Network</th><th>Broadcast</th><th>Host range</th><th>Usable</th></tr></thead>
-            <tbody id="ipcSplitTbody"></tbody>
-          </table>
-        </div>
+        <div class="ipc-term" id="ipcTermOutput"></div>
       </div>
 
       <div class="set-group">

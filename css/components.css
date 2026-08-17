@@ -1450,33 +1450,42 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
   display: flex; align-items: center; justify-content: center;
 }
 
-/* ─── IP CALCULATOR MODAL (botão #ipcOpenBtn no header, ver js/ipcalc.js) ─── */
-.ipc-input-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.ipc-input-row .set-input { flex: 1 1 160px; min-width: 120px; }
-.ipc-slash { font-family: var(--mono); font-weight: 700; color: var(--dim); }
-/* .ipc-info-table (2 col, label/valor) — a regra genérica .audit-log-table
-   td (branco/nowrap/ellipsis, pensada pra tabela de auditoria) cortava
-   valores mais longos (ex.: "255.255.255.128 (/25)", a faixa de hosts) com
-   "…" mesmo sobrando espaço na célula; aqui a célula de valor volta a
-   quebrar/mostrar tudo normalmente, e o rótulo ganha uma largura fixa
-   menor pra sobrar mais espaço pro valor + botão de copiar. */
-.ipc-info-table td { vertical-align: middle; }
-.ipc-info-table td.ipc-info-label { width: 32%; font-weight: 700; white-space: normal; }
-.ipc-info-table td.ipc-info-value {
-  width: 68%; font-family: var(--mono); white-space: normal;
-  overflow: visible; text-overflow: clip; word-break: break-word;
+/* ─── IP CALCULATOR MODAL (botão #ipcOpenBtn no header, ver js/ipcalc.js) ───
+   Pedido do usuário: estilo de uma calculadora de sub-rede clássica —
+   rótulo em verde + valor + a mesma dotted-quad em BINÁRIO ao lado (rede
+   destacada, host esmaecido), máscara em vermelho, tipo de endereço em azul
+   entre parênteses. .ipc-term é a caixa de saída em si; os campos de
+   entrada continuam usando .set-input/.btn do resto do app. */
+.ipc-input-row { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.ipc-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 160px; min-width: 140px; }
+.ipc-field .set-input { width: 100%; }
+.ipc-slash { font-family: var(--mono); font-weight: 700; color: var(--dim); padding-bottom: 9px; }
+.ipc-moveto-row { display: flex; align-items: center; gap: 6px; }
+.ipc-moveto-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.ipc-moveto-row .set-input { flex: 1 1 auto; min-width: 0; }
+
+.ipc-term {
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.85;
+  white-space: pre; overflow-x: auto;
+  background: var(--surf2); border: 1px solid var(--bdr); border-radius: 8px;
+  padding: 12px 14px;
 }
-.ipc-info-table td.ipc-info-value .copy-btn-inline { vertical-align: -3px; }
-/* As larguras nth-child de .audit-log-table (6 colunas, ver acima) não
-   servem pra estas tabelas (2/3/5 colunas) — sobrescritas aqui com a MESMA
-   especificidade (classe + nth-child), então a ordem no arquivo (esta regra
-   vem depois) decide quem vence. */
-.ipc-split-table td, .ipc-rfc-table td { white-space: normal; overflow: visible; text-overflow: clip; }
-.ipc-split-table th:nth-child(1), .ipc-split-table td:nth-child(1) { width: 22%; font-family: var(--mono); }
-.ipc-split-table th:nth-child(2), .ipc-split-table td:nth-child(2) { width: 18%; font-family: var(--mono); }
-.ipc-split-table th:nth-child(3), .ipc-split-table td:nth-child(3) { width: 18%; font-family: var(--mono); }
-.ipc-split-table th:nth-child(4), .ipc-split-table td:nth-child(4) { width: 32%; font-family: var(--mono); }
-.ipc-split-table th:nth-child(5), .ipc-split-table td:nth-child(5) { width: 10%; }
+.ipc-label { color: var(--green); font-weight: 700; }
+.ipc-val { color: var(--blue); font-weight: 600; }
+.ipc-bin { color: var(--text); }
+.ipc-bin-net { color: var(--text); font-weight: 700; }
+.ipc-bin-host { color: var(--muted); }
+.ipc-bin-mask { color: var(--red); font-weight: 700; }
+.ipc-note { color: var(--blue); font-style: italic; }
+.ipc-subnets-header { color: var(--green); font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
+.ipc-copy-btn { vertical-align: -2px; margin-left: 2px; }
+
+/* ─── RFC 1918 reference table — inalterada, só as larguras próprias (3
+   colunas), sobrescrevendo as larguras nth-child de .audit-log-table (6
+   colunas, pensadas pro log de auditoria) com a MESMA especificidade
+   (classe + nth-child); a ordem no arquivo (esta regra vem depois) decide
+   quem vence. ─── */
+.ipc-rfc-table td { white-space: normal; overflow: visible; text-overflow: clip; }
 .ipc-rfc-table th:nth-child(1), .ipc-rfc-table td:nth-child(1) { width: 44%; font-family: var(--mono); }
 .ipc-rfc-table th:nth-child(2), .ipc-rfc-table td:nth-child(2) { width: 26%; font-family: var(--mono); }
 .ipc-rfc-table th:nth-child(3), .ipc-rfc-table td:nth-child(3) { width: 30%; }
