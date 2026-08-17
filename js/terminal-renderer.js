@@ -499,8 +499,8 @@ function card({ id, name, desc, details, lines, folderIds = [], createdBy, modif
       <span class="card-desc">${desc || ''}</span>
       <span class="card-actions">${favHtml}${duplicateHtml}${editHtml}</span>
     </div>
-    ${detailsHtml}
     ${termRender(lines, id)}
+    ${detailsHtml}
   </div>`;
 }
 

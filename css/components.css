@@ -342,15 +342,19 @@
    modal, cobrindo o espaço vazio — escopado a #cmdEditorOverlay pra não
    afetar o editor de Notes (que usa a mesma classe .note-editor-body, mas
    dentro de um card de altura livre, não de um modal de altura fixa). */
-#cmdEditorOverlay .wiz-panel { flex: 1 1 auto; min-height: 0; }
-#cmdEditorOverlay .set-group-details { flex: 1 1 auto; min-height: 0; }
+#cmdEditorOverlay .wiz-panel { flex: 1 1 auto; min-height: 0; align-self: stretch; }
+#cmdEditorOverlay .set-group-details { flex: 1 1 auto; min-height: 0; align-self: stretch; }
 #cmdEditorOverlay .set-group-details .note-flat-body-editing {
   flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
-  /* width:100% explícito (em vez de confiar só no stretch padrão do flex
-     column pai) — pedido do usuário: "a largura do Details está menor" que
-     Name/Description. box-sizing:border-box já vem do reset global (ver
-     base.css, *{box-sizing:border-box}), repetido aqui só por clareza. */
-  width: 100%; box-sizing: border-box;
+  /* width:100%/align-self:stretch explícitos (em vez de confiar só no
+     stretch padrão do flex column pai) — pedido do usuário: "a largura do
+     Details está menor" que Name/Description. min-width:0 evita que o
+     conteúdo da toolbar (vários botões numa flex-row com wrap) force um
+     min-content maior que o disponível, o que empurraria a caixa pra fora
+     em vez de deixá-la exatamente do tamanho do container. box-sizing:
+     border-box já vem do reset global (ver base.css, *{box-sizing:border-
+     box}), repetido aqui só por clareza. */
+  width: 100%; min-width: 0; align-self: stretch; box-sizing: border-box;
 }
 #cmdEditorOverlay .set-group-details .note-editor-body {
   flex: 1 1 auto; min-height: 0; max-height: none; width: 100%; box-sizing: border-box;
@@ -360,16 +364,6 @@
      fallback de _neCurrentFontSizeAt() em js/folders.js. */
   font-size: 12px;
 }
-/* Campo de tamanho de fonte "estilo Word" (<input type="number">, ver
-   index.html) — mesma caixa visual de .ne-fmt-size (compartilhada com o
-   <select> das Notes), só com largura fixa pequena, texto centralizado e
-   cursor de texto normal (em vez do "pointer" de .ne-fmt-size, pensado pro
-   <select>: aqui o campo é digitável). */
-/* Especificidade dupla (.ne-fmt-size.ne-fmt-size-num) de propósito: o
-   input leva as duas classes (ver index.html), e precisa vencer o
-   cursor:pointer de .ne-fmt-size (definido mais abaixo, na seção de Notes)
-   independente da ordem das regras no arquivo. */
-.ne-fmt-size.ne-fmt-size-num { width: 42px; text-align: center; cursor: text; }
 .set-hint { font-size: 10px; color: var(--dim); line-height: 1.5; }
 .set-row { display: flex; gap: 10px; }
 .set-row > .set-group { flex: 1; min-width: 0; }
@@ -1191,10 +1185,23 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 }
 .ne-fmt-dd-panel.open { display: flex; }
 .ne-fmt-dd-panel-colors { gap: 4px; }
-/* O painel de tamanho reaproveita .ne-fmt-size/.ne-fmt-size-num (mesma caixa
-   do <input> "estilo Word", ver acima) — só precisa de largura um pouco
-   maior aqui dentro do popover, já que não está mais espremido na toolbar. */
-.ne-fmt-dd-panel .ne-fmt-size-num { width: 52px; height: 25px; }
+/* Lista de tamanhos pré-definidos (pedido do usuário: "coloque o menu de
+   tamanho do texto em menu dropdown, estilo da imagem anexa" — uma lista
+   vertical de números, como um <select> nativo de tamanho de fonte).
+   flex-direction:column sobrescreve o row padrão de .ne-fmt-dd-panel;
+   max-height/overflow-y deixam a lista rolável, mesmo padrão do .dd-panel
+   genérico usado no resto do app. */
+.ne-fmt-dd-panel-sizes {
+  flex-direction: column; gap: 1px; padding: 4px; min-width: 56px;
+  max-height: 220px; overflow-y: auto;
+}
+.ne-fmt-size-opt {
+  background: none; border: none; border-radius: 5px; padding: 5px 10px;
+  font-size: 12px; color: var(--text); text-align: left; cursor: pointer;
+  font-family: var(--sans);
+}
+.ne-fmt-size-opt:hover { background: var(--surf2); }
+.ne-fmt-size-opt.on { background: var(--teal-bg); color: var(--teal); font-weight: 700; }
 
 /* Editor de nota (.note-editor-body, ver startEditNote()/startCreateNote()
    em js/folders.js) — um <div contenteditable> em vez de <textarea> pra
@@ -1328,6 +1335,16 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
   border-bottom: 1px solid var(--bdr);
   display: flex; gap: 10px; align-items: flex-start;
   background: linear-gradient(to right, rgba(255,79,160,.05), transparent);
+}
+/* .card-about agora renderiza DEPOIS das linhas do terminal (ver
+   terminal-renderer.js: card()) — ou seja, é o último filho de .card. Sem
+   isso, sobrariam: (1) a linha divisória border-bottom sem nada abaixo dela,
+   e (2) cantos quadrados vazando por baixo dos cantos arredondados de .card
+   (.card não tem overflow:hidden — ver comentário acima de .card-head no
+   arquivo). */
+.card-about:last-child {
+  border-bottom: none;
+  border-radius: 0 0 8px 8px;
 }
 /* `details` (ex-Purpose/When to use/Note) agora é um único bloco de rich
    text HTML (mesmo editor de Notes) — não são mais spans separados, então

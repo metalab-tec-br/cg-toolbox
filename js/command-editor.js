@@ -45,6 +45,43 @@ function _ceBuildPromptOptions(currentValue) {
 let CMD_EDITOR_MODE = 'create'; // 'create' | 'edit'
 let CMD_EDITOR_ORIGINAL_ID = null;
 let CMD_EDITOR_RESOLVER = null; // placeholder_resolver of the row being edited (preserved as-is, never set by this UI)
+// Snapshot (JSON string) of the form's state right after opening (blank form
+// for 'create', or fully populated for 'edit'/'duplicate') — compared against
+// the current state when the user clicks the X, to decide whether to warn
+// about unsaved changes (see cmdEditorRequestClose()). null means "couldn't
+// snapshot" (fails open: closes without asking rather than blocking the user).
+let CMD_EDITOR_INITIAL_SNAPSHOT = null;
+
+// Reads exactly the same fields cmdEditorSave() reads (minus derived/validated
+// values like the generated id), so any change the user could actually save
+// is reflected here. Used both right after opening (baseline) and right
+// before closing (current) — see cmdEditorRequestClose().
+function _ceSnapshotForm() {
+  try {
+    return JSON.stringify({
+      vendors: _ceGetMultiSeg('cmdVendorSeg'),
+      systems: _ceGetMultiSeg('cmdSysSeg'),
+      versions: _ceGetMultiSeg('cmdVersionsSeg'),
+      environments: _ceGetMultiSeg('cmdEnvSeg'),
+      topics: _ceGetMultiSeg('cmdTopicSeg'),
+      name: _ce('cmdName').value,
+      name_empty: _ce('cmdNameEmpty').value,
+      desc: _ce('cmdDesc').value,
+      desc_empty: _ce('cmdDescEmpty').value,
+      details: _ce('cmdDetailsEditor').innerHTML,
+      lines: [
+        ..._ceReadLinesFrom(_ce('cmdLinesDefaultList')),
+        ..._ceReadLinesFrom(_ce('cmdLinesEmptyList')),
+      ],
+    });
+  } catch (err) {
+    // Falha ao ler o formulário (ex.: DOM inesperado) não deve travar o
+    // usuário dentro do modal — melhor deixar fechar sem perguntar do que
+    // impedir o fechamento por completo.
+    console.error('_ceSnapshotForm failed', err);
+    return null;
+  }
+}
 
 // ════════════════════════════════════════════════
 // WIZARD — 3 steps: 1) Identification, 2) Scope (Vendor/System/Version/
@@ -614,12 +651,12 @@ function _ceResetForm() {
   // `details` substitui about_purpose/when/obs (rich text, ver index.html) —
   // não é um .value, é o innerHTML do editor contenteditable.
   _ce('cmdDetailsEditor').innerHTML = '';
-  // Campo de tamanho de fonte "estilo Word" (ver index.html/js/folders.js) —
-  // volta pro padrão (12) a cada reset, já que o modal é reaproveitado
-  // (não recriado) entre uma edição e outra; sem isso o campo continuaria
-  // mostrando o último tamanho clicado na edição anterior.
-  _ce('cmdDetailsFontSize').value = 12;
-  _ce('cmdDetailsFontSizeLabel').textContent = 12; // rótulo do botão do dropdown (ver index.html)
+  // Dropdown de tamanho de fonte "estilo Word" (lista de opções, ver
+  // index.html/js/folders.js) — volta pro padrão (12) a cada reset, já que o
+  // modal é reaproveitado (não recriado) entre uma edição e outra; sem isso
+  // o botão continuaria mostrando o último tamanho clicado na edição
+  // anterior.
+  _neResetFontSizeUI('cmdDetailsFontSizeLabel', 'cmdDetailsFontSizeList');
   _ceSetSingleSeg('cmdVendorSeg', [], 'cmdVendorDDBtn');
   _ceSetSingleSeg('cmdSysSeg', [], 'cmdSysDDBtn');
   _ceSetMultiSeg('cmdVersionsSeg', [], 'cmdVersionsDDBtn', null, 'selected');
@@ -645,8 +682,7 @@ async function _cePopulateForm(id) {
   _ce('cmdDesc').value = row.desc || '';
   _ce('cmdDescEmpty').value = row.desc_empty || '';
   _ce('cmdDetailsEditor').innerHTML = row.details || '';
-  _ce('cmdDetailsFontSize').value = 12; // mostra o padrão até o usuário clicar no texto (ver _neUpdateFontSizeDisplay)
-  _ce('cmdDetailsFontSizeLabel').textContent = 12;
+  _neResetFontSizeUI('cmdDetailsFontSizeLabel', 'cmdDetailsFontSizeList'); // mostra o padrão até o usuário clicar no texto (ver _neUpdateFontSizeDisplay)
 
   _ceSetSingleSeg('cmdVendorSeg', row.vendors || [], 'cmdVendorDDBtn');
   _ceSetSingleSeg('cmdSysSeg', row.systems || [], 'cmdSysDDBtn');
@@ -748,9 +784,27 @@ async function openCommandEditor(mode, id, ev) {
     : (mode === 'edit' ? '✏️ Edit command' : '➕ New command');
   _ce('cmdEditorOverlay').classList.add('show');
   if (mode === 'create' || isDuplicate) setTimeout(() => _ce('cmdName').focus(), 30);
+  // Baseline pro alerta de "fechar sem salvar" (ver cmdEditorRequestClose) —
+  // tirado por último, já com o formulário 100% montado (reset OU populate +
+  // duplicate tweaks acima já aplicados).
+  CMD_EDITOR_INITIAL_SNAPSHOT = _ceSnapshotForm();
 }
 function closeCommandEditor() {
   _ce('cmdEditorOverlay').classList.remove('show');
+  CMD_EDITOR_INITIAL_SNAPSHOT = null;
+}
+// Chamado pelo X do cabeçalho (index.html) — diferente de closeCommandEditor(),
+// que também é usado internamente logo após salvar/excluir com sucesso (onde
+// não faz sentido perguntar nada, já que não há mais nada a perder). Pedido do
+// usuário: "inclua um popup para quando eu estiver editando um comando e
+// fechar a tela sem salvar, ser alertado".
+function cmdEditorRequestClose() {
+  const current = _ceSnapshotForm();
+  const dirty = current !== null && CMD_EDITOR_INITIAL_SNAPSHOT !== null && current !== CMD_EDITOR_INITIAL_SNAPSHOT;
+  if (!dirty) { closeCommandEditor(); return; }
+  openConfirmModal('You have unsaved changes. Close without saving?', { danger: true }).then(ok => {
+    if (ok) closeCommandEditor();
+  });
 }
 
 // ════════════════════════════════════════════════

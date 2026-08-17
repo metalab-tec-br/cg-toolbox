@@ -1007,14 +1007,14 @@ function _neCurrentFontSizeAt(editor) {
   }
   return 12;
 }
-// Só atualiza o campo se ele for o novo <input type="number"> (formato
-// "estilo Word", ver index.html — cmdDetailsEditor). O <select> de tamanho
-// ainda usado nas Notes fica de fora de propósito: continua só "escreve"
-// (escolher aplica), sem refletir o tamanho atual, para não mudar um
-// comportamento que o usuário não pediu para alterar ali. Atualiza também o
-// rótulo do botão do dropdown (.ne-fmt-dd-btn-label, ver index.html —
-// tamanho agora fica dentro de um popover, pedido do usuário: "deixe o
-// tamanho e cores em opção dropdown"), quando existir.
+// Atualiza a exibição do tamanho vigente no ponto do cursor: o <select> de
+// tamanho ainda usado nas Notes fica de fora de propósito (continua só
+// "escreve" — escolher aplica, sem refletir o tamanho atual — comportamento
+// que o usuário não pediu para mudar ali); no Details do editor de comandos
+// atualiza o rótulo do botão do dropdown (.ne-fmt-dd-btn-label) e destaca
+// (.on) a opção correspondente na lista de tamanhos pré-definidos (ver
+// .ne-fmt-size-opt em index.html — pedido do usuário: "coloque o menu de
+// tamanho do texto em menu dropdown, estilo da imagem anexa").
 function _neUpdateFontSizeDisplay(editor) {
   const wrap = editor.closest('.note-flat-body-editing');
   if (!wrap) return;
@@ -1023,6 +1023,19 @@ function _neUpdateFontSizeDisplay(editor) {
   if (input) input.value = size;
   const label = wrap.querySelector('.ne-fmt-dd-btn-label');
   if (label) label.textContent = size;
+  wrap.querySelectorAll('.ne-fmt-size-opt').forEach(b => {
+    b.classList.toggle('on', Number(b.dataset.size) === size);
+  });
+}
+// Usado por _ceResetForm/_cePopulateForm (js/command-editor.js) pra devolver
+// o dropdown de tamanho ao padrão (12) quando o modal reaproveitado é
+// reaberto — sem isso o botão/lista continuariam mostrando o último
+// tamanho clicado na edição anterior.
+function _neResetFontSizeUI(labelId, listId) {
+  const label = document.getElementById(labelId);
+  if (label) label.textContent = 12;
+  const list = document.getElementById(listId);
+  if (list) list.querySelectorAll('.ne-fmt-size-opt').forEach(b => b.classList.toggle('on', b.dataset.size === '12'));
 }
 
 // ── Dropdowns de tamanho/cor do toolbar (ver .ne-fmt-dd em index.html) ──
@@ -1030,6 +1043,13 @@ function _neUpdateFontSizeDisplay(editor) {
 // proximidade via closest/querySelector, não por id fixo) — necessário aqui
 // porque pode haver mais de um editor de nota aberto na tela ao mesmo tempo
 // (cada um com seu próprio par tamanho/cor), então um id global não serviria.
+// Diferente do antigo <input type="number"> dentro do painel, a lista de
+// tamanhos (.ne-fmt-size-opt) é só botões com onmousedown="event.
+// preventDefault()" — abrir o dropdown NUNCA move o foco pra dentro dele,
+// então a seleção de texto no editor permanece visível o tempo todo (bug
+// relatado pelo usuário: "quando clico no tamanho da fonte a seleção do
+// texto está sendo removida" — a causa era justamente o antigo .focus()
+// chamado aqui embaixo pra permitir digitar no <input>).
 function _neToggleFmtDropdown(btn) {
   const wrap = btn.closest('.ne-fmt-dd');
   const panel = wrap && wrap.querySelector('.ne-fmt-dd-panel');
@@ -1037,10 +1057,6 @@ function _neToggleFmtDropdown(btn) {
   const willOpen = !panel.classList.contains('open');
   _neCloseFmtDropdowns();
   panel.classList.toggle('open', willOpen);
-  if (willOpen) {
-    const numInput = panel.querySelector('input[type="number"]');
-    if (numInput) { numInput.focus(); numInput.select(); }
-  }
 }
 function _neCloseFmtDropdowns() {
   document.querySelectorAll('.ne-fmt-dd-panel.open').forEach(p => p.classList.remove('open'));
@@ -1087,7 +1103,10 @@ document.addEventListener('input', ev => {
 // formatado (do início do primeiro elemento afetado ao fim do último) e
 // GRAVA essa Range fresca de volta em _neLastRange — assim tanto a seleção
 // visual quanto um próximo ajuste imediato (aumentar/diminuir de novo sem
-// reselecionar) continuam funcionando corretamente.
+// reselecionar) continuam funcionando corretamente. `el` é um dos botões da
+// lista .ne-fmt-size-opt (ver index.html) — nunca ganha foco (onmousedown
+// preventDefault), então a seleção no editor nem chega a piscar/sumir ao
+// clicar numa opção, diferente do antigo <input type="number">.
 function neSetFontSize(el, px) {
   let n = parseInt(px, 10);
   if (isNaN(n)) return;
@@ -1111,9 +1130,11 @@ function neSetFontSize(el, px) {
     sel.addRange(range);
     _neSaveSelectionFor(body);
   }
-  if (el && el.tagName === 'INPUT') el.value = n;
-  const label = wrap && wrap.querySelector('.ne-fmt-dd-btn-label');
-  if (label) label.textContent = n;
+  if (el && el.tagName === 'INPUT') el.value = n; // <select>/<input> legados das Notes, se algum dia usados aqui
+  _neUpdateFontSizeDisplay(body); // rótulo do botão + destaque (.on) da opção na lista
+  // Fecha o dropdown ao escolher um tamanho — mesmo padrão de "fechar ao
+  // selecionar" da cor, ver neSetColor abaixo.
+  if (el && el.closest('.ne-fmt-dd')) _neCloseFmtDropdowns();
 }
 function neSetColor(el, color) {
   const wrap = el.closest('.note-flat-body-editing');

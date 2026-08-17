@@ -1019,7 +1019,7 @@
   <div class="modal-box modal-wide">
     <div class="modal-head">
       <span class="modal-title" id="cmdEditorTitle">➕ New command</span>
-      <button class="modal-close" onclick="closeCommandEditor()">✕</button>
+      <button class="modal-close" onclick="cmdEditorRequestClose()">✕</button>
     </div>
     <div class="modal-body">
       <div class="cmd-editor-error" id="cmdEditorError"></div>
@@ -1091,16 +1091,29 @@
                 <button type="button" class="ne-fmt-dd-btn" onmousedown="event.preventDefault()" onclick="_neToggleFmtDropdown(this)" title="Font size">
                   <span class="ne-fmt-dd-btn-label" id="cmdDetailsFontSizeLabel">12</span><span class="ne-fmt-dd-arrow">▾</span>
                 </button>
-                <span class="ne-fmt-dd-panel">
-                  <!-- Campo "estilo Word" (pedido do usuário): ao clicar/mover o
-                       cursor dentro do texto, este campo (e o rótulo do botão
-                       acima) mostram o tamanho vigente naquele ponto (ver
-                       _neUpdateFontSizeDisplay em js/folders.js, disparado pelos
-                       listeners de mouseup/keyup já existentes no editor); digitar
-                       um novo valor (8–24) + Enter aplica no texto selecionado. -->
-                  <input type="number" class="ne-fmt-size ne-fmt-size-num" id="cmdDetailsFontSize" min="8" max="24" step="1" value="12" title="Font size"
-                    onchange="neSetFontSize(this, this.value)"
-                    onkeydown="if(event.key==='Enter'){event.preventDefault(); neSetFontSize(this, this.value); this.blur(); _neCloseFmtDropdowns();}">
+                <span class="ne-fmt-dd-panel ne-fmt-dd-panel-sizes" id="cmdDetailsFontSizeList">
+                  <!-- Lista de tamanhos pré-definidos (pedido do usuário: "coloque o
+                       menu de tamanho do texto em menu dropdown, estilo da imagem
+                       anexa") — cada opção é um botão simples com
+                       onmousedown="event.preventDefault()" (igual aos swatches de
+                       cor e aos botões B/I/U acima), então clicar numa opção NUNCA
+                       tira o foco/seleção do texto no editor antes de aplicar. Isso
+                       substitui o <input type="number"> anterior, que precisava
+                       ganhar foco pra ser digitado e por isso "sumia" com a seleção
+                       visual do texto ao ser clicado (bug relatado pelo usuário). A
+                       opção correspondente ao tamanho vigente no cursor ganha a
+                       classe .on (ver _neUpdateFontSizeDisplay em js/folders.js). -->
+                  <button type="button" class="ne-fmt-size-opt" data-size="8" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 8)">8</button>
+                  <button type="button" class="ne-fmt-size-opt" data-size="9" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 9)">9</button>
+                  <button type="button" class="ne-fmt-size-opt" data-size="10" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 10)">10</button>
+                  <button type="button" class="ne-fmt-size-opt" data-size="11" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 11)">11</button>
+                  <button type="button" class="ne-fmt-size-opt on" data-size="12" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 12)">12</button>
+                  <button type="button" class="ne-fmt-size-opt" data-size="14" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 14)">14</button>
+                  <button type="button" class="ne-fmt-size-opt" data-size="16" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 16)">16</button>
+                  <button type="button" class="ne-fmt-size-opt" data-size="18" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 18)">18</button>
+                  <button type="button" class="ne-fmt-size-opt" data-size="20" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 20)">20</button>
+                  <button type="button" class="ne-fmt-size-opt" data-size="22" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 22)">22</button>
+                  <button type="button" class="ne-fmt-size-opt" data-size="24" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 24)">24</button>
                 </span>
               </span>
               <span class="ne-fmt-dd">
