@@ -172,10 +172,9 @@ function _ipcResultRow(label, value, copyable) {
   const tr = document.createElement('tr');
   const tdLabel = document.createElement('td');
   tdLabel.textContent = label;
-  tdLabel.style.fontWeight = '700';
-  tdLabel.style.width = '38%';
+  tdLabel.className = 'ipc-info-label';
   const tdValue = document.createElement('td');
-  tdValue.style.fontFamily = 'var(--mono)';
+  tdValue.className = 'ipc-info-value';
   const valueSpan = document.createElement('span');
   valueSpan.textContent = value;
   tdValue.appendChild(valueSpan);
