@@ -489,8 +489,11 @@ function card({ id, name, desc, details, lines, folderIds = [], createdBy, modif
   // `details` já vem sanitizado pelo servidor (sanitizeNoteHtml, mesma
   // allow-list usada pela descrição das Notes) — inserido cru, mesmo modelo
   // de confiança do note.description em buildNoteCardHtml.
+  // "Details" heading — pedido do usuário: sem ele, o bloco emendava direto
+  // no fim das linhas do terminal, sem deixar claro onde uma seção terminava
+  // e a outra começava (ver .about-heading em css/components.css).
   const detailsHtml = (details && details.trim()) ? `<div class="card-about">
-    <div class="about-body">${details}</div>
+    <div class="about-body"><div class="about-heading">Details</div>${details}</div>
   </div>` : '';
   return `<div class="card" data-cmd-id="${id || ''}">
     <div class="card-head">

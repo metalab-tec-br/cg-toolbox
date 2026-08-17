@@ -1372,6 +1372,14 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .about-body p { margin: 0 0 4px; }
 .about-body p:last-child { margin-bottom: 0; }
 .about-body strong { color: var(--teal); font-weight: 700; }
+/* Cabeçalho "Details" — pedido do usuário: sem ele o bloco emendava direto
+   no fim das linhas do terminal, sem separação visual clara entre as duas
+   seções do card. Mesmo tratamento (uppercase/letter-spacing/cor apagada)
+   já usado em outros rótulos de seção do app (ver .set-label acima). */
+.about-heading {
+  font-size: 9px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .8px; color: var(--dim); margin-bottom: 4px;
+}
 
 /* Modo compacto: oculta descrição curta, bloco 'about' e tags do cabeçalho do card
    (preferência 'Exibir detalhes dos cards' em Configurações). As tags de escopo
