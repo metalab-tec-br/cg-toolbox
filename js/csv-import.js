@@ -81,30 +81,36 @@ function splitCell(cell) { return String(cell || '').split(',').map(s => s.trim(
 
 // ── Template para download — mesmas colunas usadas na exportação (Topic,
 // Versions, Environments, Details — ver CSV_COLUMNS em csv-export.js), mais
-// as colunas específicas de importação (Requires IP/Port, Prompt, Command,
-// Note). SEM coluna de ID — o id é sempre gerado automaticamente a partir do
-// Name (ver slugifyName/buildImportPayload abaixo), é um detalhe interno,
-// igual ao editor manual (ver _ceBindSingleSeg em js/command-editor.js, onde
-// o ID também é oculto/auto-gerado). Uma linha de exemplo real ajuda mais
-// que uma linha de instruções — os detalhes ficam no texto do modal.
+// as colunas específicas de importação (Prompt, Command). SEM coluna de ID —
+// o id é sempre gerado automaticamente a partir do Name (ver slugifyName/
+// buildImportPayload abaixo), é um detalhe interno, igual ao editor manual
+// (ver _ceBindSingleSeg em js/command-editor.js, onde o ID também é oculto/
+// auto-gerado). Uma linha de exemplo real ajuda mais que uma linha de
+// instruções — os detalhes ficam no texto do modal.
+// Ordem das colunas — pedido do usuário: Name, Description, Details, Vendor,
+// System, Topics, Versions, Environments, Prompt, Command.
 // `Details` substitui as antigas 3 colunas Purpose/When to use/Notes (agora
 // um campo único de rich text — ver server/schema.sql) — texto simples numa
 // célula do CSV funciona igual antes (sanitizeNoteHtml não mexe em texto sem
 // tags reconhecidas), e um .csv reexportado (com HTML de verdade na célula)
-// também reimporta corretamente, sem conversão adicional. ──
+// também reimporta corretamente, sem conversão adicional.
+// Coluna `Note` REMOVIDA deste template (pedido do usuário) — o parser ainda
+// aceita uma coluna "Note" por compatibilidade retroativa com .csv antigos/
+// já preenchidos (ver getCell(obj, 'Note') abaixo), mas o arquivo baixado
+// agora não a inclui mais; use `Details` para qualquer observação. ──
 const IMPORT_HEADERS = [
-  'Name', 'Description', 'Vendor', 'System', 'Topics', 'Versions', 'Environments',
-  'Prompt', 'Command', 'Note', 'Details',
+  'Name', 'Description', 'Details', 'Vendor', 'System', 'Topics', 'Versions', 'Environments',
+  'Prompt', 'Command',
 ];
 // Vendor/System/Version/Environment/Topics são todos obrigatórios agora (ver
 // buildImportPayload abaixo) — "all" não é mais um valor aceito nestas 4
 // colunas, por isso o exemplo usa valores reais e concretos do catálogo.
 const IMPORT_EXAMPLE_ROW = [
   'Check WatchDog process status', 'Shows whether a monitored WatchDog process is alive',
+  'Confirms a critical process (fwd, cpd, etc.) is being watched and running. After a restart, or when troubleshooting a service that keeps failing.',
   'Check Point', 'Gaia',
   'System Monitoring', 'R82', 'Standalone',
-  '[Expert@FW]#', 'cpwd_admin list', '',
-  'Confirms a critical process (fwd, cpd, etc.) is being watched and running. After a restart, or when troubleshooting a service that keeps failing.',
+  '[Expert@FW]#', 'cpwd_admin list',
 ];
 function downloadImportTemplate() {
   const csv = '﻿' + [IMPORT_HEADERS, IMPORT_EXAMPLE_ROW]
