@@ -397,16 +397,21 @@ function ipcRunCalculate() {
   }
   IPC_LAST_RESULT = r;
 
-  // Pedido do usuário: Address/Netmask/Wildcard + Network/HostMin/HostMax/
-  // Broadcast/Hosts formam UM ÚNICO bloco visual (sem linha divisória entre
-  // eles) — só o respiro de espaço normal. A separação com linha/borda
-  // fica reservada para quando há split/supernet (ver .ipc-subnets-section
-  // logo abaixo), que aí sim vira um segundo bloco distinto.
+  // Pedido do usuário: ordem fixa Address, Network, Netmask, Wildcard,
+  // HostMin, HostMax, Broadcast, Hosts/Net — tudo em UM ÚNICO bloco visual
+  // (sem linha divisória interna, só o respiro de espaço normal). A
+  // separação com linha/borda fica reservada para quando há split/supernet
+  // (ver .ipc-subnets-section logo abaixo), que aí sim vira um segundo
+  // bloco distinto.
   let out = '<div class="ipc-block">';
   out += ipcLine('Address', r.ip, ipcBinHtml(r.ipLong, r.prefix, 'net'), null, r.ip);
+  out += ipcLine('Network', r.cidr, ipcBinHtml(r.networkLong, r.prefix, 'net'), `Class ${r.ipClass}`, r.cidr);
   out += ipcNetmaskLine(r.maskDotted, r.prefix, ipcBinHtml(r.maskLong, r.prefix, 'mask'));
   out += ipcLine('Wildcard', r.wildcardDotted, ipcBinHtml(r.wildcardLong, r.prefix, 'plain'));
-  out += ipcRenderNetworkBlock(r, null, false);
+  out += ipcLine('HostMin', longToIp(r.firstHostLong), ipcBinHtml(r.firstHostLong, r.prefix, 'net'), null, longToIp(r.firstHostLong));
+  out += ipcLine('HostMax', longToIp(r.lastHostLong), ipcBinHtml(r.lastHostLong, r.prefix, 'net'), null, longToIp(r.lastHostLong));
+  out += ipcLine('Broadcast', longToIp(r.broadcastLong), ipcBinHtml(r.broadcastLong, r.prefix, 'net'), null, longToIp(r.broadcastLong));
+  out += ipcLine('Hosts/Net', r.usableHosts.toLocaleString('pt-BR'), '', r.ipType);
   out += '</div>';
 
   const moveTo = String(moveToRaw || '').trim();
