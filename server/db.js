@@ -371,7 +371,7 @@ async function runMigrations() {
   // catálogo — relatado pelo usuário: alguns não apareciam na linha fixa.
   // Causa: seedDefaultParameters() só semeia numa tabela vazia (instalação
   // nova); numa instalação que já tinha `parameters` parcialmente
-  // preenchida de antes desta convenção (ex.: faltando dest_port/host/
+  // preenchida de antes desta convenção (ex.: faltando dst_port/host/
   // license), o seed nunca roda de novo e essas chaves nunca são criadas.
   // ON CONFLICT (key) DO NOTHING: só cria o que estiver faltando, nunca
   // sobrescreve um parâmetro (fixo ou não) já cadastrado.
