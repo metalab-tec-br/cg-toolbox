@@ -250,6 +250,18 @@ function resetSidebarFilterToAny(containerId) {
 function clearAllSidebarFilters() {
   Object.keys(SB_FILTER_CFG).forEach(resetSidebarFilterToAny);
   if (typeof ccRefreshCascade === 'function') ccRefreshCascade();
+  // Pedido do usuário: "Clear filters" também deve limpar o campo de busca de
+  // comandos (#cmdSearch), não só os 5 dropdowns — sem isso um texto digitado
+  // ali continuava filtrando mesmo depois de "limpar tudo". Zera o input
+  // direto (sem chamar clearCommandSearch(), que daria foco ao campo e
+  // chamaria applySearchFilter() + render() por conta própria — aqui já
+  // fazemos um único render() no final, igual ao resto desta função).
+  const searchInput = document.getElementById('cmdSearch');
+  if (searchInput && searchInput.value) {
+    if (typeof saveCmdSearchHistoryEntry === 'function') saveCmdSearchHistoryEntry(searchInput.value);
+    searchInput.value = '';
+    if (typeof updateSearchClearBtn === 'function') updateSearchClearBtn();
+  }
   render();
 }
 
