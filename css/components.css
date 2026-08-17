@@ -272,12 +272,23 @@
 #settingsToggleGroup2 .sb-toggle { margin-bottom: 0; }
 
 
-/* ─── SELETOR DE COLUNAS (exportar comandos) ─── */
-.exp-col-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin-top: 8px; }
+/* ─── SELETOR DE COLUNAS (exportar comandos) ───
+   `columns: 2` (multi-coluna de CSS, não CSS Grid) preenche a coluna da
+   ESQUERDA de cima a baixo antes de passar para a da direita — pedido do
+   usuário: a ordem visual (lida coluna a coluna) deve bater com a ordem das
+   colunas no arquivo template de import (ver IMPORT_HEADERS em
+   js/csv-import.js / CSV_COLUMNS em js/csv-export.js). Um `display: grid`
+   com 2 colunas (versão anterior) preenche LINHA a linha por padrão, o que
+   intercala os itens entre as duas colunas (ex.: Name/Description,
+   Details/Vendor, ...) e não corresponde à ordem real do arquivo. Não
+   depende de saber quantos itens existem (ao contrário de um grid com
+   grid-auto-flow:column, que precisaria de grid-template-rows fixo) — resta
+   robusto mesmo se uma coluna nova for adicionada a CSV_COLUMNS no futuro. */
+.exp-col-grid { columns: 2; column-gap: 10px; margin-top: 8px; }
 .exp-col-row {
-  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin-bottom: 4px; border-radius: 6px;
   cursor: pointer; font-size: 12px; color: var(--muted); border: 1px solid transparent;
-  transition: all .12s;
+  transition: all .12s; break-inside: avoid;
 }
 .exp-col-row:hover { background: var(--surf2); color: var(--text); }
 .exp-col-row input[type="checkbox"] { accent-color: var(--teal); cursor: pointer; flex-shrink: 0; }
