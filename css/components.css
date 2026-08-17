@@ -314,6 +314,22 @@
 
 /* ─── COMMAND EDITOR MODAL ─── */
 .modal-box.modal-wide { width: min(760px, 100%); }
+/* Modal do editor de comandos (cadastro/edição) — pedido do usuário: "dobre
+   o tamanho da tela de cadastro e edição de comandos, e deixe as tres telas
+   do mesmo tamanho". Antes usava só .modal-wide (760px) com altura livre
+   (auto, presa apenas ao max-height/overflow-y do .modal-box padrão) — cada
+   wiz-panel (Identification/Scope/Command lines) tem uma quantidade de
+   campos diferente, então o modal "pulava" de tamanho ao trocar de passo.
+   Agora largura e altura são FIXAS (~dobro do .modal-wide padrão) e iguais
+   nos 3 passos: overflow:hidden no .modal-box (a caixa em si não rola mais)
+   e overflow-y:auto só no .modal-body (mesmo padrão já usado no modal de
+   Configurações, ver #settingsOverlay .modal-box acima) — cabeçalho e
+   rodapé (Back/Next/Save) ficam sempre fixos, só o conteúdo do passo rola
+   quando não cabe. */
+#cmdEditorOverlay .modal-box {
+  width: min(1520px, 96vw); height: min(1200px, 92vh); max-height: 92vh; overflow: hidden;
+}
+#cmdEditorOverlay .modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .set-hint { font-size: 10px; color: var(--dim); line-height: 1.5; }
 .set-row { display: flex; gap: 10px; }
 .set-row > .set-group { flex: 1; min-width: 0; }
