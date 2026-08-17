@@ -142,7 +142,16 @@ function _ceRenderWizardState() {
   // do layout.
   _ce('cmdWizBackBtn').disabled = CMD_WIZ_STEP <= 1;
   _ce('cmdWizNextBtn').style.display = CMD_WIZ_STEP < CMD_WIZ_TOTAL_STEPS ? '' : 'none';
-  _ce('cmdWizSaveBtn').style.display = CMD_WIZ_STEP === CMD_WIZ_TOTAL_STEPS ? '' : 'none';
+  // Pedido do usuário: "deixe o botão de save após o next nas tres telas ao
+  // editar o comando" — em modo 'edit' (comando já existente, todos os
+  // passos já começam válidos/desbloqueados — ver openCommandEditor), Save
+  // fica visível nos 3 passos, sempre depois do Next (mesma ordem de sempre
+  // no DOM/index.html — ver .modal-foot). Em 'create' (e duplicate, que usa
+  // CMD_EDITOR_MODE='create' — ver openCommandEditor) continua só no último
+  // passo, já que ali faz sentido guiar o preenchimento passo a passo antes
+  // de liberar o Save.
+  _ce('cmdWizSaveBtn').style.display =
+    (CMD_EDITOR_MODE === 'edit' || CMD_WIZ_STEP === CMD_WIZ_TOTAL_STEPS) ? '' : 'none';
   // Delete só aparece no último passo (Command lines) — nos passos anteriores
   // fica oculto mesmo que o usuário tenha permissão (CMD_EDITOR_CAN_DELETE),
   // para não competir visualmente com Next antes da revisão final. Ele mora
