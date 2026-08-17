@@ -1459,20 +1459,24 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .ipc-input-row { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 .ipc-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 160px; min-width: 140px; }
 .ipc-field .set-input { width: 100%; }
+/* Pedido do usuário: rótulos Address/Netmask/Move to netmask na cor de
+   destaque do tema (mesma var(--teal) usada em .set-section-title, .ipc-
+   calc-btn etc.) em vez do cinza padrão var(--dim) de .set-label. */
+.ipc-field .set-label { color: var(--teal); }
 .ipc-slash { font-family: var(--mono); font-weight: 700; color: var(--dim); padding-bottom: 9px; }
 /* Pedido do usuário: um "i" pequeno de informação ao lado do rótulo
-   "Netmask" — ao passar o mouse (ou focar via teclado), mostra a tabela
-   de prefixo/máscara de /32 a /0. Reaproveita o padrão de popover-no-hover
-   já usado em .fav-wrap/.fav-audit-pop. */
+   "Netmask" — só aparece a tabela de prefixo/máscara de /32 a /0 quando o
+   usuário CLICA no "i" (não mais ao passar o mouse); clicar fora ou no
+   próprio "i" de novo fecha (ver ipcToggleNetmaskInfo em js/ipcalc.js). */
 .ipc-label-info-wrap { display: flex; align-items: center; gap: 4px; position: relative; }
 .ipc-info-icon {
   display: inline-flex; align-items: center; justify-content: center;
   width: 13px; height: 13px; border-radius: 50%;
   border: 1px solid var(--dim); color: var(--dim);
   font-size: 9px; font-weight: 700; font-style: italic; font-family: Georgia, serif;
-  cursor: default; line-height: 1; flex-shrink: 0;
+  cursor: pointer; line-height: 1; flex-shrink: 0;
 }
-.ipc-info-icon:hover, .ipc-info-icon:focus {
+.ipc-info-icon:hover, .ipc-info-icon:focus, .ipc-info-icon.ipc-info-open {
   border-color: var(--teal); color: var(--teal); outline: none;
 }
 .ipc-info-pop {
@@ -1481,7 +1485,7 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
   background: var(--surf); border: 1px solid var(--bdr); border-radius: 7px;
   box-shadow: 0 6px 18px rgba(0,0,0,.22); padding: 8px;
 }
-.ipc-info-icon:hover .ipc-info-pop, .ipc-info-icon:focus .ipc-info-pop { display: block; }
+.ipc-info-icon.ipc-info-open .ipc-info-pop { display: block; }
 .ipc-cidr-table { border-collapse: collapse; font-family: var(--mono); font-size: 10.5px; }
 .ipc-cidr-table th {
   text-align: left; color: var(--dim); font-weight: 800; text-transform: uppercase;
@@ -1525,6 +1529,10 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .ipc-block { margin-bottom: 10px; padding-bottom: 10px; }
 .ipc-block:last-child { margin-bottom: 0; padding-bottom: 0; }
 .ipc-block + .ipc-block { border-top: 1px solid var(--bdr); padding-top: 10px; }
+/* Pedido do usuário: Network/HostMin/HostMax/Broadcast/Hosts "colado" logo
+   abaixo de Address/Netmask/Wildcard dentro do MESMO .ipc-block — só um
+   respiro de espaço (sem linha divisória, que ficava estranha ali). */
+.ipc-block-inner { margin-top: 10px; }
 .ipc-label {
   flex: 0 0 11ch; color: var(--green); font-weight: 700;
 }

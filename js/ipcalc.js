@@ -180,6 +180,23 @@ function closeIpCalcModal() {
 // fora (overlay) nem por Esc, propositalmente (evita perder os dados
 // calculados/o "move to" digitado com um clique ou tecla acidental).
 
+// Pedido do usuário: a tabela de referência de prefixo/máscara (o "i" ao
+// lado do rótulo "Netmask") só deve aparecer quando o usuário CLICAR no
+// ícone — não mais ao passar o mouse. Clicar de novo no ícone, ou clicar
+// fora dele, fecha o popover.
+function ipcToggleNetmaskInfo(e) {
+  e.stopPropagation();
+  const icon = e.currentTarget;
+  const wasOpen = icon.classList.contains('ipc-info-open');
+  document.querySelectorAll('.ipc-info-icon.ipc-info-open').forEach(el => el.classList.remove('ipc-info-open'));
+  if (!wasOpen) icon.classList.add('ipc-info-open');
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.ipc-label-info-wrap')) {
+    document.querySelectorAll('.ipc-info-icon.ipc-info-open').forEach(el => el.classList.remove('ipc-info-open'));
+  }
+});
+
 // ── UI: saída em estilo "calculadora de terminal" ──
 // Pedido do usuário: reproduzir o estilo de uma calculadora de sub-rede
 // clássica (rótulo em verde + valor + a mesma dotted-quad em BINÁRIO ao
@@ -298,8 +315,16 @@ function ipcNetmaskLine(maskDotted, prefix, binHtml) {
 // começa num split com várias — pedido do usuário ("ficou tudo em um bloco
 // só, está confuso"). `indexLabel` (opcional) é um rotulozinho tipo
 // "Subnet 2 of 4", mostrado só quando há múltiplas sub-redes geradas.
-function ipcRenderNetworkBlock(n, indexLabel) {
-  let out = '<div class="ipc-block">';
+// wrapBlock=true (padrão): sai como .ipc-block PRÓPRIO, com a linha
+// divisória entre ele e o bloco anterior (usado nas sub-redes do split e
+// no supernet, onde cada um deve ficar visualmente separado). wrapBlock=
+// false: sai só com um respiro (.ipc-block-inner, sem borda) — usado pra
+// "colar" este bloco dentro do MESMO .ipc-block do Address/Netmask/Wildcard
+// (pedido do usuário: "remova essa linha" entre Wildcard e Network — devem
+// parecer um bloco só, com espaço mas sem divisória).
+function ipcRenderNetworkBlock(n, indexLabel, wrapBlock) {
+  if (wrapBlock === undefined) wrapBlock = true;
+  let out = wrapBlock ? '<div class="ipc-block">' : '<div class="ipc-block-inner">';
   if (indexLabel) out += `<div class="ipc-subnet-index">${indexLabel}</div>`;
   out += ipcLine('Network', n.cidr, ipcBinHtml(n.networkLong, n.prefix, 'net'), `Class ${n.ipClass}`, n.cidr);
   out += ipcLine('HostMin', longToIp(n.firstHostLong), ipcBinHtml(n.firstHostLong, n.prefix, 'net'), null, longToIp(n.firstHostLong));
@@ -332,12 +357,17 @@ function ipcRunCalculate() {
   }
   IPC_LAST_RESULT = r;
 
+  // Pedido do usuário: Address/Netmask/Wildcard + Network/HostMin/HostMax/
+  // Broadcast/Hosts formam UM ÚNICO bloco visual (sem linha divisória entre
+  // eles) — só o respiro de espaço normal. A separação com linha/borda
+  // fica reservada para quando há split/supernet (ver .ipc-subnets-section
+  // logo abaixo), que aí sim vira um segundo bloco distinto.
   let out = '<div class="ipc-block">';
   out += ipcLine('Address', r.ip, ipcBinHtml(r.ipLong, r.prefix, 'net'), null, r.ip);
   out += ipcNetmaskLine(r.maskDotted, r.prefix, ipcBinHtml(r.maskLong, r.prefix, 'mask'));
   out += ipcLine('Wildcard', r.wildcardDotted, ipcBinHtml(r.wildcardLong, r.prefix, 'plain'));
+  out += ipcRenderNetworkBlock(r, null, false);
   out += '</div>';
-  out += ipcRenderNetworkBlock(r);
 
   const moveTo = String(moveToRaw || '').trim();
   if (moveTo) {
