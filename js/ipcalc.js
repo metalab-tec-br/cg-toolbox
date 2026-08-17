@@ -367,6 +367,8 @@ function ipcRenderNetworkBlock(n, indexLabel, wrapBlock) {
   let out = wrapBlock ? '<div class="ipc-block">' : '<div class="ipc-block-inner">';
   if (indexLabel) out += `<div class="ipc-subnet-index">${indexLabel}</div>`;
   out += ipcLine('Network', n.cidr, ipcBinHtml(n.networkLong, n.prefix, 'net'), `Class ${n.ipClass}`, n.cidr);
+  const _maskLong = ipcPrefixToMaskLong(n.prefix);
+  out += ipcNetmaskLine(longToIp(_maskLong), n.prefix, ipcBinHtml(_maskLong, n.prefix, 'mask'));
   out += ipcLine('HostMin', longToIp(n.firstHostLong), ipcBinHtml(n.firstHostLong, n.prefix, 'net'));
   out += ipcLine('HostMax', longToIp(n.lastHostLong), ipcBinHtml(n.lastHostLong, n.prefix, 'net'));
   out += ipcLine('Broadcast', longToIp(n.broadcastLong), ipcBinHtml(n.broadcastLong, n.prefix, 'net'));
@@ -437,10 +439,6 @@ function ipcRunCalculate() {
       // sub-redes menores (ex.: /24 -> 4 x /26).
       const res = ipcSplitSubnets(r.networkLong, r.prefix, newPrefix);
       subnetsLabelEl.textContent = 'Subnets';
-      subnetsOut += '<div class="ipc-block">';
-      subnetsOut += ipcNetmaskLine(longToIp(ipcPrefixToMaskLong(newPrefix)), newPrefix, ipcBinHtml(ipcPrefixToMaskLong(newPrefix), newPrefix, 'mask'));
-      subnetsOut += ipcLine('Wildcard', longToIp((~ipcPrefixToMaskLong(newPrefix)) >>> 0), ipcBinHtml((~ipcPrefixToMaskLong(newPrefix)) >>> 0, newPrefix, 'plain'));
-      subnetsOut += '</div>';
       res.subnets.forEach((sn, i) => {
         subnetsOut += ipcRenderNetworkBlock({ ...sn, prefix: newPrefix }, `Subnet ${i + 1} of ${res.generated}`);
       });
