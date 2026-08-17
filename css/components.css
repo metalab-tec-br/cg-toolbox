@@ -1490,8 +1490,12 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .ipc-label {
   flex: 0 0 11ch; color: var(--green); font-weight: 700;
 }
+/* Largura pensada pro caso mais largo — a linha Netmask, que tem DOIS
+   pares valor+copiar (máscara pontuada + prefixo, cada um com seu próprio
+   botão — pedido do usuário). As demais linhas (só 1 par) sobram espaço
+   em branco à direita, o que é esperado: é o que mantém o binário alinhado. */
 .ipc-valwrap {
-  flex: 0 0 calc(20ch + 24px);
+  flex: 0 0 calc(24ch + 48px);
   display: inline-flex; align-items: center; gap: 4px;
 }
 .ipc-val { color: var(--blue); font-weight: 600; white-space: nowrap; }

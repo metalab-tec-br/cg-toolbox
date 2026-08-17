@@ -268,6 +268,24 @@ function ipcLine(label, value, binHtml, note, copyText) {
   return html;
 }
 
+// Linha "Netmask" — caso especial: pedido do usuário é mostrar a máscara
+// pontuada (255.255.255.0) com o SEU PRÓPRIO botão de copiar, um espaço, e
+// o prefixo (/24) com OUTRO botão de copiar independente — em vez de um
+// texto único "255.255.255.0 = 24" sem botão nenhum (como as demais linhas
+// via ipcLine()). Ainda usa .ipc-valwrap (mesma largura fixa reservada nas
+// outras linhas) pra manter a coluna do binário alinhada.
+function ipcNetmaskLine(maskDotted, prefix, binHtml) {
+  let html = `<div class="ipc-line">`;
+  html += `<span class="ipc-label">Netmask:</span>`;
+  html += `<span class="ipc-valwrap">`;
+  html += `<span class="ipc-val">${maskDotted}</span>${ipcCopyBtnHtml(maskDotted)}`;
+  html += `<span class="ipc-val">/${prefix}</span>${ipcCopyBtnHtml('/' + prefix)}`;
+  html += `</span>`;
+  if (binHtml) html += `<span class="ipc-bin-wrap">${binHtml}</span>`;
+  html += `</div>`;
+  return html;
+}
+
 // Bloco de 5 linhas comum a qualquer rede já calculada (rede/base, sub-rede
 // individual de um split, ou supernet) — Network/HostMin/HostMax/Broadcast/
 // Hosts+tipo, com botão de copiar em todos os endereços (Network/HostMin/
@@ -312,7 +330,7 @@ function ipcRunCalculate() {
 
   let out = '<div class="ipc-block">';
   out += ipcLine('Address', r.ip, ipcBinHtml(r.ipLong, r.prefix, 'net'), null, r.ip);
-  out += ipcLine('Netmask', `${r.maskDotted} = ${r.prefix}`, ipcBinHtml(r.maskLong, r.prefix, 'mask'));
+  out += ipcNetmaskLine(r.maskDotted, r.prefix, ipcBinHtml(r.maskLong, r.prefix, 'mask'));
   out += ipcLine('Wildcard', r.wildcardDotted, ipcBinHtml(r.wildcardLong, r.prefix, 'plain'));
   out += '</div>';
   out += ipcRenderNetworkBlock(r);
@@ -334,7 +352,7 @@ function ipcRunCalculate() {
       const res = ipcSplitSubnets(r.networkLong, r.prefix, newPrefix);
       out += '<div class="ipc-subnets-header-row"><span class="ipc-subnets-header">Subnets</span></div>';
       out += '<div class="ipc-block">';
-      out += ipcLine('Netmask', `${longToIp(ipcPrefixToMaskLong(newPrefix))} = ${newPrefix}`, ipcBinHtml(ipcPrefixToMaskLong(newPrefix), newPrefix, 'mask'));
+      out += ipcNetmaskLine(longToIp(ipcPrefixToMaskLong(newPrefix)), newPrefix, ipcBinHtml(ipcPrefixToMaskLong(newPrefix), newPrefix, 'mask'));
       out += ipcLine('Wildcard', longToIp((~ipcPrefixToMaskLong(newPrefix)) >>> 0), ipcBinHtml((~ipcPrefixToMaskLong(newPrefix)) >>> 0, newPrefix, 'plain'));
       out += '</div>';
       res.subnets.forEach(sn => {
@@ -356,7 +374,7 @@ function ipcRunCalculate() {
       const sr = ipcCalculate(r.ip, String(newPrefix));
       out += '<div class="ipc-subnets-header-row"><span class="ipc-subnets-header">Supernet</span></div>';
       out += '<div class="ipc-block">';
-      out += ipcLine('Netmask', `${sr.maskDotted} = ${sr.prefix}`, ipcBinHtml(sr.maskLong, sr.prefix, 'mask'));
+      out += ipcNetmaskLine(sr.maskDotted, sr.prefix, ipcBinHtml(sr.maskLong, sr.prefix, 'mask'));
       out += ipcLine('Wildcard', sr.wildcardDotted, ipcBinHtml(sr.wildcardLong, sr.prefix, 'plain'));
       out += '</div>';
       out += ipcRenderNetworkBlock(sr);
