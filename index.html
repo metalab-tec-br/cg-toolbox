@@ -57,9 +57,11 @@
   <!-- Botão IPCalc — pedido do usuário: calculadora de rede (IP+máscara,
        split de sub-rede, referência RFC 1918), num botão ao lado do menu de
        conta, abrindo um modal (ver #ipCalcOverlay mais abaixo e
-       js/ipcalc.js). Mesmo estilo de botão-ícone do "Settings" (.theme-toggle,
-       ver logo abaixo), colocado ANTES do menu de usuário. -->
-  <button class="theme-toggle" id="ipcOpenBtn" onclick="openIpCalcModal()" title="IP Calculator" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;">
+       js/ipcalc.js). Cores iguais ao botão "+ Add" das subpastas
+       (.sec-folder-add-btn em db-render-engine.js/components.css — fundo
+       tingido/--teal-bg no escuro, branco/--surf no claro, borda e texto
+       --teal) — pedido do usuário, ver .ipc-header-btn em components.css. -->
+  <button class="ipc-header-btn" id="ipcOpenBtn" onclick="openIpCalcModal()" title="IP Calculator">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10.5" x2="8" y2="10.5"/><line x1="12" y1="10.5" x2="12" y2="10.5"/><line x1="16" y1="10.5" x2="16" y2="10.5"/><line x1="8" y1="14" x2="8" y2="14"/><line x1="12" y1="14" x2="12" y2="14"/><line x1="16" y1="14" x2="16" y2="14"/><line x1="8" y1="17.5" x2="16" y2="17.5"/></svg>
     <span>IP Calc</span>
   </button>
@@ -1837,11 +1839,9 @@
               <input type="text" class="set-input" id="ipcMoveTo" placeholder="e.g. 25" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
             </div>
           </div>
+          <button type="button" class="btn btn-primary ipc-calc-btn" onclick="ipcRunCalculate()">Calc</button>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <button type="button" class="btn btn-primary" onclick="ipcRunCalculate()">Calculate</button>
-          <span class="set-hint">A longer prefix in "move to" splits into all subnets; a shorter one shows the enclosing supernet.</span>
-        </div>
+        <span class="set-hint">A longer prefix in "move to" splits into all subnets; a shorter one shows the enclosing supernet.</span>
         <span class="set-hint" id="ipcError" style="display:none;color:var(--red);"></span>
         <span class="set-hint" id="ipcMoveToError" style="display:none;color:var(--red);"></span>
       </div>
@@ -1862,9 +1862,9 @@
           <table class="audit-log-table ipc-rfc-table">
             <thead><tr><th>Range</th><th>CIDR block</th><th>Addresses</th></tr></thead>
             <tbody>
-              <tr><td>10.0.0.0 – 10.255.255.255</td><td>10.0.0.0/8</td><td>16,777,216</td></tr>
-              <tr><td>172.16.0.0 – 172.31.255.255</td><td>172.16.0.0/12</td><td>1,048,576</td></tr>
-              <tr><td>192.168.0.0 – 192.168.255.255</td><td>192.168.0.0/16</td><td>65,536</td></tr>
+              <tr><td>10.0.0.0 – 10.255.255.255</td><td>10.0.0.0/8</td><td>16.777.216</td></tr>
+              <tr><td>172.16.0.0 – 172.31.255.255</td><td>172.16.0.0/12</td><td>1.048.576</td></tr>
+              <tr><td>192.168.0.0 – 192.168.255.255</td><td>192.168.0.0/16</td><td>65.536</td></tr>
             </tbody>
           </table>
         </div>

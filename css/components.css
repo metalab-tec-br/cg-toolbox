@@ -1491,3 +1491,17 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .ipc-rfc-table th:nth-child(1), .ipc-rfc-table td:nth-child(1) { width: 44%; font-family: var(--mono); }
 .ipc-rfc-table th:nth-child(2), .ipc-rfc-table td:nth-child(2) { width: 26%; font-family: var(--mono); }
 .ipc-rfc-table th:nth-child(3), .ipc-rfc-table td:nth-child(3) { width: 30%; }
+
+/* Botão "IP Calc" do header — mesmas cores do "+ Add" das subpastas
+   (.sec-folder-add-btn acima): tingido/--teal-bg no escuro, branco/--surf
+   sólido no claro, borda e texto --teal em ambos — pedido do usuário. */
+.ipc-header-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 5px 10px; font-size: 11px; white-space: nowrap; border-radius: 6px;
+  background: var(--teal-bg); border: 1px solid var(--teal);
+  color: var(--teal); font-weight: 700; letter-spacing: .2px; cursor: pointer;
+  transition: all .12s;
+}
+.ipc-header-btn:hover { filter: brightness(1.08); }
+[data-theme="light"] .ipc-header-btn { background: var(--surf); }
+[data-theme="light"] .ipc-header-btn:hover { background: var(--surf); }

@@ -270,10 +270,10 @@ function ipcLine(label, value, binHtml, note, copyText) {
 function ipcRenderNetworkBlock(n) {
   let out = '';
   out += ipcLine('Network', n.cidr, ipcBinHtml(n.networkLong, n.prefix, 'net'), `Class ${n.ipClass}`, n.cidr);
-  out += ipcLine('Broadcast', longToIp(n.broadcastLong), ipcBinHtml(n.broadcastLong, n.prefix, 'net'), null, longToIp(n.broadcastLong));
   out += ipcLine('HostMin', longToIp(n.firstHostLong), ipcBinHtml(n.firstHostLong, n.prefix, 'net'));
   out += ipcLine('HostMax', longToIp(n.lastHostLong), ipcBinHtml(n.lastHostLong, n.prefix, 'net'));
-  out += ipcLine('Hosts/Net', n.usableHosts.toLocaleString('en-US'), '', n.ipType);
+  out += ipcLine('Broadcast', longToIp(n.broadcastLong), ipcBinHtml(n.broadcastLong, n.prefix, 'net'), null, longToIp(n.broadcastLong));
+  out += ipcLine('Hosts/Net', n.usableHosts.toLocaleString('pt-BR'), '', n.ipType);
   return out;
 }
 
@@ -305,7 +305,6 @@ function ipcRunCalculate() {
   out += ipcLine('Address', r.ip, ipcBinHtml(r.ipLong, r.prefix, 'net'), null, r.ip);
   out += ipcLine('Netmask', `${r.maskDotted} = ${r.prefix}`, ipcBinHtml(r.maskLong, r.prefix, 'mask'));
   out += ipcLine('Wildcard', r.wildcardDotted, ipcBinHtml(r.wildcardLong, r.prefix, 'plain'));
-  out += '\n=>\n';
   out += ipcRenderNetworkBlock(r);
 
   const copyAllWrap = document.getElementById('ipcCopyAllWrap');
@@ -335,8 +334,8 @@ function ipcRunCalculate() {
         out += `<span class="ipc-note">Showing the first ${res.generated} of ${res.count} subnets (safety limit).</span>\n\n`;
       }
       const totalHosts = res.subnets.reduce((sum, sn) => sum + sn.usableHosts, 0);
-      out += ipcLine('Subnets', res.generated.toLocaleString('en-US'));
-      out += ipcLine('Hosts', totalHosts.toLocaleString('en-US'));
+      out += ipcLine('Subnets', res.generated.toLocaleString('pt-BR'));
+      out += ipcLine('Hosts', totalHosts.toLocaleString('pt-BR'));
       IPC_LAST_SUBNETS_TEXT = res.subnets.map(sn => sn.cidr).join('\n');
       copyAllWrap.style.display = '';
     } else {
