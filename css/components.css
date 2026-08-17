@@ -150,6 +150,14 @@
    de comandos — ver override justify-content:flex-start no próprio modal-foot
    em index.html. */
 .wiz-required-note { font-size: 10px; color: var(--dim); white-space: nowrap; margin-left: auto; }
+/* Pedido do usuário: "deixe os tres botoes do mesmo tamanho" — sem isso,
+   .btn tem largura no tamanho do próprio texto (padding fixo, sem width),
+   então "← Back"/"Next →"/"Save" ficavam com larguras diferentes entre si.
+   Largura fixa igual pros 3, texto centralizado (a seta de Next/Back deixa
+   de "empurrar" o texto pro centro do botão). */
+#cmdWizBackBtn, #cmdWizNextBtn, #cmdWizSaveBtn {
+  width: 96px; display: flex; align-items: center; justify-content: center;
+}
 .btn {
   padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 700;
   cursor: pointer; border: 1px solid var(--bdr); background: var(--surf2); color: var(--text);
