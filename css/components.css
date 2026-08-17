@@ -1512,19 +1512,6 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    antes — ver ipcBinHtml em js/ipcalc.js). */
 .ipc-bin { color: var(--text); }
 .ipc-note { color: var(--blue); font-style: italic; }
-/* Cabeçalho "Binary", fora da caixa de resultado — pedido do usuário — na
-   mesma linha do rótulo "Result" (ver index.html, #ipcResultsGroup). O
-   margin-left tenta chegar perto do x onde a coluna de binário começa
-   DENTRO da caixa logo abaixo (padding 14px + coluna Label 11ch + coluna
-   valor/copiar calc(24ch+48px) — ver .ipc-label/.ipc-valwrap acima),
-   usando a mesma fonte/tamanho monoespaçado do conteúdo da caixa pra o
-   cálculo em `ch` bater; não é 100% pixel-perfeito (a caixa tem borda),
-   mas fica bem próximo. */
-.ipc-binary-header {
-  font-family: var(--mono); font-size: 9px; font-weight: 800;
-  text-transform: uppercase; letter-spacing: .6px; color: var(--dim);
-  margin-left: calc(14px + 11ch + 24ch + 48px);
-}
 /* Rotulozinho "Subnet 2 of 4" acima de cada sub-rede de um split — junto
    com a linha divisória de .ipc-block, deixa claro onde cada sub-rede
    começa numa lista longa (pedido do usuário, split "confuso"). */
@@ -1533,7 +1520,16 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
   letter-spacing: .6px; color: var(--dim); margin-bottom: 4px;
 }
 .ipc-note-line { margin: 6px 0; }
-.ipc-subnets-header-row { margin: 14px 0 6px; }
+/* Pedido do usuário: "separe o campo das subnets da net principal" — a
+   divisória fina de .ipc-block (mesma usada entre cada sub-rede) não
+   distinguia bem onde a rede base termina e a seção Subnets/Supernet
+   começa. Este wrapper usa uma borda mais grossa e destacada (cor de
+   acento) + mais respiro, tornando a seção visualmente separada. */
+.ipc-subnets-section {
+  margin-top: 18px; padding-top: 16px;
+  border-top: 2px solid var(--teal);
+}
+.ipc-subnets-header-row { margin: 0 0 6px; }
 .ipc-subnets-header { color: var(--green); font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
 /* .copy-btn-inline já cobre display:inline-flex + padding; aqui só zera a
    margem antiga (agora o espaçamento vem do .ipc-copy-slot, largura fixa). */

@@ -1825,7 +1825,7 @@
         <div class="ipc-input-row">
           <div class="ipc-field">
             <span class="set-label">Address</span>
-            <input type="text" class="set-input" id="ipcIp" placeholder="e.g. 192.168.0.1" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
+            <input type="text" class="set-input" id="ipcIp" placeholder="192.168.0.1" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
           </div>
           <span class="ipc-slash">/</span>
           <div class="ipc-field">
@@ -1834,7 +1834,7 @@
           </div>
           <div class="ipc-field">
             <span class="set-label">Move to netmask</span>
-            <input type="text" class="set-input" id="ipcMoveTo" placeholder="e.g. 25" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
+            <input type="text" class="set-input" id="ipcMoveTo" placeholder="25 or 255.255.255.128" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
           </div>
           <button type="button" class="btn btn-primary ipc-calc-btn" onclick="ipcRunCalculate()">Calc</button>
         </div>
@@ -1843,10 +1843,7 @@
       </div>
 
       <div class="set-group" id="ipcResultsGroup" style="display:none;">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <span class="set-label">Result</span>
-          <span class="ipc-binary-header">Binary</span>
-        </div>
+        <span class="set-label">Result</span>
         <div class="ipc-term" id="ipcTermOutput"></div>
       </div>
 
