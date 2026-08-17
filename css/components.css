@@ -1148,6 +1148,14 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
   display: inline-flex; align-items: center; justify-content: center;
 }
 .ne-fmt-btn:hover { border-color: var(--teal); color: var(--teal); }
+/* Estado ativo (negrito/itálico/sublinhado/alinhamento) — destaca o botão
+   quando o texto sob o cursor/seleção já está naquele formato (ver
+   data-ne-cmd + document.queryCommandState em _neUpdateToolbarState, js/
+   folders.js). Pedido do usuário: "ao clicar ou selecionar um texto a barra
+   de configurações deve mostrar as configurações atuais" — antes só o
+   tamanho da fonte refletia o estado vigente, negrito/itálico/cor ficavam
+   sempre "apagados" mesmo com o texto selecionado já formatado diferente. */
+.ne-fmt-btn.on { background: var(--teal-bg); color: var(--teal); border-color: var(--teal); }
 /* Divisor visual entre grupos da toolbar (negrito/itálico/sublinhado |
    tamanho+cor | alinhamento) — só uma linha vertical fininha. */
 .ne-fmt-sep { width: 1px; height: 18px; background: var(--bdr); margin: 0 2px; }
@@ -1165,6 +1173,11 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
   cursor: pointer; transition: border-color .12s, transform .12s;
 }
 .ne-fmt-color-swatch:hover { border-color: var(--teal); transform: scale(1.1); }
+/* Destaca a cor vigente sob o cursor/seleção (mesmo pedido do estado ativo
+   acima, ver data-color + _neCurrentColorAt/_neUpdateToolbarState em
+   js/folders.js) — um anel ao redor do swatch escolhido, já que a própria
+   cor de fundo do botão não pode "mudar de cor" pra indicar seleção. */
+.ne-fmt-color-swatch.on { border-color: var(--teal); box-shadow: 0 0 0 2px var(--teal-bg); }
 
 /* Dropdowns de tamanho/cor — compartilhados pelo Details do editor de
    comandos e pelas Notes de pasta (pedido do usuário: "deixe o tamanho e

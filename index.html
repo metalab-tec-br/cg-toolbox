@@ -1085,9 +1085,9 @@
           <span class="set-label">Details</span>
           <div class="note-flat-body note-flat-body-editing">
             <div class="note-editor-toolbar">
-              <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'bold')" title="Bold (Ctrl+B)"><b>B</b></button>
-              <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'italic')" title="Italic (Ctrl+I)"><i>I</i></button>
-              <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'underline')" title="Underline (Ctrl+U)"><u>U</u></button>
+              <button type="button" class="ne-fmt-btn" data-ne-cmd="bold" onmousedown="event.preventDefault()" onclick="neExec(this, 'bold')" title="Bold (Ctrl+B)"><b>B</b></button>
+              <button type="button" class="ne-fmt-btn" data-ne-cmd="italic" onmousedown="event.preventDefault()" onclick="neExec(this, 'italic')" title="Italic (Ctrl+I)"><i>I</i></button>
+              <button type="button" class="ne-fmt-btn" data-ne-cmd="underline" onmousedown="event.preventDefault()" onclick="neExec(this, 'underline')" title="Underline (Ctrl+U)"><u>U</u></button>
               <span class="ne-fmt-sep"></span>
               <!-- Tamanho e cor viraram dropdowns (pedido do usuário: "deixe o
                    tamanho e cores em opção dropdown") em vez de ficarem sempre
@@ -1113,7 +1113,7 @@
                        ganhar foco pra ser digitado e por isso "sumia" com a seleção
                        visual do texto ao ser clicado (bug relatado pelo usuário). A
                        opção correspondente ao tamanho vigente no cursor ganha a
-                       classe .on (ver _neUpdateFontSizeDisplay em js/folders.js). -->
+                       classe .on (ver _neUpdateToolbarState em js/folders.js). -->
                   <button type="button" class="ne-fmt-size-opt" data-size="8" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 8)">8</button>
                   <button type="button" class="ne-fmt-size-opt" data-size="9" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 9)">9</button>
                   <button type="button" class="ne-fmt-size-opt" data-size="10" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 10)">10</button>
@@ -1132,21 +1132,21 @@
                   <span class="ne-fmt-color-trigger-swatch" style="background:#000000"></span><span class="ne-fmt-dd-arrow">▾</span>
                 </button>
                 <span class="ne-fmt-dd-panel ne-fmt-dd-panel-colors">
-                  <button type="button" class="ne-fmt-color-swatch" style="background:#000000" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#000000')" title="Black"></button>
-                  <button type="button" class="ne-fmt-color-swatch" style="background:#1565c0" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#1565c0')" title="Blue"></button>
-                  <button type="button" class="ne-fmt-color-swatch" style="background:#2e7d32" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#2e7d32')" title="Green"></button>
-                  <button type="button" class="ne-fmt-color-swatch" style="background:#c62828" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#c62828')" title="Red"></button>
-                  <button type="button" class="ne-fmt-color-swatch" style="background:#f9a825" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#f9a825')" title="Yellow"></button>
+                  <button type="button" class="ne-fmt-color-swatch" data-color="#000000" style="background:#000000" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#000000')" title="Black"></button>
+                  <button type="button" class="ne-fmt-color-swatch" data-color="#1565c0" style="background:#1565c0" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#1565c0')" title="Blue"></button>
+                  <button type="button" class="ne-fmt-color-swatch" data-color="#2e7d32" style="background:#2e7d32" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#2e7d32')" title="Green"></button>
+                  <button type="button" class="ne-fmt-color-swatch" data-color="#c62828" style="background:#c62828" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#c62828')" title="Red"></button>
+                  <button type="button" class="ne-fmt-color-swatch" data-color="#f9a825" style="background:#f9a825" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#f9a825')" title="Yellow"></button>
                 </span>
               </span>
               <span class="ne-fmt-sep"></span>
-              <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyLeft')" title="Align left">
+              <button type="button" class="ne-fmt-btn" data-ne-cmd="justifyLeft" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyLeft')" title="Align left">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M1 7h9M1 11h14M1 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
               </button>
-              <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyCenter')" title="Align center">
+              <button type="button" class="ne-fmt-btn" data-ne-cmd="justifyCenter" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyCenter')" title="Align center">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M3.5 7h9M1 11h14M3.5 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
               </button>
-              <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyRight')" title="Align right">
+              <button type="button" class="ne-fmt-btn" data-ne-cmd="justifyRight" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyRight')" title="Align right">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M6 7h9M1 11h14M6 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
               </button>
               <span class="ne-fmt-sep"></span>

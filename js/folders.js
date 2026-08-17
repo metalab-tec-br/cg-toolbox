@@ -960,6 +960,12 @@ function neExec(btn, cmd) {
   const body = wrap && wrap.querySelector('.note-editor-body');
   if (body) body.focus();
   document.execCommand(cmd, false, null);
+  // Atualiza o próprio botão clicado (e o resto da barra) imediatamente —
+  // pedido do usuário: "ao clicar ou selecionar um texto a barra de
+  // configurações deve mostrar as configurações atuais" (o botão Bold/
+  // Italic/Underline/alinhamento precisa refletir o estado já no clique,
+  // sem esperar um próximo mouseup/keyup).
+  if (body) { _neSaveSelectionFor(body); _neUpdateToolbarState(body); }
 }
 
 // Tamanho de fonte e cor (5 cores fixas, ver colorSwatches em
@@ -998,11 +1004,11 @@ function _neRestoreSelectionFor(editor) {
 // render() reconstruir o DOM.
 document.addEventListener('mouseup', ev => {
   const editor = ev.target.closest && ev.target.closest('.note-editor-body');
-  if (editor) { _neSaveSelectionFor(editor); _neUpdateFontSizeDisplay(editor); }
+  if (editor) { _neSaveSelectionFor(editor); _neUpdateToolbarState(editor); }
 });
 document.addEventListener('keyup', ev => {
   const editor = ev.target.closest && ev.target.closest('.note-editor-body');
-  if (editor) { _neSaveSelectionFor(editor); _neUpdateFontSizeDisplay(editor); }
+  if (editor) { _neSaveSelectionFor(editor); _neUpdateToolbarState(editor); }
 });
 // "Estilo Word" (pedido do usuário no Details do editor de comandos): ao
 // clicar/mover o cursor dentro do texto, o campo de tamanho de fonte deve
@@ -1025,32 +1031,84 @@ function _neCurrentFontSizeAt(editor) {
   }
   return 12;
 }
-// Atualiza a exibição do tamanho vigente no ponto do cursor: em ambos os
-// editores (Notes e Details do editor de comandos, mesmo dropdown desde o
-// pedido "deixar o menu de formatação em notes de folder igual dos
-// comandos") atualiza o rótulo do botão do dropdown (.ne-fmt-dd-btn-label) e
-// destaca (.on) a opção correspondente na lista de tamanhos pré-definidos
-// (ver .ne-fmt-size-opt em index.html/js/db-render-engine.js).
-// `forceSize`: quando informado, usa esse valor em vez de redetectar via
-// _neCurrentFontSizeAt (ver neSetFontSize abaixo). Necessário porque, logo
-// depois de aplicar um tamanho, a seleção é recriada com setStartBefore/
-// setEndAfter sobre o(s) elemento(s) afetado(s) — isso posiciona o nó-âncora
-// da seleção no elemento PAI dos spans recém-formatados (com um offset
-// apontando pra eles), não DENTRO de um deles. _neCurrentFontSizeAt só sobe a
-// árvore a partir do nó-âncora (nunca desce pros filhos), então nesse caso
-// específico ela nunca alcança o style aplicado e sempre "acha" o tamanho
-// herdado do pai (12, o padrão do editor) — foi o que o usuário reportou:
-// "alterei o tamanho para 18, mas no menu continua exibindo 12".
-function _neUpdateFontSizeDisplay(editor, forceSize) {
+// Mesma ideia de _neCurrentFontSizeAt, mas pra cor do texto: sobe a árvore a
+// partir do nó da seleção procurando o primeiro `color` inline explícito
+// (aplicado por neSetColor abaixo, via style ou o <font color> legado que
+// document.execCommand('foreColor') às vezes usa) — se não achar nenhum,
+// assume a cor padrão do editor (preto). Devolve sempre um hex em minúsculas
+// pra poder comparar direto com os data-color dos swatches.
+function _neCurrentColorAt(editor) {
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount && editor.contains(sel.anchorNode)) {
+    let node = sel.anchorNode;
+    if (node.nodeType === 3) node = node.parentElement;
+    while (node && node !== editor && editor.contains(node)) {
+      if (node.style && node.style.color) return _neRgbToHex(node.style.color);
+      if (node.tagName === 'FONT' && node.getAttribute('color')) return node.getAttribute('color').toLowerCase();
+      node = node.parentElement;
+    }
+  }
+  return '#000000';
+}
+// Navegadores normalizam `style.color` pra "rgb(r, g, b)" ao ler de volta
+// mesmo quando o valor foi setado como hex (ver neSetColor) — sem esta
+// conversão, comparar contra os data-color dos swatches (sempre hex) nunca
+// bateria.
+function _neRgbToHex(value) {
+  if (!value) return '#000000';
+  if (value[0] === '#') return value.toLowerCase();
+  const m = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if (!m) return '#000000';
+  const toHex = n => Math.max(0, Math.min(255, Number(n))).toString(16).padStart(2, '0');
+  return '#' + toHex(m[1]) + toHex(m[2]) + toHex(m[3]);
+}
+// Atualiza TODA a barra de formatação pro estado vigente no ponto do cursor/
+// seleção — pedido do usuário: "ao clicar ou selecionar um texto a barra de
+// configurações deve mostrar as configurações atuais" (relatou que só o
+// tamanho da fonte refletia corretamente; negrito/itálico/cor ficavam
+// sempre no estado padrão do botão, mesmo com o texto selecionado já
+// formatado diferente). Cobre, em ambos os editores (Notes e Details do
+// editor de comandos, mesmo toolbar compartilhada):
+//  - tamanho de fonte: rótulo do dropdown + opção destacada (.on), como já
+//    era em _neUpdateFontSizeDisplay (função renomeada);
+//  - negrito/itálico/sublinhado/alinhamento: destaca (.on) cada botão
+//    marcado com data-ne-cmd cujo document.queryCommandState(cmd) esteja
+//    ativo no ponto atual — a mesma técnica usada por qualquer editor
+//    baseado em execCommand pra saber "o texto sob o cursor já está em
+//    negrito?";
+//  - cor do texto: atualiza o swatch de preview (.ne-fmt-color-trigger-
+//    swatch) e destaca (.on) o swatch correspondente na lista.
+// `forceSize`/`forceColor`: quando informados, usam esse valor em vez de
+// redetectar via _neCurrentFontSizeAt/_neCurrentColorAt (ver neSetFontSize/
+// neSetColor abaixo). Necessário pro tamanho porque, logo depois de aplicar,
+// a seleção é recriada com setStartBefore/setEndAfter sobre o(s)
+// elemento(s) afetado(s) — isso posiciona o nó-âncora da seleção no
+// elemento PAI dos spans recém-formatados (com um offset apontando pra
+// eles), não DENTRO de um deles; _neCurrentFontSizeAt/_neCurrentColorAt só
+// sobem a árvore a partir do nó-âncora (nunca descem pros filhos), então
+// nesse caso específico nunca alcançariam o style aplicado e sempre
+// "achariam" o valor herdado do pai — foi o que o usuário reportou antes
+// pro tamanho ("alterei o tamanho para 18, mas no menu continua exibindo
+// 12"); o mesmo se aplicaria à cor sem forceColor.
+function _neUpdateToolbarState(editor, forceSize, forceColor) {
   const wrap = editor.closest('.note-flat-body-editing');
   if (!wrap) return;
-  const input = wrap.querySelector('input.ne-fmt-size');
   const size = (typeof forceSize === 'number') ? forceSize : _neCurrentFontSizeAt(editor);
-  if (input) input.value = size;
   const label = wrap.querySelector('.ne-fmt-dd-btn-label');
   if (label) label.textContent = size;
   wrap.querySelectorAll('.ne-fmt-size-opt').forEach(b => {
     b.classList.toggle('on', Number(b.dataset.size) === size);
+  });
+  wrap.querySelectorAll('.ne-fmt-btn[data-ne-cmd]').forEach(btn => {
+    let active = false;
+    try { active = document.queryCommandState(btn.dataset.neCmd); } catch (e) { /* comando não suportado neste navegador */ }
+    btn.classList.toggle('on', active);
+  });
+  const color = (typeof forceColor === 'string') ? forceColor.toLowerCase() : _neCurrentColorAt(editor);
+  const trigger = wrap.querySelector('.ne-fmt-color-trigger-swatch');
+  if (trigger) trigger.style.background = color;
+  wrap.querySelectorAll('.ne-fmt-color-swatch').forEach(b => {
+    b.classList.toggle('on', (b.dataset.color || '').toLowerCase() === color);
   });
 }
 // Usado por _ceResetForm/_cePopulateForm (js/command-editor.js) pra devolver
@@ -1158,10 +1216,10 @@ function neSetFontSize(el, px) {
   }
   if (el && el.tagName === 'INPUT') el.value = n; // <select>/<input> legados das Notes, se algum dia usados aqui
   // Passa `n` (o tamanho que ACABAMOS de aplicar) em vez de deixar
-  // _neUpdateFontSizeDisplay redetectar sozinha — ver comentário na função
+  // _neUpdateToolbarState redetectar sozinha — ver comentário na função
   // sobre por que a redetecção falha logo após aplicar (nó-âncora fica no
   // elemento pai dos spans afetados, não dentro deles).
-  _neUpdateFontSizeDisplay(body, n);
+  _neUpdateToolbarState(body, n);
   // Fecha o dropdown ao escolher um tamanho — mesmo padrão de "fechar ao
   // selecionar" da cor, ver neSetColor abaixo.
   if (el && el.closest('.ne-fmt-dd')) _neCloseFmtDropdowns();
@@ -1173,15 +1231,15 @@ function neSetColor(el, color) {
   _neRestoreSelectionFor(body);
   document.execCommand('foreColor', false, color);
   // Fecha o dropdown de cor (se o swatch estiver dentro de um, ver
-  // index.html — pedido do usuário: "deixe... cores em opção dropdown") e
-  // atualiza o preview no botão pra refletir a última cor escolhida, mesmo
-  // padrão de "fechar ao selecionar" já usado nos outros dropdowns do app.
-  const dd = el.closest('.ne-fmt-dd');
-  if (dd) {
-    _neCloseFmtDropdowns();
-    const trigger = dd.querySelector('.ne-fmt-color-trigger-swatch');
-    if (trigger) trigger.style.background = color;
-  }
+  // index.html — pedido do usuário: "deixe... cores em opção dropdown").
+  if (el.closest('.ne-fmt-dd')) _neCloseFmtDropdowns();
+  _neSaveSelectionFor(body);
+  // Passa `color` (a cor que ACABAMOS de aplicar) em vez de deixar
+  // _neUpdateToolbarState redetectar sozinha via _neCurrentColorAt — mesmo
+  // motivo do forceSize em neSetFontSize acima (a seleção pode não cair
+  // exatamente dentro do nó recém-colorido). Atualiza tanto o preview do
+  // botão quanto o destaque (.on) do swatch escolhido.
+  _neUpdateToolbarState(body, undefined, color);
 }
 // Inserir link — pedido do usuário: "inclua uma opção para inserir link no
 // menu de detalhes e em notas também" (Details do editor de comandos e

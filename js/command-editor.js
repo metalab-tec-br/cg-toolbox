@@ -699,7 +699,7 @@ async function _cePopulateForm(id) {
   _ce('cmdDesc').value = row.desc || '';
   _ce('cmdDescEmpty').value = row.desc_empty || '';
   _ce('cmdDetailsEditor').innerHTML = row.details || '';
-  _neResetFontSizeUI('cmdDetailsFontSizeLabel', 'cmdDetailsFontSizeList'); // mostra o padrão até o usuário clicar no texto (ver _neUpdateFontSizeDisplay)
+  _neResetFontSizeUI('cmdDetailsFontSizeLabel', 'cmdDetailsFontSizeList'); // mostra o padrão até o usuário clicar no texto (ver _neUpdateToolbarState)
 
   _ceSetSingleSeg('cmdVendorSeg', row.vendors || [], 'cmdVendorDDBtn');
   _ceSetSingleSeg('cmdSysSeg', row.systems || [], 'cmdSysDDBtn');

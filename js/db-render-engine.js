@@ -482,7 +482,7 @@ function buildNoteCardHtml(note, ownFolder, editing) {
     const colorSwatches = [
       ['#000000', 'Black'], ['#1565c0', 'Blue'], ['#2e7d32', 'Green'],
       ['#c62828', 'Red'], ['#f9a825', 'Yellow'],
-    ].map(([hex, label]) => `<button type="button" class="ne-fmt-color-swatch" style="background:${hex}" onmousedown="event.preventDefault()" onclick="neSetColor(this, '${hex}')" title="${label}"></button>`).join('');
+    ].map(([hex, label]) => `<button type="button" class="ne-fmt-color-swatch" data-color="${hex}" style="background:${hex}" onmousedown="event.preventDefault()" onclick="neSetColor(this, '${hex}')" title="${label}"></button>`).join('');
     return `<div class="card" data-note-id="${note.id || ''}" data-note-editing="1">
       <div class="note-edit-head">
         <span class="note-edit-label">${isNew ? 'New note' : 'Editing note'}</span>
@@ -494,9 +494,9 @@ function buildNoteCardHtml(note, ownFolder, editing) {
       </div>
       <div class="note-flat-body note-flat-body-editing">
         <div class="note-editor-toolbar">
-          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'bold')" title="Bold (Ctrl+B)"><b>B</b></button>
-          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'italic')" title="Italic (Ctrl+I)"><i>I</i></button>
-          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'underline')" title="Underline (Ctrl+U)"><u>U</u></button>
+          <button type="button" class="ne-fmt-btn" data-ne-cmd="bold" onmousedown="event.preventDefault()" onclick="neExec(this, 'bold')" title="Bold (Ctrl+B)"><b>B</b></button>
+          <button type="button" class="ne-fmt-btn" data-ne-cmd="italic" onmousedown="event.preventDefault()" onclick="neExec(this, 'italic')" title="Italic (Ctrl+I)"><i>I</i></button>
+          <button type="button" class="ne-fmt-btn" data-ne-cmd="underline" onmousedown="event.preventDefault()" onclick="neExec(this, 'underline')" title="Underline (Ctrl+U)"><u>U</u></button>
           <span class="ne-fmt-sep"></span>
           <!-- Tamanho/cor em dropdown — mesmo padrão do Details do editor de
                comandos (ver index.html/.ne-fmt-dd), pedido do usuário: "deixar
@@ -504,7 +504,7 @@ function buildNoteCardHtml(note, ownFolder, editing) {
                Sem id fixo (diferente do #cmdDetailsFontSizeLabel do Details):
                pode haver vários editores de nota abertos ao mesmo tempo, e
                _neToggleFmtDropdown/neSetFontSize/neSetColor/
-               _neUpdateFontSizeDisplay (js/folders.js) já resolvem tudo via
+               _neUpdateToolbarState (js/folders.js) já resolvem tudo via
                closest()/querySelector() a partir do próprio editor, sem
                precisar de id. -->
           <span class="ne-fmt-dd">
@@ -532,13 +532,13 @@ function buildNoteCardHtml(note, ownFolder, editing) {
             <span class="ne-fmt-dd-panel ne-fmt-dd-panel-colors">${colorSwatches}</span>
           </span>
           <span class="ne-fmt-sep"></span>
-          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyLeft')" title="Align left">
+          <button type="button" class="ne-fmt-btn" data-ne-cmd="justifyLeft" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyLeft')" title="Align left">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M1 7h9M1 11h14M1 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           </button>
-          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyCenter')" title="Align center">
+          <button type="button" class="ne-fmt-btn" data-ne-cmd="justifyCenter" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyCenter')" title="Align center">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M3.5 7h9M1 11h14M3.5 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           </button>
-          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyRight')" title="Align right">
+          <button type="button" class="ne-fmt-btn" data-ne-cmd="justifyRight" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyRight')" title="Align right">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M6 7h9M1 11h14M6 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           </button>
           <span class="ne-fmt-sep"></span>
