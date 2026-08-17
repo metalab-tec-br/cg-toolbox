@@ -330,6 +330,41 @@
   width: min(1520px, 96vw); height: min(1200px, 92vh); max-height: 92vh; overflow: hidden;
 }
 #cmdEditorOverlay .modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* Details (passo 1) — pedido do usuário: "ajuste o tamanho do campo para
+   cobrir a parte abaixo, e deixe da mesma largura do name e description".
+   A largura já era igual (mesmo .set-group que Name/Description, 100% da
+   largura do .modal-body); o que faltava era a altura: o campo tinha um
+   tamanho fixo pequeno (min/max-height de .note-editor-body, pensado pra
+   Notes) e sobrava bastante vão em branco embaixo dele agora que o modal
+   ficou bem mais alto (ver #cmdEditorOverlay .modal-box acima). A cadeia
+   flex:1/min-height:0 abaixo (wiz-panel → set-group-details → note-flat-
+   body-editing → note-editor-body) faz o campo esticar até o rodapé do
+   modal, cobrindo o espaço vazio — escopado a #cmdEditorOverlay pra não
+   afetar o editor de Notes (que usa a mesma classe .note-editor-body, mas
+   dentro de um card de altura livre, não de um modal de altura fixa). */
+#cmdEditorOverlay .wiz-panel { flex: 1 1 auto; min-height: 0; }
+#cmdEditorOverlay .set-group-details { flex: 1 1 auto; min-height: 0; }
+#cmdEditorOverlay .set-group-details .note-flat-body-editing {
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+}
+#cmdEditorOverlay .set-group-details .note-editor-body {
+  flex: 1 1 auto; min-height: 0; max-height: none;
+  /* Tamanho padrão 12px (pedido do usuário) — o .note-editor-body
+     compartilhado com Notes usa 12.5px; aqui fica exatamente 12, igual ao
+     valor inicial do campo de tamanho de fonte (ver index.html) e ao
+     fallback de _neCurrentFontSizeAt() em js/folders.js. */
+  font-size: 12px;
+}
+/* Campo de tamanho de fonte "estilo Word" (<input type="number">, ver
+   index.html) — mesma caixa visual de .ne-fmt-size (compartilhada com o
+   <select> das Notes), só com largura fixa pequena, texto centralizado e
+   cursor de texto normal (em vez do "pointer" de .ne-fmt-size, pensado pro
+   <select>: aqui o campo é digitável). */
+/* Especificidade dupla (.ne-fmt-size.ne-fmt-size-num) de propósito: o
+   input leva as duas classes (ver index.html), e precisa vencer o
+   cursor:pointer de .ne-fmt-size (definido mais abaixo, na seção de Notes)
+   independente da ordem das regras no arquivo. */
+.ne-fmt-size.ne-fmt-size-num { width: 42px; text-align: center; cursor: text; }
 .set-hint { font-size: 10px; color: var(--dim); line-height: 1.5; }
 .set-row { display: flex; gap: 10px; }
 .set-row > .set-group { flex: 1; min-width: 0; }

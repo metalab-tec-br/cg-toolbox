@@ -614,6 +614,11 @@ function _ceResetForm() {
   // `details` substitui about_purpose/when/obs (rich text, ver index.html) —
   // não é um .value, é o innerHTML do editor contenteditable.
   _ce('cmdDetailsEditor').innerHTML = '';
+  // Campo de tamanho de fonte "estilo Word" (ver index.html/js/folders.js) —
+  // volta pro padrão (12) a cada reset, já que o modal é reaproveitado
+  // (não recriado) entre uma edição e outra; sem isso o campo continuaria
+  // mostrando o último tamanho clicado na edição anterior.
+  _ce('cmdDetailsFontSize').value = 12;
   _ceSetSingleSeg('cmdVendorSeg', [], 'cmdVendorDDBtn');
   _ceSetSingleSeg('cmdSysSeg', [], 'cmdSysDDBtn');
   _ceSetMultiSeg('cmdVersionsSeg', [], 'cmdVersionsDDBtn', null, 'selected');
@@ -639,6 +644,7 @@ async function _cePopulateForm(id) {
   _ce('cmdDesc').value = row.desc || '';
   _ce('cmdDescEmpty').value = row.desc_empty || '';
   _ce('cmdDetailsEditor').innerHTML = row.details || '';
+  _ce('cmdDetailsFontSize').value = 12; // mostra o padrão até o usuário clicar no texto (ver _neUpdateFontSizeDisplay)
 
   _ceSetSingleSeg('cmdVendorSeg', row.vendors || [], 'cmdVendorDDBtn');
   _ceSetSingleSeg('cmdSysSeg', row.systems || [], 'cmdSysDDBtn');

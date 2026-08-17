@@ -980,12 +980,43 @@ function _neRestoreSelectionFor(editor) {
 // render() reconstruir o DOM.
 document.addEventListener('mouseup', ev => {
   const editor = ev.target.closest && ev.target.closest('.note-editor-body');
-  if (editor) _neSaveSelectionFor(editor);
+  if (editor) { _neSaveSelectionFor(editor); _neUpdateFontSizeDisplay(editor); }
 });
 document.addEventListener('keyup', ev => {
   const editor = ev.target.closest && ev.target.closest('.note-editor-body');
-  if (editor) _neSaveSelectionFor(editor);
+  if (editor) { _neSaveSelectionFor(editor); _neUpdateFontSizeDisplay(editor); }
 });
+// "Estilo Word" (pedido do usuário no Details do editor de comandos): ao
+// clicar/mover o cursor dentro do texto, o campo de tamanho de fonte deve
+// refletir o tamanho vigente naquele ponto, em vez de ficar sempre com um
+// valor fixo. Sobe a árvore a partir do nó da seleção procurando o primeiro
+// font-size inline explícito (aplicado por neSetFontSize abaixo); se não
+// achar nenhum, assume o tamanho padrão do editor (12px, ver .note-editor-
+// body em css/components.css).
+function _neCurrentFontSizeAt(editor) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || !editor.contains(sel.anchorNode)) return 12;
+  let node = sel.anchorNode;
+  if (node.nodeType === 3) node = node.parentElement;
+  while (node && node !== editor && editor.contains(node)) {
+    if (node.style && node.style.fontSize) {
+      const n = parseInt(node.style.fontSize, 10);
+      if (!isNaN(n)) return n;
+    }
+    node = node.parentElement;
+  }
+  return 12;
+}
+// Só atualiza o campo se ele for o novo <input type="number"> (formato
+// "estilo Word", ver index.html — cmdDetailsEditor). O <select> de tamanho
+// ainda usado nas Notes fica de fora de propósito: continua só "escreve"
+// (escolher aplica), sem refletir o tamanho atual, para não mudar um
+// comportamento que o usuário não pediu para alterar ali.
+function _neUpdateFontSizeDisplay(editor) {
+  const wrap = editor.closest('.note-flat-body-editing');
+  const input = wrap && wrap.querySelector('input.ne-fmt-size');
+  if (input) input.value = _neCurrentFontSizeAt(editor);
+}
 // Mantém NOTE_EDIT_DRAFTS (ver comentário acima) sincronizado a cada tecla/
 // edição — é o que protege o texto em andamento de um render() disparado
 // por outro motivo enquanto o usuário ainda está escrevendo/formatando.
@@ -1000,21 +1031,30 @@ document.addEventListener('input', ev => {
 // (sem controle em pixels) — o truque padrão (sem precisar de nenhuma lib)
 // é aplicar o tamanho 7 (usado só como marcador único, fácil de achar
 // depois) e então trocar cada <font size="7"> resultante por um `style`
-// inline com o tamanho em px de verdade, removendo o atributo `size`. O
-// próprio <select> volta pro placeholder ("Size") depois de aplicar (ver
-// onchange em db-render-engine.js), pra poder escolher o MESMO tamanho de
-// novo em seguida sem precisar trocar de opção primeiro.
-function neSetFontSize(selectEl, px) {
-  if (!px) return;
-  const wrap = selectEl.closest('.note-flat-body-editing');
+// inline com o tamanho em px de verdade, removendo o atributo `size`. Para
+// o <select> das Notes, o próprio elemento volta pro placeholder ("Size")
+// depois de aplicar (ver onchange em db-render-engine.js), pra poder
+// escolher o MESMO tamanho de novo em seguida sem precisar trocar de opção
+// primeiro — isso é feito no HTML, não aqui dentro. Já o novo <input
+// type="number"> "estilo Word" (Details do editor de comandos, ver
+// index.html) faz o oposto: mantém o valor exibido (não faz sentido limpar
+// um número que o usuário acabou de digitar), e esta função o corrige de
+// volta pro intervalo permitido (8–24) caso ele tenha digitado algo fora
+// da faixa.
+function neSetFontSize(el, px) {
+  let n = parseInt(px, 10);
+  if (isNaN(n)) return;
+  n = Math.max(8, Math.min(24, n));
+  const wrap = el.closest('.note-flat-body-editing');
   const body = wrap && wrap.querySelector('.note-editor-body');
   if (!body) return;
   _neRestoreSelectionFor(body);
   document.execCommand('fontSize', false, '7');
-  body.querySelectorAll('font[size="7"]').forEach(el => {
-    el.removeAttribute('size');
-    el.style.fontSize = px + 'px';
+  body.querySelectorAll('font[size="7"]').forEach(f => {
+    f.removeAttribute('size');
+    f.style.fontSize = n + 'px';
   });
+  if (el && el.tagName === 'INPUT') el.value = n;
 }
 function neSetColor(el, color) {
   const wrap = el.closest('.note-flat-body-editing');

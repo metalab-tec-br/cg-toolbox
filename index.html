@@ -1078,13 +1078,20 @@
               <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'italic')" title="Italic (Ctrl+I)"><i>I</i></button>
               <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'underline')" title="Underline (Ctrl+U)"><u>U</u></button>
               <span class="ne-fmt-sep"></span>
-              <select class="ne-fmt-size" onchange="neSetFontSize(this, this.value); this.value='';" title="Font size">
-                <option value="">Size</option>
-                <option value="11">11</option>
-                <option value="13">13</option>
-                <option value="17">17</option>
-                <option value="22">22</option>
-              </select>
+              <!-- Campo de tamanho de fonte "estilo Word" (pedido do usuário) — em
+                   vez do <select> de valores fixos usado nas Notes, este é um
+                   <input type="number"> (8–24, padrão 12): ao clicar/mover o
+                   cursor dentro do texto o campo mostra o tamanho vigente
+                   naquele ponto (ver _neUpdateFontSizeDisplay em
+                   js/folders.js, disparado pelos listeners de mouseup/keyup
+                   já existentes no editor), e digitar um novo valor + Enter
+                   (ou tirar o foco) aplica no texto selecionado — mesmo
+                   neSetFontSize() das Notes, só que sem o reset de valor no
+                   final (esse reset só é feito no próprio onchange do
+                   <select>, não dentro da função). -->
+              <input type="number" class="ne-fmt-size ne-fmt-size-num" id="cmdDetailsFontSize" min="8" max="24" step="1" value="12" title="Font size"
+                onchange="neSetFontSize(this, this.value)"
+                onkeydown="if(event.key==='Enter'){event.preventDefault(); neSetFontSize(this, this.value); this.blur();}">
               <span class="ne-fmt-colors" title="Text color">
                 <button type="button" class="ne-fmt-color-swatch" style="background:#000000" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#000000')" title="Black"></button>
                 <button type="button" class="ne-fmt-color-swatch" style="background:#1565c0" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#1565c0')" title="Blue"></button>
@@ -1103,7 +1110,7 @@
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M6 7h9M1 11h14M6 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
               </button>
             </div>
-            <div class="note-editor-body" id="cmdDetailsEditor" contenteditable="true" data-placeholder="Purpose, when to use, notes..."></div>
+            <div class="note-editor-body" id="cmdDetailsEditor" contenteditable="true"></div>
           </div>
         </div>
       </div>
