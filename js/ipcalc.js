@@ -438,18 +438,13 @@ function ipcRunCalculate() {
       // Prefixo mais longo/específico = SPLIT: divide a rede atual em N
       // sub-redes menores (ex.: /24 -> 4 x /26).
       const res = ipcSplitSubnets(r.networkLong, r.prefix, newPrefix);
-      subnetsLabelEl.textContent = 'Subnets';
+      subnetsLabelEl.textContent = `Subnets (${res.generated.toLocaleString('pt-BR')})`;
       res.subnets.forEach((sn, i) => {
         subnetsOut += ipcRenderNetworkBlock({ ...sn, prefix: newPrefix }, `Subnet ${i + 1} of ${res.generated}`);
       });
       if (res.truncated) {
         subnetsOut += `<div class="ipc-note-line"><span class="ipc-note">Showing the first ${res.generated} of ${res.count} subnets (safety limit).</span></div>`;
       }
-      const totalHosts = res.subnets.reduce((sum, sn) => sum + sn.usableHosts, 0);
-      subnetsOut += '<div class="ipc-block">';
-      subnetsOut += ipcLine('Subnets', res.generated.toLocaleString('pt-BR'));
-      subnetsOut += ipcLine('Hosts', totalHosts.toLocaleString('pt-BR'));
-      subnetsOut += '</div>';
     } else {
       // Prefixo mais curto/genérico = SUPERNET: recalcula a rede que
       // contém o MESMO endereço, só que com uma máscara mais larga.
