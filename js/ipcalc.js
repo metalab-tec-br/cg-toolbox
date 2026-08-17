@@ -250,15 +250,18 @@ function ipcCopyInline(btn, text) {
   _doSingleCopy(btn);
 }
 
-// Uma linha "Label: valor [copiar] binário (nota)", como um <div> flex —
-// o botão de copiar (quando existe) vem logo depois do valor — pedido do
-// usuário — num slot de largura fixa (.ipc-copy-slot) que existe MESMO
-// vazio, pra coluna do binário não deslocar entre linhas com/sem botão.
+// Uma linha "Label: valor[copiar] binário (nota)", como um <div> flex — o
+// valor e o botão de copiar (quando existe) ficam juntos dentro de
+// .ipc-valwrap, colados um no outro — pedido do usuário ("o botão de
+// copiar deve ficar logo após os endereços"). .ipc-valwrap tem largura
+// FIXA (ver css/components.css) MESMO quando não há botão, pra coluna do
+// binário não deslocar entre linhas com/sem botão de copiar.
 function ipcLine(label, value, binHtml, note, copyText) {
   let html = `<div class="ipc-line">`;
   html += `<span class="ipc-label">${label}:</span>`;
-  html += `<span class="ipc-val">${value}</span>`;
-  html += `<span class="ipc-copy-slot">${copyText ? ipcCopyBtnHtml(copyText) : ''}</span>`;
+  html += `<span class="ipc-valwrap"><span class="ipc-val">${value}</span>`;
+  if (copyText) html += ipcCopyBtnHtml(copyText);
+  html += `</span>`;
   if (binHtml) html += `<span class="ipc-bin-wrap">${binHtml}</span>`;
   if (note) html += ` <span class="ipc-note">(${note})</span>`;
   html += `</div>`;

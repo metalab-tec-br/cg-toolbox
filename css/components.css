@@ -1475,25 +1475,26 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
   background: var(--surf2); border: 1px solid var(--bdr); border-radius: 8px;
   padding: 12px 14px;
 }
-/* Cada linha "Label: valor [copiar] binário (nota)" é um flex row com
-   colunas de largura FIXA em `ch` (unidade monoespaçada) — Label/Valor/slot
-   do botão de copiar sempre ocupam a mesma largura em toda linha, existindo
-   ou não o botão (.ipc-copy-slot fica vazio quando não há copyText). Isso
-   garante que a coluna do binário comece exatamente no mesmo x em todas as
-   linhas — pedido do usuário ("alinhar o hexadecimal") — o que um
-   padEnd() de string não conseguia garantir quando um <button> real
-   (largura em pixels, não em caracteres) entrava no meio do texto. */
+/* Cada linha "Label: valor[copiar] binário (nota)" é um flex row. O par
+   valor+botão de copiar fica junto dentro de .ipc-valwrap — o botão vem
+   colado logo após o endereço (pedido do usuário), em vez de "empurrado"
+   pro fim de uma coluna de valor com padding vazio no meio. .ipc-valwrap
+   tem largura FIXA (calc(20ch + botão), existindo ou não o botão) — isso
+   garante que a coluna do binário comece sempre no mesmo x em toda linha
+   ("alinhar o hexadecimal"), o que um padEnd() de string não conseguia
+   garantir quando um <button> real (largura em pixels, não em caracteres)
+   entrava no meio do texto. */
 .ipc-line { display: flex; align-items: baseline; white-space: nowrap; }
 .ipc-block { margin-bottom: 10px; }
 .ipc-block:last-child { margin-bottom: 0; }
 .ipc-label {
   flex: 0 0 11ch; color: var(--green); font-weight: 700;
 }
-.ipc-val {
-  flex: 0 0 20ch; color: var(--blue); font-weight: 600;
-  overflow: hidden; text-overflow: ellipsis;
+.ipc-valwrap {
+  flex: 0 0 calc(20ch + 24px);
+  display: inline-flex; align-items: center; gap: 4px;
 }
-.ipc-copy-slot { flex: 0 0 26px; display: inline-flex; align-items: center; }
+.ipc-val { color: var(--blue); font-weight: 600; white-space: nowrap; }
 .ipc-bin-wrap { flex: 1 1 auto; }
 .ipc-bin { color: var(--text); }
 .ipc-bin-net { color: var(--text); font-weight: 700; }
