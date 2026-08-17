@@ -169,12 +169,49 @@ function readMultiSelectValue(containerId, itemSelector, keyAttr, specificKeys) 
   });
 }
 
+// Filtros da sidebar (Vendor/System/Version/Environment/Topic) + texto da busca
+// (#cmdSearch) persistem entre atualizações de página — bug reportado: "ao
+// atualizar a tela os filtros estão sendo limpos". Chave separada do "default"
+// configurado em Configurações (SETTINGS_KEY/s.vendor etc., js/settings.js) —
+// mesmo princípio de LAST_VIEW_KEY/FOLDER_SCOPE_KEY (js/settings.js): aqui é o
+// filtro AO VIVO que o usuário está navegando agora, e ele espera que
+// sobreviva a um F5 como qualquer outro, independente do que esteja
+// configurado como padrão. resolveSidebarFilters() (chamada por
+// applyDefaultsFromSettings() em js/settings.js) prioriza este valor sobre o
+// "default" salvo em Configurações; só cai pro default na primeira visita
+// deste navegador (localStorage ainda vazio).
+const SIDEBAR_FILTERS_KEY = 'cpa-sidebar-filters';
+function persistSidebarFilters() {
+  try {
+    const q = (document.getElementById('cmdSearch') || {}).value || '';
+    localStorage.setItem(SIDEBAR_FILTERS_KEY, JSON.stringify({ vd: ST.vd, sys: ST.sys, v: ST.v, e: ST.e, t: ST.t, q }));
+  } catch (e) {}
+}
+function resolveSidebarFilters(defaults) {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_FILTERS_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw) || {};
+      return {
+        vd: Array.isArray(saved.vd) ? saved.vd : defaults.vd,
+        sys: Array.isArray(saved.sys) ? saved.sys : defaults.sys,
+        v: Array.isArray(saved.v) ? saved.v : defaults.v,
+        e: Array.isArray(saved.e) ? saved.e : defaults.e,
+        t: Array.isArray(saved.t) ? saved.t : defaults.t,
+        q: typeof saved.q === 'string' ? saved.q : '',
+      };
+    }
+  } catch (e) {}
+  return Object.assign({ q: '' }, defaults);
+}
+
 function onSidebarFilterChange() {
   if (VIEW_FOLDERS_HOME) {
     VIEW_FOLDERS_HOME = false;
     const nav = document.getElementById('foldersNavRow');
     if (nav) nav.classList.remove('on');
   }
+  persistSidebarFilters();
   render();
 }
 bindMultiSelect('vendorList', '.sb-row', 'data-vd', () => {
@@ -262,6 +299,7 @@ function clearAllSidebarFilters() {
     searchInput.value = '';
     if (typeof updateSearchClearBtn === 'function') updateSearchClearBtn();
   }
+  persistSidebarFilters();
   render();
 }
 

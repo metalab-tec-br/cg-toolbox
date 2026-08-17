@@ -389,17 +389,39 @@ function setGroupBy(mode) {
 // Aplica as preferências salvas ao estado vivo da ferramenta (chamado no boot)
 function applyDefaultsFromSettings() {
   const s = loadSettings();
-  ST.vd = s.vendor; ST.sys = s.sys; ST.v = s.version; ST.e = s.env; ST.t = s.type;
-  setActiveRowsMulti('vendorList', 'data-vd', s.vendor);
-  setActiveRowsMulti('sysList', 'data-sys', s.sys);
-  setActiveRowsMulti('vList', 'data-v', s.version);
-  setActiveRowsMulti('eList', 'data-e', s.env);
-  setActiveRowsMulti('tList', 'data-t', s.type);
+  // resolveSidebarFilters() (js/state.js) prioriza o filtro AO VIVO que o
+  // usuário deixou selecionado na sidebar (localStorage 'cpa-sidebar-filters')
+  // sobre o "default" configurado aqui em s.vendor/s.sys/s.version/s.env/
+  // s.type — bug reportado: "ao atualizar a tela os filtros estão sendo
+  // limpos". Só cai pro default quando não há nada salvo ainda (primeira
+  // visita deste navegador). Mesmo valor também traz de volta o texto da
+  // busca de comandos (#cmdSearch), se houver.
+  const filters = typeof resolveSidebarFilters === 'function'
+    ? resolveSidebarFilters({ vd: s.vendor, sys: s.sys, v: s.version, e: s.env, t: s.type })
+    : { vd: s.vendor, sys: s.sys, v: s.version, e: s.env, t: s.type, q: '' };
+  ST.vd = filters.vd; ST.sys = filters.sys; ST.v = filters.v; ST.e = filters.e; ST.t = filters.t;
+  setActiveRowsMulti('vendorList', 'data-vd', filters.vd);
+  setActiveRowsMulti('sysList', 'data-sys', filters.sys);
+  setActiveRowsMulti('vList', 'data-v', filters.v);
+  setActiveRowsMulti('eList', 'data-e', filters.e);
+  setActiveRowsMulti('tList', 'data-t', filters.t);
   updateVendorDDLabel();
   updateSystemDDLabel();
   updateVersionDDLabel();
   updateEnvDDLabel();
   updateTypeDDLabel();
+  if (filters.q) {
+    gvSet('cmdSearch', filters.q);
+    if (typeof updateSearchClearBtn === 'function') updateSearchClearBtn();
+    // Dispara o mesmo caminho de uma digitação normal (onSearchInput ->
+    // applySearchFilter debounced) em vez de chamar applySearchFilter()
+    // direto — nesse ponto do boot os comandos ainda podem não ter chegado
+    // do servidor (fetch assíncrono), então o debounce de 120ms dá tempo do
+    // primeiro render() já ter colocado os cards no DOM antes do filtro
+    // rodar. Mesmo espírito "best-effort" já usado pelo resto do boot.
+    const input = document.getElementById('cmdSearch');
+    if (input && typeof onSearchInput === 'function') input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
   if (typeof ccRefreshCascade === 'function') ccRefreshCascade();
   gvSet('f-log', s.logFile);
   applyCardDetailsSetting(s.showCardDetails === true);
