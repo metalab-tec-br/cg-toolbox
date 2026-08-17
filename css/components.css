@@ -1460,6 +1460,37 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .ipc-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 160px; min-width: 140px; }
 .ipc-field .set-input { width: 100%; }
 .ipc-slash { font-family: var(--mono); font-weight: 700; color: var(--dim); padding-bottom: 9px; }
+/* Pedido do usuário: um "i" pequeno de informação ao lado do rótulo
+   "Netmask" — ao passar o mouse (ou focar via teclado), mostra a tabela
+   de prefixo/máscara de /32 a /0. Reaproveita o padrão de popover-no-hover
+   já usado em .fav-wrap/.fav-audit-pop. */
+.ipc-label-info-wrap { display: flex; align-items: center; gap: 4px; position: relative; }
+.ipc-info-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 1px solid var(--dim); color: var(--dim);
+  font-size: 9px; font-weight: 700; font-style: italic; font-family: Georgia, serif;
+  cursor: default; line-height: 1; flex-shrink: 0;
+}
+.ipc-info-icon:hover, .ipc-info-icon:focus {
+  border-color: var(--teal); color: var(--teal); outline: none;
+}
+.ipc-info-pop {
+  display: none; position: absolute; top: 100%; left: 0; margin-top: 6px;
+  z-index: 30; width: max-content;
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: 7px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.22); padding: 8px;
+}
+.ipc-info-icon:hover .ipc-info-pop, .ipc-info-icon:focus .ipc-info-pop { display: block; }
+.ipc-cidr-table { border-collapse: collapse; font-family: var(--mono); font-size: 10.5px; }
+.ipc-cidr-table th {
+  text-align: left; color: var(--dim); font-weight: 800; text-transform: uppercase;
+  letter-spacing: .4px; font-size: 9px; padding: 0 10px 4px 0;
+  border-bottom: 1px solid var(--bdr);
+}
+.ipc-cidr-table td { padding: 1px 10px 1px 0; white-space: nowrap; }
+.ipc-cidr-table td:first-child { color: var(--green); font-weight: 700; }
+.ipc-cidr-table td:last-child { color: var(--blue); }
 /* Pedido do usuário: mesmas cores do botão "Add" da toolbar principal
    (.ctb-cmd-actions .btn.ctb-cmd-btn.admin-highlight em css/layout.css) —
    pill sólido rosa/magenta da marca, texto branco. */
