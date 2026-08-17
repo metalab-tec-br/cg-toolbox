@@ -1358,7 +1358,17 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    text HTML (mesmo editor de Notes) — não são mais spans separados, então
    as regras abaixo estilizam o conteúdo genérico (parágrafos/negrito) em vez
    de classes fixas .about-purpose/.about-when. */
-.about-body { min-width: 0; font-size: 11.5px; color: var(--text); line-height: 1.5; }
+/* flex:1 — .about-body é o único filho de .card-about (display:flex), mas
+   flex-items não esticam pra preencher a linha por padrão (flex-grow:0 é o
+   valor inicial mesmo sendo filho único). Sem isso, a caixa fica exatamente
+   do tamanho do próprio conteúdo (shrink-to-fit) — o que faz qualquer
+   parágrafo alinhado à direita/centralizado (text-align, ver toolbar do
+   Details) não ter nenhum espaço sobrando pra realmente deslocar o texto,
+   já que a caixa já é do tamanho exato da linha mais larga. Bug reportado
+   pelo usuário: "alinhei um texto para direita, mas na tela continua
+   exibindo para esquerda" — a formatação estava sendo salva certinho, só não
+   tinha efeito visível aqui por falta desse flex:1. */
+.about-body { flex: 1 1 auto; min-width: 0; font-size: 11.5px; color: var(--text); line-height: 1.5; }
 .about-body p { margin: 0 0 4px; }
 .about-body p:last-child { margin-bottom: 0; }
 .about-body strong { color: var(--teal); font-weight: 700; }
