@@ -1834,14 +1834,10 @@
           </div>
           <div class="ipc-field">
             <span class="set-label">Move to netmask</span>
-            <div class="ipc-moveto-row">
-              <span class="ipc-moveto-label">move to:</span>
-              <input type="text" class="set-input" id="ipcMoveTo" placeholder="e.g. 25" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
-            </div>
+            <input type="text" class="set-input" id="ipcMoveTo" placeholder="e.g. 25" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
           </div>
           <button type="button" class="btn btn-primary ipc-calc-btn" onclick="ipcRunCalculate()">Calc</button>
         </div>
-        <span class="set-hint">A longer prefix in "move to" splits into all subnets; a shorter one shows the enclosing supernet.</span>
         <span class="set-hint" id="ipcError" style="display:none;color:var(--red);"></span>
         <span class="set-hint" id="ipcMoveToError" style="display:none;color:var(--red);"></span>
       </div>
@@ -1869,10 +1865,6 @@
           </table>
         </div>
       </div>
-    </div>
-    <div class="modal-foot">
-      <div></div>
-      <button class="btn" onclick="closeIpCalcModal()">Close</button>
     </div>
   </div>
 </div>

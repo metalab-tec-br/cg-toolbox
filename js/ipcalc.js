@@ -175,24 +175,24 @@ function openIpCalcModal() {
 function closeIpCalcModal() {
   document.getElementById('ipCalcOverlay').classList.remove('show');
 }
-document.getElementById('ipCalcOverlay').addEventListener('click', ev => {
-  if (ev.target.id === 'ipCalcOverlay') closeIpCalcModal();
-});
-document.addEventListener('keydown', ev => {
-  if (ev.key === 'Escape' && document.getElementById('ipCalcOverlay').classList.contains('show')) closeIpCalcModal();
-});
+// Pedido do usuário: fechar SOMENTE pelo botão "✕" do cabeçalho — ao
+// contrário dos outros modais do app, aqui não há fechamento por clique
+// fora (overlay) nem por Esc, propositalmente (evita perder os dados
+// calculados/o "move to" digitado com um clique ou tecla acidental).
 
 // ── UI: saída em estilo "calculadora de terminal" ──
 // Pedido do usuário: reproduzir o estilo de uma calculadora de sub-rede
 // clássica (rótulo em verde + valor + a mesma dotted-quad em BINÁRIO ao
 // lado, com a porção de rede/host separada por um espaço extra bem na
 // fronteira do prefixo, e a máscara em vermelho) em vez da tabela simples
-// usada antes. Tudo é montado como uma única string monoespaçada (o
-// container #ipcTermOutput tem white-space:pre — ver css/components.css)
-// em vez de nós de DOM um a um, porque o layout depende de alinhamento por
-// espaços (padEnd), igual ao original.
-const IPC_LBL_W = 11; // "Broadcast: " etc. — largura fixa da coluna de rótulo
-const IPC_VAL_W = 20; // largura fixa da coluna de valor, antes do binário/nota
+// usada antes.
+// Cada linha é um <div class="ipc-line"> com colunas flex de largura FIXA
+// em `ch` (ver .ipc-label/.ipc-val/.ipc-copy-slot em css/components.css) —
+// não mais uma string monoespaçada com padEnd()/'\n'. Isso garante que a
+// coluna do binário comece sempre no mesmo x em toda linha, existindo ou
+// não um botão de copiar (um <button> real tem largura em pixels, não em
+// caracteres — padEnd() não conseguia alinhar em torno dele, era o motivo
+// do "hexadecimal" desalinhado que o usuário reportou).
 
 function _ipcBits32(long) {
   return (long >>> 0).toString(2).padStart(32, '0');
@@ -250,30 +250,36 @@ function ipcCopyInline(btn, text) {
   _doSingleCopy(btn);
 }
 
-// Uma linha "Label:   valor  [copiar]   binário   (nota)". O botão de
-// copiar (quando existe) vem logo depois do valor — pedido do usuário —
-// e ANTES do binário, não no final da linha.
+// Uma linha "Label: valor [copiar] binário (nota)", como um <div> flex —
+// o botão de copiar (quando existe) vem logo depois do valor — pedido do
+// usuário — num slot de largura fixa (.ipc-copy-slot) que existe MESMO
+// vazio, pra coluna do binário não deslocar entre linhas com/sem botão.
 function ipcLine(label, value, binHtml, note, copyText) {
-  const lbl = `${label}:`.padEnd(IPC_LBL_W);
-  const val = String(value).padEnd(IPC_VAL_W);
-  let html = `<span class="ipc-label">${lbl}</span><span class="ipc-val">${val}</span>`;
-  if (copyText) html += ipcCopyBtnHtml(copyText);
-  if (binHtml) html += binHtml;
+  let html = `<div class="ipc-line">`;
+  html += `<span class="ipc-label">${label}:</span>`;
+  html += `<span class="ipc-val">${value}</span>`;
+  html += `<span class="ipc-copy-slot">${copyText ? ipcCopyBtnHtml(copyText) : ''}</span>`;
+  if (binHtml) html += `<span class="ipc-bin-wrap">${binHtml}</span>`;
   if (note) html += ` <span class="ipc-note">(${note})</span>`;
-  return html + '\n';
+  html += `</div>`;
+  return html;
 }
 
 // Bloco de 5 linhas comum a qualquer rede já calculada (rede/base, sub-rede
-// individual de um split, ou supernet) — Network/Broadcast/HostMin/HostMax/
-// Hosts+tipo. Recebe um objeto com os *Long (networkLong, broadcastLong,
-// firstHostLong, lastHostLong) + prefix/usableHosts/ipClass/ipType/cidr.
+// individual de um split, ou supernet) — Network/HostMin/HostMax/Broadcast/
+// Hosts+tipo, com botão de copiar em todos os endereços (Network/HostMin/
+// HostMax/Broadcast) — pedido do usuário. Recebe um objeto com os *Long
+// (networkLong, broadcastLong, firstHostLong, lastHostLong) +
+// prefix/usableHosts/ipClass/ipType/cidr. Envolto num .ipc-block, que dá o
+// espaçamento vertical entre blocos (rede base, cada sub-rede do split etc.)
 function ipcRenderNetworkBlock(n) {
-  let out = '';
+  let out = '<div class="ipc-block">';
   out += ipcLine('Network', n.cidr, ipcBinHtml(n.networkLong, n.prefix, 'net'), `Class ${n.ipClass}`, n.cidr);
-  out += ipcLine('HostMin', longToIp(n.firstHostLong), ipcBinHtml(n.firstHostLong, n.prefix, 'net'));
-  out += ipcLine('HostMax', longToIp(n.lastHostLong), ipcBinHtml(n.lastHostLong, n.prefix, 'net'));
+  out += ipcLine('HostMin', longToIp(n.firstHostLong), ipcBinHtml(n.firstHostLong, n.prefix, 'net'), null, longToIp(n.firstHostLong));
+  out += ipcLine('HostMax', longToIp(n.lastHostLong), ipcBinHtml(n.lastHostLong, n.prefix, 'net'), null, longToIp(n.lastHostLong));
   out += ipcLine('Broadcast', longToIp(n.broadcastLong), ipcBinHtml(n.broadcastLong, n.prefix, 'net'), null, longToIp(n.broadcastLong));
   out += ipcLine('Hosts/Net', n.usableHosts.toLocaleString('pt-BR'), '', n.ipType);
+  out += '</div>';
   return out;
 }
 
@@ -301,10 +307,11 @@ function ipcRunCalculate() {
   IPC_LAST_RESULT = r;
   IPC_LAST_SUBNETS_TEXT = null;
 
-  let out = '';
+  let out = '<div class="ipc-block">';
   out += ipcLine('Address', r.ip, ipcBinHtml(r.ipLong, r.prefix, 'net'), null, r.ip);
   out += ipcLine('Netmask', `${r.maskDotted} = ${r.prefix}`, ipcBinHtml(r.maskLong, r.prefix, 'mask'));
   out += ipcLine('Wildcard', r.wildcardDotted, ipcBinHtml(r.wildcardLong, r.prefix, 'plain'));
+  out += '</div>';
   out += ipcRenderNetworkBlock(r);
 
   const copyAllWrap = document.getElementById('ipcCopyAllWrap');
@@ -317,35 +324,38 @@ function ipcRunCalculate() {
       moveToErrEl.textContent = 'Invalid netmask/prefix for "move to".';
       moveToErrEl.style.display = '';
     } else if (newPrefix === r.prefix) {
-      out += `\n<span class="ipc-note">Same prefix as the netmask above — nothing to move to.</span>\n`;
+      out += `<div class="ipc-note-line"><span class="ipc-note">Same prefix as the netmask above — nothing to move to.</span></div>`;
     } else if (newPrefix > r.prefix) {
       // Prefixo mais longo/específico = SPLIT: divide a rede atual em N
       // sub-redes menores (ex.: /24 -> 4 x /26).
       const res = ipcSplitSubnets(r.networkLong, r.prefix, newPrefix);
-      out += '\n<span class="ipc-subnets-header">Subnets</span>\n\n';
+      out += '<div class="ipc-subnets-header-row"><span class="ipc-subnets-header">Subnets</span></div>';
+      out += '<div class="ipc-block">';
       out += ipcLine('Netmask', `${longToIp(ipcPrefixToMaskLong(newPrefix))} = ${newPrefix}`, ipcBinHtml(ipcPrefixToMaskLong(newPrefix), newPrefix, 'mask'));
       out += ipcLine('Wildcard', longToIp((~ipcPrefixToMaskLong(newPrefix)) >>> 0), ipcBinHtml((~ipcPrefixToMaskLong(newPrefix)) >>> 0, newPrefix, 'plain'));
-      out += '\n';
+      out += '</div>';
       res.subnets.forEach(sn => {
         out += ipcRenderNetworkBlock({ ...sn, prefix: newPrefix });
-        out += '\n';
       });
       if (res.truncated) {
-        out += `<span class="ipc-note">Showing the first ${res.generated} of ${res.count} subnets (safety limit).</span>\n\n`;
+        out += `<div class="ipc-note-line"><span class="ipc-note">Showing the first ${res.generated} of ${res.count} subnets (safety limit).</span></div>`;
       }
       const totalHosts = res.subnets.reduce((sum, sn) => sum + sn.usableHosts, 0);
+      out += '<div class="ipc-block">';
       out += ipcLine('Subnets', res.generated.toLocaleString('pt-BR'));
       out += ipcLine('Hosts', totalHosts.toLocaleString('pt-BR'));
+      out += '</div>';
       IPC_LAST_SUBNETS_TEXT = res.subnets.map(sn => sn.cidr).join('\n');
       copyAllWrap.style.display = '';
     } else {
       // Prefixo mais curto/genérico = SUPERNET: recalcula a rede que
       // contém o MESMO endereço, só que com uma máscara mais larga.
       const sr = ipcCalculate(r.ip, String(newPrefix));
-      out += '\n<span class="ipc-subnets-header">Supernet</span>\n\n';
+      out += '<div class="ipc-subnets-header-row"><span class="ipc-subnets-header">Supernet</span></div>';
+      out += '<div class="ipc-block">';
       out += ipcLine('Netmask', `${sr.maskDotted} = ${sr.prefix}`, ipcBinHtml(sr.maskLong, sr.prefix, 'mask'));
       out += ipcLine('Wildcard', sr.wildcardDotted, ipcBinHtml(sr.wildcardLong, sr.prefix, 'plain'));
-      out += '\n';
+      out += '</div>';
       out += ipcRenderNetworkBlock(sr);
     }
   }

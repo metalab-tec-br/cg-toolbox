@@ -1460,27 +1460,52 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .ipc-field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 160px; min-width: 140px; }
 .ipc-field .set-input { width: 100%; }
 .ipc-slash { font-family: var(--mono); font-weight: 700; color: var(--dim); padding-bottom: 9px; }
-.ipc-moveto-row { display: flex; align-items: center; gap: 6px; }
-.ipc-moveto-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
-.ipc-moveto-row .set-input { flex: 1 1 auto; min-width: 0; }
+/* Pedido do usuário: mesmas cores do botão "Add" da toolbar principal
+   (.ctb-cmd-actions .btn.ctb-cmd-btn.admin-highlight em css/layout.css) —
+   pill sólido rosa/magenta da marca, texto branco. */
+.ipc-calc-btn {
+  background: var(--teal); border-color: var(--teal); color: #fff;
+  border-radius: 999px; font-weight: 700; letter-spacing: .2px;
+}
+.ipc-calc-btn:hover { filter: brightness(1.08); border-color: var(--teal); }
 
 .ipc-term {
   font-family: var(--mono); font-size: 12.5px; line-height: 1.85;
-  white-space: pre; overflow-x: auto;
+  overflow-x: auto;
   background: var(--surf2); border: 1px solid var(--bdr); border-radius: 8px;
   padding: 12px 14px;
 }
-.ipc-label { color: var(--green); font-weight: 700; }
-.ipc-val { color: var(--blue); font-weight: 600; }
+/* Cada linha "Label: valor [copiar] binário (nota)" é um flex row com
+   colunas de largura FIXA em `ch` (unidade monoespaçada) — Label/Valor/slot
+   do botão de copiar sempre ocupam a mesma largura em toda linha, existindo
+   ou não o botão (.ipc-copy-slot fica vazio quando não há copyText). Isso
+   garante que a coluna do binário comece exatamente no mesmo x em todas as
+   linhas — pedido do usuário ("alinhar o hexadecimal") — o que um
+   padEnd() de string não conseguia garantir quando um <button> real
+   (largura em pixels, não em caracteres) entrava no meio do texto. */
+.ipc-line { display: flex; align-items: baseline; white-space: nowrap; }
+.ipc-block { margin-bottom: 10px; }
+.ipc-block:last-child { margin-bottom: 0; }
+.ipc-label {
+  flex: 0 0 11ch; color: var(--green); font-weight: 700;
+}
+.ipc-val {
+  flex: 0 0 20ch; color: var(--blue); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.ipc-copy-slot { flex: 0 0 26px; display: inline-flex; align-items: center; }
+.ipc-bin-wrap { flex: 1 1 auto; }
 .ipc-bin { color: var(--text); }
 .ipc-bin-net { color: var(--text); font-weight: 700; }
 .ipc-bin-host { color: var(--muted); }
 .ipc-bin-mask { color: var(--red); font-weight: 700; }
 .ipc-note { color: var(--blue); font-style: italic; }
+.ipc-note-line { margin: 6px 0; }
+.ipc-subnets-header-row { margin: 14px 0 6px; }
 .ipc-subnets-header { color: var(--green); font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
-/* .copy-btn-inline já cobre display:inline-flex + padding; aqui só um
-   ajuste fino de espaçamento pra caber bem entre o valor e o binário. */
-.ipc-copy-btn { vertical-align: -2px; margin: 0 8px 0 4px; }
+/* .copy-btn-inline já cobre display:inline-flex + padding; aqui só zera a
+   margem antiga (agora o espaçamento vem do .ipc-copy-slot, largura fixa). */
+.ipc-copy-btn { margin: 0; }
 
 /* ─── RFC 1918 reference table — inalterada, só as larguras próprias (3
    colunas), sobrescrevendo as larguras nth-child de .audit-log-table (6
