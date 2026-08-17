@@ -429,6 +429,13 @@ function auditPopover({ createdBy, modifiedBy, updatedAt }) {
 // seu próprio onclick com stopPropagation() (novo: antes não precisava, já
 // que não havia aninhamento — sem isso, clicar numa subpasta faria o clique
 // borbulhar e disparar TAMBÉM o onclick da pasta-mãe que a contém).
+// cmdId vai SEM aspas nos onclick abaixo (igual f.id, que já era INTEGER) —
+// commands.id agora é INTEGER (SERIAL, ver schema.sql), então embuti-lo com
+// aspas simples faria o atributo onclick reconstruir uma STRING em vez de um
+// número quando o handler dispara (onclick é sempre texto de markup — o
+// browser reparseia o valor no momento do clique, não guarda o tipo JS
+// original). Isso quebraria comparações estritas (cmd.id === cmdId) em
+// toggleCommandInFolder/promptCreateFolder (js/folders.js).
 function folderMenuHtml(cmdId, folderIds) {
   const idSet = new Set(folderIds || []);
   const tree = (typeof buildFolderTree === 'function')
@@ -442,7 +449,7 @@ function folderMenuHtml(cmdId, folderIds) {
       const arrow = hasChildren ? '<span class="folder-menu-arrow">›</span>' : '';
       const submenu = hasChildren ? `<div class="folder-menu-submenu">${renderLevel(children)}</div>` : '';
       return `<div class="folder-menu-item${on ? ' on' : ''}${hasChildren ? ' has-children' : ''}">
-        <span class="folder-menu-row" onclick="event.stopPropagation(); toggleCommandInFolder('${cmdId}', ${f.id}, this.parentElement)">
+        <span class="folder-menu-row" onclick="event.stopPropagation(); toggleCommandInFolder(${cmdId}, ${f.id}, this.parentElement)">
           <span class="folder-menu-chk">${on ? '✓' : ''}</span><span class="folder-menu-name">${escAttr(f.name)}</span>${arrow}
         </span>${submenu}
       </div>`;
@@ -453,7 +460,7 @@ function folderMenuHtml(cmdId, folderIds) {
   return `<div class="folder-menu-pop">
     ${emptyHtml}${items}
     <div class="folder-menu-divider"></div>
-    <div class="folder-menu-item folder-menu-new" onclick="event.stopPropagation(); document.querySelectorAll('.folder-menu-pop.open').forEach(p=>p.classList.remove('open')); promptCreateFolder('${cmdId}')">
+    <div class="folder-menu-item folder-menu-new" onclick="event.stopPropagation(); document.querySelectorAll('.folder-menu-pop.open').forEach(p=>p.classList.remove('open')); promptCreateFolder(${cmdId})">
       <span class="folder-menu-chk"></span><span class="folder-menu-name">+ New folder</span>
     </div>
   </div>`;
@@ -520,12 +527,16 @@ function card({ id, name, desc, details, lines, folderIds = [], createdBy, modif
   // (audit_log, ver botão "View audit log" em Configurações).
   const isOwnCommand = typeof CURRENT_USER !== 'undefined' && CURRENT_USER === createdBy;
   const canEdit = window.CG_IS_ADMIN || isSystem || isOwnCommand;
-  const editHtml = (id && canEdit && typeof openCommandEditor === 'function') ? `<button class="edit-btn" onclick="openCommandEditor('edit','${id}',event)" title="Edit command">
+  // id vai SEM aspas aqui (mesmo motivo do folderMenuHtml acima) — id é
+  // INTEGER agora, e _cePopulateForm (js/command-editor.js) faz
+  // list.find(c => c.id === id), comparação estrita que falharia se id
+  // chegasse como STRING (ex.: "123" !== 123).
+  const editHtml = (id && canEdit && typeof openCommandEditor === 'function') ? `<button class="edit-btn" onclick="openCommandEditor('edit',${id},event)" title="Edit command">
     <svg width="11" height="11" fill="none" viewBox="0 0 16 16">
       <path d="M11.3 1.7l3 3L5 14H2v-3l9.3-9.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
     </svg>
   </button>` : '';
-  const duplicateHtml = (id && typeof openCommandEditor === 'function') ? `<button class="edit-btn" onclick="openCommandEditor('duplicate','${id}')" title="Duplicate command">
+  const duplicateHtml = (id && typeof openCommandEditor === 'function') ? `<button class="edit-btn" onclick="openCommandEditor('duplicate',${id})" title="Duplicate command">
     <svg width="11" height="11" fill="none" viewBox="0 0 16 16">
       <rect x="5.5" y="5.5" width="9" height="9" rx="1.3" stroke="currentColor" stroke-width="1.4"/>
       <path d="M3.2 10.5H2.3a.8.8 0 01-.8-.8v-7A.8.8 0 012.3 2h7a.8.8 0 01.8.8v.9" stroke="currentColor" stroke-width="1.4"/>

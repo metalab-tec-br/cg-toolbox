@@ -82,11 +82,11 @@ function splitCell(cell) { return String(cell || '').split(',').map(s => s.trim(
 // ── Template para download — mesmas colunas usadas na exportação (Topic,
 // Versions, Environments, Details — ver CSV_COLUMNS em csv-export.js), mais
 // as colunas específicas de importação (Prompt, Command). SEM coluna de ID —
-// o id é sempre gerado automaticamente a partir do Name (ver slugifyName/
-// buildImportPayload abaixo), é um detalhe interno, igual ao editor manual
-// (ver _ceBindSingleSeg em js/command-editor.js, onde o ID também é oculto/
-// auto-gerado). Uma linha de exemplo real ajuda mais que uma linha de
-// instruções — os detalhes ficam no texto do modal.
+// o id agora é um INTEGER sequencial atribuído pelo Postgres na criação (ver
+// server/index.js: POST /api/commands), nunca lido do CSV nem gerado aqui —
+// igual ao editor manual (ver _ceBindSingleSeg em js/command-editor.js, onde
+// o ID também é oculto/auto-gerado). Uma linha de exemplo real ajuda mais que
+// uma linha de instruções — os detalhes ficam no texto do modal.
 // Ordem das colunas — pedido do usuário: Name, Description, Details, Vendor,
 // System, Topics, Versions, Environments, Prompt, Command.
 // `Details` substitui as antigas 3 colunas Purpose/When to use/Notes (agora
@@ -189,9 +189,6 @@ function resolveTopics(cell, warnings) {
   });
   return [...new Set(keys)];
 }
-// id a partir do nome quando a coluna ID vier vazia — mesma ideia de "slug"
-// usada em URLs; suficiente para o caso comum (o servidor rejeita com 409 se
-// já existir, e o resumo da importação mostra isso linha a linha).
 // Interpreta a célula `Exportable` como booleano. Aceita yes/true/1/x
 // (case-insensitive); qualquer outro valor (incluindo vazio/no/false/0) é
 // tratado como falso — mesmo padrão do checkbox "Exportable" (supports_export)
@@ -201,36 +198,19 @@ function parseBooleanCell(value) {
   return v === 'yes' || v === 'true' || v === '1' || v === 'x';
 }
 
-function slugifyName(name) {
-  return String(name || '')
-    .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '') // remove acentos
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60) || 'command';
-}
-
 // Converte uma linha (objeto {header: valor}) no payload de POST /api/commands.
 // Retorna { payload, warnings, error } — `error` != null significa que a
 // linha inteira foi rejeitada (não gera payload).
-function buildImportPayload(obj, existingIdsInBatch) {
+// `id` não é mais um conceito de importação — commands.id é um INTEGER
+// sequencial atribuído pelo Postgres em cada INSERT (ver server/index.js),
+// então não há mais colisão de id pra resolver dentro do lote.
+function buildImportPayload(obj) {
   const warnings = [];
   const name = getCell(obj, 'Name');
   if (!name) return { error: 'Missing "Name"' };
 
   const topics = resolveTopics(getCell(obj, 'Topics', 'Topic'), warnings);
   if (!topics.length) return { error: 'No valid "Topics" (must match an existing topic)' };
-
-  // id é sempre auto-gerado a partir do Name — detalhe interno, nunca lido
-  // do CSV (mesmo se o arquivo vier de um "Export commands" reaproveitado,
-  // que tem uma coluna "ID" — ela é simplesmente ignorada aqui).
-  let id = slugifyName(name);
-  if (existingIdsInBatch.has(id)) {
-    let n = 2;
-    while (existingIdsInBatch.has(`${id}-${n}`)) n++;
-    warnings.push(`ID "${id}" repeated in this file — using "${id}-${n}" instead`);
-    id = `${id}-${n}`;
-  }
 
   // Vendor/System/Version/Environment são obrigatórios no cadastro (mesma
   // regra do editor manual — "All" só existe como filtro, nunca como valor
@@ -282,7 +262,7 @@ function buildImportPayload(obj, existingIdsInBatch) {
   });
 
   const payload = {
-    id, name,
+    name,
     desc: getCell(obj, 'Description', 'Desc'),
     topics, vendors, systems, versions, environments,
     // `Details` substitui Purpose/When to use/Notes — passado cru pro
@@ -771,17 +751,15 @@ async function runImportCommands() {
   // privilégio de verdade.
   const asSystemChk = _impBox('importAsSystemCheckbox');
   const asSystem = !!(asSystemChk && asSystemChk.checked);
-  const existingIdsInBatch = new Set();
   const report = [];
   for (let i = 0; i < _importParsedRows.length; i++) {
     const rowNum = i + 2; // +1 for 1-based, +1 for the header row
     const obj = _importParsedRows[i];
-    const built = buildImportPayload(obj, existingIdsInBatch);
+    const built = buildImportPayload(obj);
     if (built.error) {
       report.push({ rowNum, name: getCell(obj, 'Name') || '(no name)', ok: false, message: built.error });
       continue;
     }
-    existingIdsInBatch.add(built.payload.id);
     try {
       await createCommand(built.payload, asSystem);
       report.push({

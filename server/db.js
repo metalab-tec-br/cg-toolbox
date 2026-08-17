@@ -81,6 +81,131 @@ async function initDb({ retries = 30, delayMs = 2000 } = {}) {
   }
 }
 
+// Converte commands.id de TEXT (slug estável, ex.: 'cplic-print') para
+// INTEGER sequencial (SERIAL) — pedido do usuário: "implementar ID
+// sequencial de verdade". Só existe DADO A MIGRAR numa instalação que já
+// tinha comandos cadastrados com o esquema antigo; uma instalação nova já
+// nasce com `id SERIAL` direto do CREATE TABLE em schema.sql, então o guard
+// abaixo (consulta a information_schema) faz esta função não fazer nada
+// nesse caso — só entra no corpo da função quando encontra o tipo antigo.
+//
+// 8 tabelas dependem de commands.id via FK (command_vendors/systems/
+// versions/environments/topics/lines, folder_commands, user_favorites —
+// esta última legada, ver comentário em schema.sql, mas ainda com FK
+// formal). A troca de tipo de uma coluna referenciada por FK em várias
+// tabelas não é uma operação single-statement no Postgres — o caminho
+// seguro é: (1) criar uma coluna nova SERIAL em `commands`; (2) para cada
+// dependente, criar uma coluna INTEGER nova e preenchê-la via JOIN pelo id
+// de texto antigo; (3) remover a FK/PK antiga e a coluna de texto antiga de
+// cada dependente, e renomear a nova pro lugar; (4) só então trocar a PK de
+// `commands` para a coluna sequencial; (5) recriar FK/PK dos dependentes,
+// agora apontando pra commands(id) já inteiro; (6) recriar os índices que
+// dependiam da coluna antiga (dropados junto com ela). Tudo dentro de uma
+// única transação (withTransaction) — se qualquer passo falhar, o Postgres
+// desfaz tudo e o banco volta exatamente ao estado anterior (id ainda TEXT),
+// então o guard vai tentar de novo no próximo boot em vez de deixar o banco
+// pela metade.
+async function migrateCommandsIdToSerial() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT data_type FROM information_schema.columns WHERE table_name = 'commands' AND column_name = 'id'`
+    );
+    if (!rows.length || rows[0].data_type !== 'text') return; // já migrado, ou instalação nova (schema.sql já cria como integer)
+
+    console.log('[db] commands.id ainda é TEXT (slug) — migrando para INTEGER sequencial (isso preserva todos os comandos e vínculos já cadastrados)...');
+
+    // Nome da tabela É controlado por nós mesmos aqui (lista fixa abaixo,
+    // nunca vem de input externo), então interpolar no SQL é seguro — não há
+    // como parametrizar um identificador de tabela/coluna via $1 no driver `pg`.
+    const DEPENDENTS = [
+      'command_vendors', 'command_systems', 'command_versions',
+      'command_environments', 'command_topics', 'command_lines',
+      'folder_commands', 'user_favorites',
+    ];
+    // Só estas têm uma PK COMPOSTA que inclui command_id (precisa ser
+    // recriada) — command_lines tem PK própria em `id` (SERIAL), que não é
+    // tocada em nenhum passo desta migração.
+    const COMPOSITE_PK_COLS = {
+      command_vendors: ['command_id', 'vendor'],
+      command_systems: ['command_id', 'system'],
+      command_versions: ['command_id', 'version'],
+      command_environments: ['command_id', 'environment'],
+      command_topics: ['command_id', 'topic'],
+      folder_commands: ['folder_id', 'command_id'],
+      user_favorites: ['username', 'command_id'],
+    };
+
+    await withTransaction(async client => {
+      // 1) Coluna sequencial nova em commands (convive com a antiga por
+      //    enquanto — só vira a PK de fato no passo 4).
+      await client.query(`ALTER TABLE commands ADD COLUMN IF NOT EXISTS id_seq SERIAL`);
+
+      // 2) Cada dependente ganha uma coluna INTEGER nova, preenchida a
+      //    partir do mapeamento commands.id (texto antigo) -> commands.id_seq.
+      for (const table of DEPENDENTS) {
+        await client.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS command_id_seq INTEGER`);
+        await client.query(`UPDATE ${table} t SET command_id_seq = c.id_seq FROM commands c WHERE t.command_id = c.id`);
+      }
+
+      // 3) Em cada dependente: derruba a FK antiga (nome default do
+      //    Postgres: <tabela>_command_id_fkey) e, só nas tabelas com PK
+      //    composta, a PK antiga também (ela inclui a coluna de texto que
+      //    está prestes a ser removida) — depois remove a coluna de texto e
+      //    põe a nova no lugar dela.
+      for (const table of DEPENDENTS) {
+        await client.query(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${table}_command_id_fkey`);
+        if (COMPOSITE_PK_COLS[table]) {
+          await client.query(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${table}_pkey`);
+        }
+        await client.query(`ALTER TABLE ${table} DROP COLUMN command_id`);
+        await client.query(`ALTER TABLE ${table} RENAME COLUMN command_id_seq TO command_id`);
+        await client.query(`ALTER TABLE ${table} ALTER COLUMN command_id SET NOT NULL`);
+      }
+
+      // 4) Só agora troca a PK de `commands` — todas as FKs que apontavam
+      //    pra ela já foram removidas no passo 3, então isto não esbarra em
+      //    nenhuma dependência pendente.
+      await client.query(`ALTER TABLE commands DROP CONSTRAINT IF EXISTS commands_pkey`);
+      await client.query(`ALTER TABLE commands DROP COLUMN id`);
+      await client.query(`ALTER TABLE commands RENAME COLUMN id_seq TO id`);
+      await client.query(`ALTER TABLE commands ADD PRIMARY KEY (id)`);
+
+      // 5) Recria PK composta (onde havia) + FK de cada dependente, agora
+      //    apontando pra commands(id) já inteiro.
+      for (const table of DEPENDENTS) {
+        await client.query(`ALTER TABLE ${table} ADD CONSTRAINT ${table}_command_id_fkey FOREIGN KEY (command_id) REFERENCES commands(id) ON DELETE CASCADE`);
+        if (COMPOSITE_PK_COLS[table]) {
+          await client.query(`ALTER TABLE ${table} ADD PRIMARY KEY (${COMPOSITE_PK_COLS[table].join(', ')})`);
+        }
+      }
+
+      // 6) Índices que existiam sobre a coluna antiga (dropados junto com
+      //    ela no passo 3/4) — recria todos.
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_command_topics_topic ON command_topics(topic)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_user_favorites_command ON user_favorites(command_id)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_folder_commands_command ON folder_commands(command_id)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_command_lines_command ON command_lines(command_id)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_commands_topic ON commands(topic)`);
+    });
+
+    // Cosmético — fora da transação de propósito: o nome da sequência criada
+    // pelo `SERIAL` no passo 1 fica `commands_id_seq_seq` (porque a coluna se
+    // chamava "id_seq" no momento da criação), diferente do nome que uma
+    // instalação NOVA teria (`commands_id_seq`, convenção padrão do Postgres
+    // pra SERIAL numa coluna chamada "id"). Renomear deixa as duas
+    // instalações idênticas por baixo dos panos; uma falha aqui é só
+    // estética (a sequência funciona de qualquer forma com o nome antigo) —
+    // não deve desfazer a migração de dados, que já foi commitada acima.
+    try {
+      await pool.query(`ALTER SEQUENCE IF EXISTS commands_id_seq_seq RENAME TO commands_id_seq`);
+    } catch (e) { /* cosmético — ver comentário acima */ }
+
+    console.log('[db] commands.id migrado para INTEGER sequencial — todos os comandos e vínculos (pastas, linhas, catálogos) foram preservados.');
+  } catch (err) {
+    console.error('[db] Falha ao migrar commands.id para INTEGER sequencial — nada foi alterado (a migração roda inteira dentro de uma transação):', err.message);
+  }
+}
+
 // Pequenos ajustes idempotentes em bancos que já existiam ANTES de uma coluna
 // nova ser adicionada ao schema — `CREATE TABLE IF NOT EXISTS` (acima) não
 // altera uma tabela que já existe de um deploy anterior, então uma coluna
@@ -89,6 +214,11 @@ async function initDb({ retries = 30, delayMs = 2000 } = {}) {
 // todo boot, inclusive numa instalação nova onde a coluna já veio do CREATE
 // TABLE (o IF NOT EXISTS simplesmente não faz nada nesse caso).
 async function runMigrations() {
+  // Roda ANTES de qualquer outra migração/seed — várias delas tocam em
+  // command_lines/folder_commands/etc., então é mais simples garantir que
+  // commands.id já está no formato final (INTEGER) antes de mexer em mais
+  // nada. Ver migrateCommandsIdToSerial() acima.
+  await migrateCommandsIdToSerial();
   try {
     // api_keys.role (admin|user) — ver comentário em schema.sql. DEFAULT
     // 'admin' preserva o acesso total das keys criadas antes deste campo
@@ -250,7 +380,7 @@ async function runMigrations() {
       { key: 'src_ip', label: 'Source' },
       { key: 'dst_ip', label: 'Destination' },
       { key: 'src_port', label: 'Source Port' },
-      { key: 'dest_port', label: 'Destination Port' },
+      { key: 'dst_port', label: 'Destination Port' },
       { key: 'user', label: 'User' },
       { key: 'host', label: 'Host' },
       { key: 'license', label: 'License' },
@@ -637,7 +767,7 @@ async function seedDefaultParameters() {
     { key: 'src_ip', label: 'Source' },
     { key: 'dst_ip', label: 'Destination' },
     { key: 'src_port', label: 'Source Port' },
-    { key: 'dest_port', label: 'Destination Port' },
+    { key: 'dst_port', label: 'Destination Port' },
     { key: 'user', label: 'User' },
     { key: 'host', label: 'Host' },
     { key: 'license', label: 'License' },

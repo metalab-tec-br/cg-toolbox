@@ -89,9 +89,9 @@ function csvSystemLabel(key) {
 // de import (ver IMPORT_HEADERS em js/csv-import.js) — pedido do usuário:
 // "ajustar o export na mesma ordem" — permitindo reimportar um .csv
 // exportado por aqui sem precisar reordenar colunas. `ID` foi removido do
-// export (pedido do usuário) — o id continua sendo sempre auto-gerado a
-// partir do Name no reimport (ver slugifyName em js/csv-import.js), nunca
-// lido do CSV.
+// export (pedido do usuário) — o id nunca é lido do CSV: é um INTEGER
+// sequencial atribuído pelo Postgres em cada reimport (ver server/index.js:
+// POST /api/commands).
 //
 // Exportação do conteúdo de Folders (coluna Folder + Notes como linhas) foi
 // removida a pedido do usuário — "vamos tratar disso mais pra frente" —

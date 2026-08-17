@@ -760,11 +760,11 @@ async function loadFolderOrderAndNotes(folderIds) {
   if (!folderIds.length) return { orderByFolder: new Map(), notesByFolder: new Map() };
   const [itemsQ, notesQ] = await Promise.all([
     pool.query(
-      `SELECT folder_id, command_id::text AS item_id, sort_order, 'command' AS item_type FROM folder_commands WHERE folder_id = ANY($1)
+      `SELECT folder_id, command_id AS item_id, sort_order, 'command' AS item_type FROM folder_commands WHERE folder_id = ANY($1)
        UNION ALL
-       SELECT folder_id, id::text AS item_id, sort_order, 'note' AS item_type FROM notes WHERE folder_id = ANY($1)
+       SELECT folder_id, id AS item_id, sort_order, 'note' AS item_type FROM notes WHERE folder_id = ANY($1)
        UNION ALL
-       SELECT parent_id AS folder_id, id::text AS item_id, sort_order, 'folder' AS item_type FROM folders WHERE parent_id = ANY($1)
+       SELECT parent_id AS folder_id, id AS item_id, sort_order, 'folder' AS item_type FROM folders WHERE parent_id = ANY($1)
        ORDER BY folder_id, sort_order, item_type`,
       [folderIds]
     ),
@@ -778,8 +778,12 @@ async function loadFolderOrderAndNotes(folderIds) {
   itemsQ.rows.forEach(r => {
     if (!orderByFolder.has(r.folder_id)) orderByFolder.set(r.folder_id, []);
     orderByFolder.get(r.folder_id).push({
+      // command_id, notes.id e folders.id são todos INTEGER agora — não há
+      // mais necessidade de tratar 'command' como caso especial (era TEXT
+      // antes, por isso o item_id vinha ::text e só os outros dois tipos
+      // eram convertidos de volta pra Number aqui).
       type: r.item_type,
-      id: r.item_type === 'command' ? r.item_id : Number(r.item_id),
+      id: r.item_id,
     });
   });
   const notesByFolder = new Map();
@@ -1831,7 +1835,11 @@ function isNonEmptyArray(val) {
 function validateBody(body) {
   const errors = [];
   if (!body || typeof body !== 'object') return ['Request body must be a JSON object'];
-  if (!body.id || typeof body.id !== 'string') errors.push('"id" is required');
+  // `id` NÃO é mais validado/aceito aqui — pedido do usuário: "implementar
+  // ID sequencial de verdade". O id é sempre atribuído pelo Postgres na
+  // criação (INSERT ... RETURNING id, ver POST /api/commands abaixo), nunca
+  // lido do body (mesmo que um cliente antigo/CSV reaproveitado ainda mande
+  // um — é simplesmente ignorado, igual ao id do template de import).
   if (!isNonEmptyArray(body.vendors)) errors.push('"vendors" is required (exactly one vendor)');
   else if (body.vendors.length > 1) errors.push('"vendors" must contain exactly one vendor (a command belongs to a single vendor)');
   if (!isNonEmptyArray(body.systems)) errors.push('"systems" is required (at least one system)');
@@ -1855,7 +1863,6 @@ function buildCommandColumns(body) {
   // menos uma linha empty com conteúdo.
   const hasEmptyLines = Array.isArray(body.lines) && body.lines.some(l => l && l.variant === 'empty' && String(l.content || '').trim());
   const cols = {
-    id: body.id,
     topic: topics[0],
     icon: body.icon || '📄',
     sort_order: Number.isInteger(body.sort_order) ? body.sort_order : 0,
@@ -1920,10 +1927,6 @@ app.post('/api/commands', async (req, res) => {
     const errors = validateBody(req.body);
     if (errors.length) return res.status(400).json({ error: 'validation_error', message: errors.join('; ') });
 
-    const { id } = req.body;
-    const existing = await findCommand(id);
-    if (existing) return res.status(409).json({ error: 'conflict', message: `Command '${id}' already exists` });
-
     const cols = buildCommandColumns(req.body);
     // Todo comando criado por esta API é atribuído ao usuário atual
     // (created_by = modified_by = quem está autenticado) — EXCETO quando o
@@ -1940,22 +1943,31 @@ app.post('/api/commands', async (req, res) => {
     cols.created_by = isAdmin ? 'System' : username;
     cols.modified_by = isAdmin ? 'System' : username;
 
+    // id não é mais lido do body — o Postgres atribui um INTEGER sequencial
+    // sozinho (commands.id SERIAL, ver schema.sql) e devolve pelo RETURNING
+    // abaixo; nunca mais colide (era só o slug baseado no Name que podia
+    // colidir antes), então a checagem de conflito 409 que existia aqui
+    // (findCommand(id) antes de inserir) deixou de fazer sentido e foi
+    // removida.
+    let id;
     await withTransaction(async client => {
-      await client.query(
+      const { rows } = await client.query(
         `INSERT INTO commands (
-          id, topic, icon, sort_order, requires_ip_port, placeholder_resolver,
+          topic, icon, sort_order, requires_ip_port, placeholder_resolver,
           name, name_empty, "desc", desc_empty,
           details,
           created_by, modified_by
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        RETURNING id`,
         [
-          cols.id, cols.topic, cols.icon, cols.sort_order, cols.requires_ip_port,
+          cols.topic, cols.icon, cols.sort_order, cols.requires_ip_port,
           cols.placeholder_resolver,
           cols.name, cols.name_empty, cols.desc, cols.desc_empty,
           cols.details,
           cols.created_by, cols.modified_by,
         ]
       );
+      id = rows[0].id;
       await insertChildren(client, id, req.body);
     });
 
@@ -1992,15 +2004,12 @@ app.put('/api/commands/:id', async (req, res) => {
       });
     }
 
-    const bodyForValidation = { ...req.body, id: req.body.id || id };
-    const errors = validateBody(bodyForValidation);
+    // id não é mais um campo do body (é sempre o INTEGER da URL, gerado uma
+    // única vez na criação) — não há mais o que mesclar/comparar aqui.
+    const errors = validateBody(req.body);
     if (errors.length) return res.status(400).json({ error: 'validation_error', message: errors.join('; ') });
 
-    if (req.body.id && req.body.id !== id) {
-      return res.status(400).json({ error: 'validation_error', message: 'Body "id" does not match URL id and cannot be changed' });
-    }
-
-    const cols = buildCommandColumns({ ...req.body, id });
+    const cols = buildCommandColumns(req.body);
     cols.modified_by = currentUser;
 
     await withTransaction(async client => {

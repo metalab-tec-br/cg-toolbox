@@ -857,28 +857,11 @@ async function cmdEditorSave() {
     return;
   }
 
-  // ID: assim como Vendor/System/Version/Environment/Topic (ver
-  // js/catalogs.js/server/index.js: slugifyCatalogKey/uniqueCatalogKey), o
-  // usuário não digita mais um ID — ele é derivado do Name (mesma função
-  // slugifyName já usada na importação em massa, ver js/csv-import.js) e
-  // nunca muda depois de criado (ver PUT /api/commands/:id, que rejeita
-  // qualquer tentativa de alterar o id da URL). Em modo 'edit' o id já existe
-  // (CMD_EDITOR_ORIGINAL_ID); em 'create'/'duplicate' é gerado agora,
-  // conferindo colisão contra os comandos já cadastrados e adicionando um
-  // sufixo -2/-3/... se precisar (mesma lógica de resolveImportRow em
-  // csv-import.js).
-  let id;
-  if (CMD_EDITOR_MODE === 'edit') {
-    id = CMD_EDITOR_ORIGINAL_ID;
-  } else {
-    const existingIds = new Set((await fetchCommands().catch(() => [])).map(c => c.id));
-    id = slugifyName(name);
-    if (existingIds.has(id)) {
-      let n = 2;
-      while (existingIds.has(`${id}-${n}`)) n++;
-      id = `${id}-${n}`;
-    }
-  }
+  // ID: não é mais gerado no cliente — commands.id agora é um INTEGER
+  // sequencial (SERIAL) atribuído pelo próprio Postgres na criação (ver
+  // schema.sql/server/index.js: POST /api/commands usa INSERT ... RETURNING
+  // id). Em modo 'edit' o id já existe (CMD_EDITOR_ORIGINAL_ID) e só é usado
+  // como parâmetro da URL do PUT, nunca dentro do payload.
 
   const defaultLines = _ceReadLinesFrom(_ce('cmdLinesDefaultList')).map(l => Object.assign({}, l, { variant: 'default' }));
   // cmdLinesEmptyList é sempre lida (não há mais toggle de UI para isso — ver
@@ -887,7 +870,6 @@ async function cmdEditorSave() {
   const emptyLines = _ceReadLinesFrom(_ce('cmdLinesEmptyList')).map(l => Object.assign({}, l, { variant: 'empty' }));
 
   const payload = {
-    id,
     topics,
     placeholder_resolver: CMD_EDITOR_MODE === 'edit' ? CMD_EDITOR_RESOLVER : null,
     name,

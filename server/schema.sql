@@ -44,7 +44,17 @@
 --     aplicadas.
 
 CREATE TABLE IF NOT EXISTS commands (
-  id                  TEXT PRIMARY KEY,     -- slug estável, ex.: 'fwmonitor', 'cplic-print'
+  -- ID numérico sequencial (1, 2, 3, ...) — pedido do usuário: "implementar
+  -- ID sequencial de verdade". Antes era um slug de texto estável (ex.:
+  -- 'fwmonitor', 'cplic-print'), gerado a partir do Name; agora é sempre
+  -- atribuído pelo próprio Postgres na criação (INSERT ... RETURNING id, ver
+  -- POST /api/commands em server/index.js) — nunca digitado nem calculado
+  -- por ninguém, e nunca muda depois de criado. Instalações que já tinham o
+  -- id antigo (TEXT) são convertidas automaticamente no boot — ver
+  -- migrateCommandsIdToSerial() em server/db.js — preservando todos os
+  -- vínculos (command_vendors/systems/versions/environments/topics/lines,
+  -- folder_commands) na mesma migração.
+  id                  SERIAL PRIMARY KEY,
   topic               TEXT NOT NULL,        -- tópico primário (= topics[0]), ver command_topics abaixo
   icon                TEXT NOT NULL DEFAULT '📄',
   sort_order          INTEGER NOT NULL DEFAULT 0,
@@ -92,22 +102,22 @@ CREATE TABLE IF NOT EXISTS commands (
 -- Aplicabilidade por vendor/OS/versão/ambiente. Ausência de linhas = "aplica a
 -- todos" (default) — mesma semântica para as quatro tabelas abaixo.
 CREATE TABLE IF NOT EXISTS command_vendors (
-  command_id TEXT NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
+  command_id INTEGER NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
   vendor     TEXT NOT NULL,   -- ex.: 'check-point'
   PRIMARY KEY (command_id, vendor)
 );
 CREATE TABLE IF NOT EXISTS command_systems (
-  command_id TEXT NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
+  command_id INTEGER NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
   system     TEXT NOT NULL,   -- ex.: 'gaia'
   PRIMARY KEY (command_id, system)
 );
 CREATE TABLE IF NOT EXISTS command_versions (
-  command_id TEXT NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
+  command_id INTEGER NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
   version    TEXT NOT NULL,   -- 'R81.10' | 'R81.20' | 'R82' | 'R82.10'
   PRIMARY KEY (command_id, version)
 );
 CREATE TABLE IF NOT EXISTS command_environments (
-  command_id  TEXT NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
+  command_id  INTEGER NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
   environment TEXT NOT NULL,  -- 'standalone' | 'cluster' | 'vsx' | 'maestro' | 'mds' | 'gaia'
   PRIMARY KEY (command_id, environment)
 );
@@ -118,7 +128,7 @@ CREATE TABLE IF NOT EXISTS command_environments (
 -- (topics[0]) só por compatibilidade — a lista completa em command_topics é a
 -- fonte de verdade para agrupamento/filtro.
 CREATE TABLE IF NOT EXISTS command_topics (
-  command_id TEXT NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
+  command_id INTEGER NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
   topic      TEXT NOT NULL,
   PRIMARY KEY (command_id, topic)
 );
@@ -261,7 +271,7 @@ CREATE TABLE IF NOT EXISTS prompts (
 -- foram preenchidos.
 CREATE TABLE IF NOT EXISTS command_lines (
   id             SERIAL PRIMARY KEY,
-  command_id     TEXT NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
+  command_id     INTEGER NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
   variant        TEXT NOT NULL DEFAULT 'default',  -- 'default' | 'empty'
   sort_order     INTEGER NOT NULL DEFAULT 0,
   line_type      TEXT NOT NULL DEFAULT 'cmd',      -- cmd | note | warn | info | ok | image
@@ -291,7 +301,7 @@ CREATE TABLE IF NOT EXISTS command_lines (
 -- pasta "Favorites"); o app não lê nem escreve mais nesta tabela.
 CREATE TABLE IF NOT EXISTS user_favorites (
   username   TEXT NOT NULL,
-  command_id TEXT NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
+  command_id INTEGER NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (username, command_id)
 );
@@ -347,7 +357,7 @@ CREATE INDEX IF NOT EXISTS idx_folders_username ON folders(username);
 -- (PUT /api/folders/:id/reorder).
 CREATE TABLE IF NOT EXISTS folder_commands (
   folder_id  INTEGER NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
-  command_id TEXT NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
+  command_id INTEGER NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (folder_id, command_id)

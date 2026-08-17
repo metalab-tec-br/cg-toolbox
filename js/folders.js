@@ -715,7 +715,10 @@ document.addEventListener('dragend', ev => {
     const oldContainerId = Number(_fldOriginContainerId);
     const itemType = row.dataset.itemType;
     const rawId = row.dataset.itemId;
-    const itemId = itemType === 'command' ? rawId : Number(rawId);
+    // commands.id agora é INTEGER (igual notes/folders) — não há mais motivo
+    // pra manter 'command' como string aqui (era TEXT antes da migração para
+    // SERIAL, ver schema.sql/server/db.js: migrateCommandsIdToSerial).
+    const itemId = Number(rawId);
 
     if (!newContainerId || newContainerId === oldContainerId) {
       // Reorder simples: mesma pasta, só mudou de posição entre os irmãos.
@@ -790,7 +793,9 @@ function _fldReadContainerOrderFromDom(containerId) {
       const type = r.dataset.itemType;
       const rawId = r.dataset.itemId;
       if (!type) return null;
-      return { type, id: type === 'command' ? rawId : Number(rawId) };
+      // Mesmo motivo do comentário em dragend acima — commands.id é INTEGER
+      // agora, então todos os 3 tipos convertem pra Number igual.
+      return { type, id: Number(rawId) };
     })
     .filter(Boolean);
 }
