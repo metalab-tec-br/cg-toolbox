@@ -287,23 +287,20 @@ function ipcNetmaskLine(maskDotted, prefix, binHtml) {
   return html;
 }
 
-// Cabeçalho "Binary" acima da coluna de binário — pedido do usuário.
-// Reaproveita as MESMAS classes flex de .ipc-line (label/valwrap vazios,
-// só pra empurrar o texto até o x exato onde o binário das linhas abaixo
-// começa) em vez de uma tabela, já que o resto do resultado não é uma.
-function ipcColumnHeaderRow() {
-  return `<div class="ipc-line ipc-col-header-row"><span class="ipc-label"></span><span class="ipc-valwrap"></span><span class="ipc-bin-wrap">Binary</span></div>`;
-}
-
 // Bloco de 5 linhas comum a qualquer rede já calculada (rede/base, sub-rede
 // individual de um split, ou supernet) — Network/HostMin/HostMax/Broadcast/
 // Hosts+tipo, com botão de copiar em todos os endereços (Network/HostMin/
 // HostMax/Broadcast) — pedido do usuário. Recebe um objeto com os *Long
 // (networkLong, broadcastLong, firstHostLong, lastHostLong) +
-// prefix/usableHosts/ipClass/ipType/cidr. Envolto num .ipc-block, que dá o
-// espaçamento vertical entre blocos (rede base, cada sub-rede do split etc.)
-function ipcRenderNetworkBlock(n) {
+// prefix/usableHosts/ipClass/ipType/cidr. Envolto num .ipc-block, que junto
+// com a linha divisória entre blocos (ver .ipc-block + .ipc-block em
+// css/components.css) deixa claro onde uma sub-rede termina e a próxima
+// começa num split com várias — pedido do usuário ("ficou tudo em um bloco
+// só, está confuso"). `indexLabel` (opcional) é um rotulozinho tipo
+// "Subnet 2 of 4", mostrado só quando há múltiplas sub-redes geradas.
+function ipcRenderNetworkBlock(n, indexLabel) {
   let out = '<div class="ipc-block">';
+  if (indexLabel) out += `<div class="ipc-subnet-index">${indexLabel}</div>`;
   out += ipcLine('Network', n.cidr, ipcBinHtml(n.networkLong, n.prefix, 'net'), `Class ${n.ipClass}`, n.cidr);
   out += ipcLine('HostMin', longToIp(n.firstHostLong), ipcBinHtml(n.firstHostLong, n.prefix, 'net'), null, longToIp(n.firstHostLong));
   out += ipcLine('HostMax', longToIp(n.lastHostLong), ipcBinHtml(n.lastHostLong, n.prefix, 'net'), null, longToIp(n.lastHostLong));
@@ -314,7 +311,6 @@ function ipcRenderNetworkBlock(n) {
 }
 
 let IPC_LAST_RESULT = null;
-let IPC_LAST_SUBNETS_TEXT = null;
 
 function ipcRunCalculate() {
   const errEl = document.getElementById('ipcError');
@@ -335,18 +331,13 @@ function ipcRunCalculate() {
     return;
   }
   IPC_LAST_RESULT = r;
-  IPC_LAST_SUBNETS_TEXT = null;
 
-  let out = ipcColumnHeaderRow();
-  out += '<div class="ipc-block">';
+  let out = '<div class="ipc-block">';
   out += ipcLine('Address', r.ip, ipcBinHtml(r.ipLong, r.prefix, 'net'), null, r.ip);
   out += ipcNetmaskLine(r.maskDotted, r.prefix, ipcBinHtml(r.maskLong, r.prefix, 'mask'));
   out += ipcLine('Wildcard', r.wildcardDotted, ipcBinHtml(r.wildcardLong, r.prefix, 'plain'));
   out += '</div>';
   out += ipcRenderNetworkBlock(r);
-
-  const copyAllWrap = document.getElementById('ipcCopyAllWrap');
-  copyAllWrap.style.display = 'none';
 
   const moveTo = String(moveToRaw || '').trim();
   if (moveTo) {
@@ -365,8 +356,8 @@ function ipcRunCalculate() {
       out += ipcNetmaskLine(longToIp(ipcPrefixToMaskLong(newPrefix)), newPrefix, ipcBinHtml(ipcPrefixToMaskLong(newPrefix), newPrefix, 'mask'));
       out += ipcLine('Wildcard', longToIp((~ipcPrefixToMaskLong(newPrefix)) >>> 0), ipcBinHtml((~ipcPrefixToMaskLong(newPrefix)) >>> 0, newPrefix, 'plain'));
       out += '</div>';
-      res.subnets.forEach(sn => {
-        out += ipcRenderNetworkBlock({ ...sn, prefix: newPrefix });
+      res.subnets.forEach((sn, i) => {
+        out += ipcRenderNetworkBlock({ ...sn, prefix: newPrefix }, `Subnet ${i + 1} of ${res.generated}`);
       });
       if (res.truncated) {
         out += `<div class="ipc-note-line"><span class="ipc-note">Showing the first ${res.generated} of ${res.count} subnets (safety limit).</span></div>`;
@@ -376,8 +367,6 @@ function ipcRunCalculate() {
       out += ipcLine('Subnets', res.generated.toLocaleString('pt-BR'));
       out += ipcLine('Hosts', totalHosts.toLocaleString('pt-BR'));
       out += '</div>';
-      IPC_LAST_SUBNETS_TEXT = res.subnets.map(sn => sn.cidr).join('\n');
-      copyAllWrap.style.display = '';
     } else {
       // Prefixo mais curto/genérico = SUPERNET: recalcula a rede que
       // contém o MESMO endereço, só que com uma máscara mais larga.
@@ -393,21 +382,4 @@ function ipcRunCalculate() {
 
   document.getElementById('ipcTermOutput').innerHTML = out;
   resultsGroup.style.display = '';
-}
-
-// Copia todos os CIDRs da última divisão (split) gerada, um por linha —
-// mesmo _copyToClipboard usado no resto do app (js/terminal-renderer.js),
-// com feedback simples trocando o texto do botão por um instante.
-function ipcCopyAllSubnets() {
-  if (!IPC_LAST_SUBNETS_TEXT) return;
-  const btn = document.getElementById('ipcCopyAllBtn');
-  _copyToClipboard(IPC_LAST_SUBNETS_TEXT).then(() => {
-    const original = btn.textContent;
-    btn.textContent = 'Copied!';
-    clearTimeout(btn._ipcRevertTimer);
-    btn._ipcRevertTimer = setTimeout(() => { btn.textContent = original; }, COPY_BTN_FEEDBACK_MS);
-  }).catch(err => {
-    console.error('Copy all failed', err);
-    alert('Failed to copy — please try again.');
-  });
 }

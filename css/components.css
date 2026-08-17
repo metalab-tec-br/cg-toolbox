@@ -1485,8 +1485,15 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    garantir quando um <button> real (largura em pixels, não em caracteres)
    entrava no meio do texto. */
 .ipc-line { display: flex; align-items: baseline; white-space: nowrap; }
-.ipc-block { margin-bottom: 10px; }
-.ipc-block:last-child { margin-bottom: 0; }
+/* Pedido do usuário: no split, os blocos de cada sub-rede ficavam "tudo
+   em um bloco só", difícil de distinguir uma sub-rede da outra — só um
+   espaço em branco entre elas não bastava. Cada .ipc-block (rede base,
+   cada sub-rede gerada pelo split, o Netmask/Wildcard do split, o resumo
+   Subnets/Hosts) agora ganha uma linha divisória entre um bloco e o
+   próximo, além do espaço. */
+.ipc-block { margin-bottom: 10px; padding-bottom: 10px; }
+.ipc-block:last-child { margin-bottom: 0; padding-bottom: 0; }
+.ipc-block + .ipc-block { border-top: 1px solid var(--bdr); padding-top: 10px; }
 .ipc-label {
   flex: 0 0 11ch; color: var(--green); font-weight: 700;
 }
@@ -1505,16 +1512,25 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    antes — ver ipcBinHtml em js/ipcalc.js). */
 .ipc-bin { color: var(--text); }
 .ipc-note { color: var(--blue); font-style: italic; }
-/* Cabeçalho "Binary" acima da coluna de binário — mesmas classes
-   label/valwrap (vazias) da linha normal só pra empurrar o texto até o x
-   certo, reaproveitando o estilo de rótulo de coluna já usado no app
-   (.audit-log-table th: maiúsculas, cor apagada, letter-spacing). */
-.ipc-col-header-row {
-  margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid var(--bdr);
+/* Cabeçalho "Binary", fora da caixa de resultado — pedido do usuário — na
+   mesma linha do rótulo "Result" (ver index.html, #ipcResultsGroup). O
+   margin-left tenta chegar perto do x onde a coluna de binário começa
+   DENTRO da caixa logo abaixo (padding 14px + coluna Label 11ch + coluna
+   valor/copiar calc(24ch+48px) — ver .ipc-label/.ipc-valwrap acima),
+   usando a mesma fonte/tamanho monoespaçado do conteúdo da caixa pra o
+   cálculo em `ch` bater; não é 100% pixel-perfeito (a caixa tem borda),
+   mas fica bem próximo. */
+.ipc-binary-header {
+  font-family: var(--mono); font-size: 9px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .6px; color: var(--dim);
+  margin-left: calc(14px + 11ch + 24ch + 48px);
 }
-.ipc-col-header-row .ipc-bin-wrap {
+/* Rotulozinho "Subnet 2 of 4" acima de cada sub-rede de um split — junto
+   com a linha divisória de .ipc-block, deixa claro onde cada sub-rede
+   começa numa lista longa (pedido do usuário, split "confuso"). */
+.ipc-subnet-index {
   font-size: 9px; font-weight: 800; text-transform: uppercase;
-  letter-spacing: .6px; color: var(--dim);
+  letter-spacing: .6px; color: var(--dim); margin-bottom: 4px;
 }
 .ipc-note-line { margin: 6px 0; }
 .ipc-subnets-header-row { margin: 14px 0 6px; }
