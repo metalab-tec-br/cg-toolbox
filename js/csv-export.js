@@ -143,11 +143,12 @@ function collectFolderNotesForExport() {
 // ordem do template de import (ver IMPORT_HEADERS em js/csv-import.js) —
 // pedido do usuário: "ajustar o export na mesma ordem" — permitindo
 // reimportar um .csv exportado por aqui sem precisar reordenar colunas.
-// `Type`/`ID` (identificação interna) ficam antes, e `Folder` (não faz parte
-// do import) fica depois de `Command`. ──
+// `Type` (identificação interna) fica antes, e `Folder` (não faz parte do
+// import) fica depois de `Command`. `ID` foi removido do export (pedido do
+// usuário) — o id continua sendo sempre auto-gerado a partir do Name no
+// reimport (ver slugifyName em js/csv-import.js), nunca lido do CSV. ──
 const CSV_COLUMNS = [
   { key: 'type', header: 'Type', get: c => c.__isNote ? 'Note' : 'Command' },
-  { key: 'id', header: 'ID', get: c => c.id },
   { key: 'name', header: 'Name', get: c => c.name || '' },
   { key: 'desc', header: 'Description', get: c => c.__isNote ? '' : (c.desc || '') },
   // `details` substitui Purpose/When to use/Notes (campo único de rich text
