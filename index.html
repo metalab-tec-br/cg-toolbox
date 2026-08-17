@@ -1825,13 +1825,13 @@
         <div class="ipc-input-row">
           <div class="ipc-field">
             <span class="set-label">Address</span>
-            <input type="text" class="set-input" id="ipcIp" placeholder="192.168.0.1" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
+            <input type="text" class="set-input" id="ipcIp" placeholder="192.168.0.1" autocomplete="off" tabindex="1" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
           </div>
           <span class="ipc-slash">/</span>
           <div class="ipc-field">
             <span class="ipc-label-info-wrap">
               <span class="set-label">Netmask</span>
-              <span class="ipc-info-icon" tabindex="0" role="button" aria-label="Subnet mask reference table" onclick="ipcToggleNetmaskInfo(event)">i
+              <span class="ipc-info-icon" tabindex="-1" role="button" aria-label="Subnet mask reference table" onclick="ipcToggleNetmaskInfo(event)">i
                 <span class="ipc-info-pop">
                   <table class="ipc-cidr-table">
                     <thead><tr><th>Prefix</th><th>Subnet Mask</th></tr></thead>
@@ -1874,13 +1874,13 @@
                 </span>
               </span>
             </span>
-            <input type="text" class="set-input" id="ipcMask" placeholder="24 or 255.255.255.0" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
+            <input type="text" class="set-input" id="ipcMask" placeholder="24 or 255.255.255.0" autocomplete="off" tabindex="2" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
           </div>
           <div class="ipc-field">
             <span class="set-label">Move to netmask</span>
-            <input type="text" class="set-input" id="ipcMoveTo" placeholder="25 or 255.255.255.128" autocomplete="off" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
+            <input type="text" class="set-input" id="ipcMoveTo" placeholder="25 or 255.255.255.128" autocomplete="off" tabindex="3" onkeydown="if(event.key==='Enter') ipcRunCalculate()">
           </div>
-          <button type="button" class="btn btn-primary ipc-calc-btn" onclick="ipcRunCalculate()">Calc</button>
+          <button type="button" class="btn btn-primary ipc-calc-btn" tabindex="4" onclick="ipcRunCalculate()">Calc</button>
         </div>
         <span class="set-hint" id="ipcError" style="display:none;color:var(--red);"></span>
         <span class="set-hint" id="ipcMoveToError" style="display:none;color:var(--red);"></span>

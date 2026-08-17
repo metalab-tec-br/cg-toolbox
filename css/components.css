@@ -1539,9 +1539,11 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .ipc-block:last-child { margin-bottom: 0; padding-bottom: 0; }
 .ipc-block + .ipc-block { border-top: 1px solid var(--bdr); padding-top: 10px; }
 /* Pedido do usuário: Network/HostMin/HostMax/Broadcast/Hosts "colado" logo
-   abaixo de Address/Netmask/Wildcard dentro do MESMO .ipc-block — só um
-   respiro de espaço (sem linha divisória, que ficava estranha ali). */
-.ipc-block-inner { margin-top: 10px; }
+   abaixo de Address/Netmask/Wildcard dentro do MESMO .ipc-block — sem
+   linha divisória. O espaço entre Wildcard e Network deve ser IGUAL ao
+   espaço entre as demais linhas (Address/Netmask/Wildcard) — sem margem
+   extra, só o ritmo normal do line-height de .ipc-term. */
+.ipc-block-inner { margin-top: 0; }
 .ipc-label {
   flex: 0 0 11ch; color: var(--green); font-weight: 700;
 }

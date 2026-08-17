@@ -167,10 +167,20 @@ function ipcSplitSubnets(networkLong, basePrefix, newPrefix) {
 }
 
 // ── UI: abrir/fechar modal ────────────────────────
+// Pedido do usuário: o modal deve SEMPRE abrir já com um resultado
+// calculado na tela (não em branco) — usa 192.168.0.1/24 como padrão na
+// primeira vez; se os campos já tiverem algo de uma calculadora anterior
+// (usuário fechou e reabriu), só recalcula com o que já estava lá. O
+// campo Address abre com o texto TODO selecionado, pra digitar já
+// substituir o valor existente em vez de precisar apagar antes.
 function openIpCalcModal() {
   document.getElementById('ipCalcOverlay').classList.add('show');
   const ipEl = document.getElementById('ipcIp');
-  if (ipEl) setTimeout(() => ipEl.focus(), 0);
+  const maskEl = document.getElementById('ipcMask');
+  if (ipEl && !ipEl.value) ipEl.value = '192.168.0.1';
+  if (maskEl && !maskEl.value) maskEl.value = '24';
+  ipcRunCalculate();
+  if (ipEl) setTimeout(() => { ipEl.focus(); ipEl.select(); }, 0);
 }
 function closeIpCalcModal() {
   document.getElementById('ipCalcOverlay').classList.remove('show');
