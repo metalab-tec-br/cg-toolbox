@@ -1463,9 +1463,76 @@ function toggleFolderMenu(ev, btn) {
   if (!pop) return;
   const willOpen = !pop.classList.contains('open');
   document.querySelectorAll('.folder-menu-pop.open').forEach(p => { if (p !== pop) p.classList.remove('open'); });
+  // Fecha qualquer flyout de subpasta (.folder-menu-submenu.show) que tenha
+  // ficado aberto da última vez que ESTE MESMO pop foi usado — sem isso, ao
+  // reabrir o dropdown ele apareceria com o flyout já expandido (herdado da
+  // classe .show anterior), sem o usuário precisar passar o mouse de novo.
+  pop.querySelectorAll('.folder-menu-submenu.show').forEach(sm => sm.classList.remove('show'));
   pop.classList.toggle('open', willOpen);
 }
 document.addEventListener('click', ev => {
   if (ev.target.closest('.folder-menu-pop') || ev.target.closest('.fav-btn')) return;
   document.querySelectorAll('.folder-menu-pop.open').forEach(p => p.classList.remove('open'));
+});
+
+// ── Subpastas no dropdown "Add to folder" de cada card (ver folderMenuHtml()
+// em js/terminal-renderer.js) — pedido do usuário: "quando for adicionar um
+// comando em uma subpasta, exiba a subpasta dentro da pasta pai. Coloque um
+// menu estilo seta nas pastas que tiverem subpastas, e exiba as subpastas
+// quando parar o mouse na pasta pai". Delegado em vez de um listener por item
+// porque o dropdown inteiro (.folder-menu-pop) é reconstruído a cada
+// render() — um listener preso a um elemento específico não sobreviveria a
+// isso. `mouseover`/`mouseout` (que borbulham) em vez de `mouseenter`/
+// `mouseleave` (que não borbulham) — só assim dá pra delegar num único par de
+// listeners no `document`.
+let _folderMenuSubmenuCloseTimer = null;
+function _folderMenuShowSubmenu(item) {
+  clearTimeout(_folderMenuSubmenuCloseTimer);
+  const submenu = item.querySelector(':scope > .folder-menu-submenu');
+  if (!submenu) return;
+  // Só um caminho aberto por vez no MESMO nível (fecha os outros flyouts
+  // irmãos) — igual um submenu nativo de sistema operacional.
+  const parent = item.parentElement;
+  if (parent) {
+    parent.querySelectorAll(':scope > .folder-menu-item > .folder-menu-submenu.show').forEach(sm => {
+      if (sm !== submenu) sm.classList.remove('show');
+    });
+  }
+  // position:fixed (ver comentário em css/components.css) — recalculado a
+  // cada hover porque a linha pode estar em qualquer posição da lista
+  // rolável (.folder-menu-pop tem overflow-y:auto).
+  const rect = item.getBoundingClientRect();
+  submenu.style.top = `${Math.round(rect.top)}px`;
+  submenu.style.left = `${Math.round(rect.right) + 2}px`;
+  submenu.classList.add('show');
+  // Se o flyout nasceu perto demais da borda direita da tela (nome de pasta
+  // com muitas subpastas aninhadas, várias colunas de flyout empilhadas),
+  // abre pra ESQUERDA da linha em vez de pra direita — mesmo espírito do
+  // "o menu de adicionar o comando na pasta está ficando cortado" que já
+  // motivou o .folder-menu-pop principal a abrir pra esquerda (right:0).
+  const submenuRect = submenu.getBoundingClientRect();
+  if (submenuRect.right > window.innerWidth - 8) {
+    submenu.style.left = `${Math.round(rect.left) - submenuRect.width - 2}px`;
+  }
+}
+function _folderMenuScheduleHideSubmenu(item) {
+  const submenu = item.querySelector(':scope > .folder-menu-submenu');
+  if (!submenu) return;
+  clearTimeout(_folderMenuSubmenuCloseTimer);
+  _folderMenuSubmenuCloseTimer = setTimeout(() => {
+    // Só fecha se o mouse não estiver nem sobre a linha que abriu o flyout
+    // nem sobre o flyout em si — dá tempo do usuário "atravessar" o espaço
+    // entre os dois (mesmo em diagonal) sem o menu sumir no meio do caminho.
+    if (!submenu.matches(':hover') && !item.querySelector(':scope > .folder-menu-row').matches(':hover')) {
+      submenu.classList.remove('show');
+    }
+  }, 200);
+}
+document.addEventListener('mouseover', ev => {
+  const item = ev.target.closest && ev.target.closest('.folder-menu-item.has-children');
+  if (item) _folderMenuShowSubmenu(item);
+});
+document.addEventListener('mouseout', ev => {
+  const item = ev.target.closest && ev.target.closest('.folder-menu-item.has-children');
+  if (item) _folderMenuScheduleHideSubmenu(item);
 });

@@ -359,21 +359,56 @@ function auditPopover({ createdBy, modifiedBy, updatedAt }) {
 // de pasta abertos antes de abrir este. Cada item chama
 // toggleCommandInFolder(cmdId, folderId, itemEl) diretamente (sem esperar
 // re-render — ver comentário em js/folders.js sobre a atualização otimista).
+//
+// Subpastas (pedido do usuário, com print anexado do menu cortando "Passo 1"/
+// "Passo 2" soltos numa lista achatada, em vez de aninhados dentro de
+// "Migração cliente a..."): antes este menu ignorava `parent_id` e listava
+// TODAS as pastas (raiz e subpastas) numa única lista plana em ordem
+// alfabética — uma subpasta aparecia como se fosse uma pasta de topo
+// qualquer, sem nenhuma relação visual com sua pasta-mãe. Agora usa
+// buildFolderTree() (mesma função de js/folders.js usada para desenhar a
+// árvore de pastas na tela principal) para montar a MESMA hierarquia aqui:
+// só as pastas de TOPO aparecem na lista principal; uma pasta de topo com
+// subpastas ganha uma seta (›) à direita, e passar o mouse sobre ela abre um
+// submenu (flyout) ao lado com as subpastas diretas — que por sua vez também
+// podem ter sua própria seta/flyout (aninhamento ilimitado, recursivo, igual
+// à árvore da tela principal). O posicionamento do flyout é calculado via
+// JS (ver _folderMenuShowSubmenu em js/folders.js) porque .folder-menu-pop
+// tem overflow-y:auto para rolar listas grandes de pastas — um filho
+// position:absolute que ultrapassasse a borda seria cortado por esse
+// overflow, então o submenu usa position:fixed (que escapa do clipping de
+// overflow de ancestrais) com top/left recalculados a cada hover.
+// Cada item CONTINUA sendo, ele mesmo, um alvo válido para adicionar o
+// comando (inclusive pastas com subpastas — a seta só abre o flyout de
+// navegação, não impede marcar a pasta-mãe também) — por isso todo item leva
+// seu próprio onclick com stopPropagation() (novo: antes não precisava, já
+// que não havia aninhamento — sem isso, clicar numa subpasta faria o clique
+// borbulhar e disparar TAMBÉM o onclick da pasta-mãe que a contém).
 function folderMenuHtml(cmdId, folderIds) {
   const idSet = new Set(folderIds || []);
-  const folders = (typeof FOLDERS !== 'undefined' ? FOLDERS : []).slice()
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-  const items = folders.map(f => {
-    const on = idSet.has(f.id);
-    return `<div class="folder-menu-item${on ? ' on' : ''}" onclick="toggleCommandInFolder('${cmdId}', ${f.id}, this)">
-      <span class="folder-menu-chk">${on ? '✓' : ''}</span><span class="folder-menu-name">${escAttr(f.name)}</span>
-    </div>`;
-  }).join('');
-  const emptyHtml = folders.length ? '' : `<div class="folder-menu-empty">No folders yet.</div>`;
+  const tree = (typeof buildFolderTree === 'function')
+    ? buildFolderTree(typeof FOLDERS !== 'undefined' ? FOLDERS : [])
+    : { roots: (typeof FOLDERS !== 'undefined' ? FOLDERS : []).slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })), childrenOf: () => [] };
+  function renderLevel(list) {
+    return list.map(f => {
+      const on = idSet.has(f.id);
+      const children = tree.childrenOf(f.id);
+      const hasChildren = children.length > 0;
+      const arrow = hasChildren ? '<span class="folder-menu-arrow">›</span>' : '';
+      const submenu = hasChildren ? `<div class="folder-menu-submenu">${renderLevel(children)}</div>` : '';
+      return `<div class="folder-menu-item${on ? ' on' : ''}${hasChildren ? ' has-children' : ''}">
+        <span class="folder-menu-row" onclick="event.stopPropagation(); toggleCommandInFolder('${cmdId}', ${f.id}, this.parentElement)">
+          <span class="folder-menu-chk">${on ? '✓' : ''}</span><span class="folder-menu-name">${escAttr(f.name)}</span>${arrow}
+        </span>${submenu}
+      </div>`;
+    }).join('');
+  }
+  const items = renderLevel(tree.roots);
+  const emptyHtml = tree.roots.length ? '' : `<div class="folder-menu-empty">No folders yet.</div>`;
   return `<div class="folder-menu-pop">
     ${emptyHtml}${items}
     <div class="folder-menu-divider"></div>
-    <div class="folder-menu-item folder-menu-new" onclick="document.querySelectorAll('.folder-menu-pop.open').forEach(p=>p.classList.remove('open')); promptCreateFolder('${cmdId}')">
+    <div class="folder-menu-item folder-menu-new" onclick="event.stopPropagation(); document.querySelectorAll('.folder-menu-pop.open').forEach(p=>p.classList.remove('open')); promptCreateFolder('${cmdId}')">
       <span class="folder-menu-chk"></span><span class="folder-menu-name">+ New folder</span>
     </div>
   </div>`;
