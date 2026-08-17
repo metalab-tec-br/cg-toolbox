@@ -421,49 +421,117 @@ function wrapItemForFolderDrag(html, containerId, itemType, itemId, rootFolderId
   </div>`;
 }
 
-// Card de uma NOTE (task Notes) — 2º redesign (pedido mais recente: "em
-// notes, remova a palavra NOTE, permita o usuário alterar o tamanho da
-// fonte, a cor e alinha para esquerda, centro e direita; deixa a nota em
-// uma caixa branca sem borda do mesmo tamanho da caixa do comando" —
-// reverte parcialmente o pedido ANTERIOR de fundo transparente, ver
-// comentário em components.css). Continua um bloco ÚNICO (sem cabeçalho/
-// título separado, ver .note-flat-body abaixo) — só que agora com fundo
-// branco/cinza igual ao comando (var(--surf), sem borda visível) em vez de
-// transparente, e SEM o badge "Note" na frente do texto (removido a
-// pedido) — a única forma de diferenciar nota de comando na tela passou a
-// ser o próprio fundo (visualmente idêntico ao comando, sem cabeçalho)
-// dentro da MESMA seção de pasta, o que é intencional (pedido do usuário).
+// Card de uma NOTE (task Notes) — 3º redesign (pedido: "ajuste para que a
+// edição de nota na pasta Folders seja feita na mesma tela, sem abrir o
+// popup"). Continua um bloco ÚNICO (sem cabeçalho/título separado) com fundo
+// branco/cinza igual ao comando (var(--surf), sem borda visível) — a
+// diferença agora é que o PRÓPRIO card alterna entre visualização e edição,
+// em vez de abrir um modal (#noteEditorOverlay, removido de index.html).
 // A "descrição" É o próprio conteúdo (HTML já sanitizado no servidor — ver
 // sanitizeNoteHtml em server/index.js — então pode ser inserido cru aqui,
-// inclusive <img> coladas/redimensionadas, e agora também <span
-// style="..."> de tamanho de fonte/cor e blocos com text-align, todos
-// aplicados pela barra de formatação do editor — ver neExec/neSetFontSize/
-// neSetColor em js/folders.js).
+// inclusive <img> coladas/redimensionadas e <span style="..."> de tamanho de
+// fonte/cor/alinhamento, todos aplicados pela barra de formatação do editor
+// — ver neExec/neSetFontSize/neSetColor em js/folders.js).
 // `note.title` (campo do banco, ver schema.sql) não é mostrado na tela —
 // é só um resumo em texto puro derivado automaticamente do conteúdo (ver
 // _deriveNoteTitle em js/folders.js), mantido só pra mensagens internas
 // (confirmação de exclusão, sufixo " (copy)" ao clonar).
 // `ownFolder` (= withActions da seção que contém a nota, sempre verdadeiro
 // quando é uma pasta do usuário atual e falso quando é de outro usuário)
-// decide se aparecem os botões de clonar/editar/excluir — uma nota só pode
-// ser alterada por quem a escreveu, e como uma nota só existe dentro de uma
+// decide se aparecem os botões de clonar/editar — uma nota só pode ser
+// alterada por quem a escreveu, e como uma nota só existe dentro de uma
 // pasta que já é sua (não há como criar nota na pasta de outra pessoa), a
 // posse da PASTA já equivale à posse da nota — não precisa comparar
-// note.username com CURRENT_USER separadamente. As ações viram um
-// mini-toolbar absolute no canto superior direito, visível só no hover (ver
-// .note-flat-actions em components.css) — sem faixa de cabeçalho pra
-// "morarem" como antes.
-function buildNoteCardHtml(note, ownFolder) {
+// note.username com CURRENT_USER separadamente.
+// `editing` (novo): quando true, renderiza o template de EDIÇÃO em vez do de
+// visualização — controlado por NOTE_EDIT_MODE (notas existentes) ou por
+// NOTE_CREATE_FOLDER_ID (nota nova, ver js/folders.js). Uma nota "nova" (uso
+// interno, só existe no cliente até o primeiro Accept) é representada por um
+// objeto `note` com `id: null` e `folder_id` preenchido — chamado
+// diretamente por buildFolderSectionFromCards quando NOTE_CREATE_FOLDER_ID
+// bate com a pasta sendo montada.
+// Excluir (pedido: "exiba o botão de excluir nota somente quando estiver
+// editando. Faça igual a edição de pastas com os mesmos botões") só aparece
+// dentro do modo de edição, reaproveitando as MESMAS classes .sec-folder-
+// pill-btn/.pill-accept/.pill-cancel/.pill-delete já usadas na edição de
+// pastas (ver buildFolderSectionFromCards abaixo) — fora dele, só
+// Clonar/Editar (mini-toolbar flutuante, hover — ver .note-flat-actions em
+// components.css).
+function buildNoteCardHtml(note, ownFolder, editing) {
   if (!note) return '';
+  const isNew = note.id == null;
   const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(note.title || '') : escAttr(note.title || '');
+
+  if (editing) {
+    // Rascunho local (ver NOTE_EDIT_DRAFTS em js/folders.js) tem prioridade
+    // sobre note.description — preserva o que o usuário já digitou/formatou
+    // caso um render() por outro motivo (busca, outra pasta etc.) reconstrua
+    // este card enquanto ele ainda está editando (sem isso, o texto digitado
+    // seria perdido no meio da edição).
+    const draftKey = isNew ? `create:${note.folder_id}` : `edit:${note.id}`;
+    const liveDescription = (typeof NOTE_EDIT_DRAFTS !== 'undefined' && Object.prototype.hasOwnProperty.call(NOTE_EDIT_DRAFTS, draftKey))
+      ? NOTE_EDIT_DRAFTS[draftKey]
+      : (note.description || '');
+    const editorId = isNew ? `noteEditorNew_${note.folder_id}` : `noteEditorEdit_${note.id}`;
+    const acceptArg = isNew ? 'null' : note.id;
+    const cancelArg = isNew ? 'null' : note.id;
+    const deleteBtn = !isNew
+      ? `<button type="button" class="sec-folder-pill-btn pill-delete" onmousedown="event.preventDefault()" onclick="deleteNoteConfirm(${note.id}, '${jsEsc}', event)" title="Delete note">✕ Delete Note</button>`
+      : '';
+    // Ordem alfabética (pelo nome em inglês do title/tooltip, mesmo idioma
+    // do resto da UI): Black, Blue, Green, Red, Yellow — pedido do usuário:
+    // "na opções de cores deixe apenas preto, verde, azul, amarela e
+    // vermelha em ordem alfabética" (5 cores fixas, não mais paleta livre).
+    const colorSwatches = [
+      ['#000000', 'Black'], ['#1565c0', 'Blue'], ['#2e7d32', 'Green'],
+      ['#c62828', 'Red'], ['#f9a825', 'Yellow'],
+    ].map(([hex, label]) => `<button type="button" class="ne-fmt-color-swatch" style="background:${hex}" onmousedown="event.preventDefault()" onclick="neSetColor(this, '${hex}')" title="${label}"></button>`).join('');
+    return `<div class="card" data-note-id="${note.id || ''}" data-note-editing="1">
+      <div class="note-edit-head">
+        <span class="note-edit-label">${isNew ? 'New note' : 'Editing note'}</span>
+        <span class="note-edit-actions">
+          <button type="button" class="sec-folder-pill-btn pill-accept" onmousedown="event.preventDefault()" onclick="acceptNoteEdit(${acceptArg}, ${note.folder_id}, event)" title="Save note">✓ Accept</button>
+          <button type="button" class="sec-folder-pill-btn pill-cancel" onmousedown="event.preventDefault()" onclick="cancelNoteEdit(${cancelArg}, ${note.folder_id}, event)" title="Discard changes">✕ Cancel</button>
+          ${deleteBtn}
+        </span>
+      </div>
+      <div class="note-flat-body note-flat-body-editing">
+        <div class="note-editor-toolbar">
+          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'bold')" title="Bold (Ctrl+B)"><b>B</b></button>
+          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'italic')" title="Italic (Ctrl+I)"><i>I</i></button>
+          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'underline')" title="Underline (Ctrl+U)"><u>U</u></button>
+          <span class="ne-fmt-sep"></span>
+          <select class="ne-fmt-size" onchange="neSetFontSize(this, this.value); this.value='';" title="Font size">
+            <option value="">Size</option>
+            <option value="11">11</option>
+            <option value="13">13</option>
+            <option value="17">17</option>
+            <option value="22">22</option>
+          </select>
+          <span class="ne-fmt-colors" title="Text color">${colorSwatches}</span>
+          <span class="ne-fmt-sep"></span>
+          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyLeft')" title="Align left">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M1 7h9M1 11h14M1 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
+          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyCenter')" title="Align center">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M3.5 7h9M1 11h14M3.5 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
+          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyRight')" title="Align right">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M6 7h9M1 11h14M6 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="note-editor-body" id="${editorId}" data-note-draft-key="${draftKey}" contenteditable="true" data-placeholder="Write the note here — select text to format it, paste an image (Ctrl+V) to attach it.">${liveDescription}</div>
+      </div>
+    </div>`;
+  }
+
   const actions = ownFolder ? `<span class="note-flat-actions">
     <button type="button" class="edit-btn" onclick="cloneNote(${note.id}, event)" title="Clone note">
       <svg width="11" height="11" fill="none" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="9" height="9" rx="1.3" stroke="currentColor" stroke-width="1.4"/><path d="M3.2 10.5H2.3a.8.8 0 01-.8-.8v-7A.8.8 0 012.3 2h7a.8.8 0 01.8.8v.9" stroke="currentColor" stroke-width="1.4"/></svg>
     </button>
-    <button type="button" class="edit-btn" onclick="openNoteEditor('edit', ${note.folder_id}, ${note.id}, event)" title="Edit note">
+    <button type="button" class="edit-btn" onclick="startEditNote(${note.id}, event)" title="Edit note">
       <svg width="11" height="11" fill="none" viewBox="0 0 16 16"><path d="M11.3 1.7l3 3L5 14H2v-3l9.3-9.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
     </button>
-    <button type="button" class="edit-btn note-delete-btn" onclick="deleteNoteConfirm(${note.id}, '${jsEsc}', event)" title="Delete note">✕</button>
   </span>` : '';
   const content = (note.description || '').trim()
     ? note.description
@@ -525,7 +593,7 @@ function buildFolderItemsCards(cmdById, notesById, childSectionById, orderTagged
     .concat(extra);
   return finalOrder.map(o => {
     let html;
-    if (o.type === 'note') html = buildNoteCardHtml(notesById.get(o.id), ownFolder);
+    if (o.type === 'note') html = buildNoteCardHtml(notesById.get(o.id), ownFolder, NOTE_EDIT_MODE.has(o.id));
     else if (o.type === 'folder') html = childSectionById.get(o.id);
     else html = buildCardHtmlForRow(cmdById.get(o.id), values, hasIPs);
     return html ? { type: o.type, id: o.id, html } : null;
@@ -689,7 +757,7 @@ function buildFolderSectionFromCards(items, folderId, folderName, key, withActio
         <span>Add</span><span class="dd-arrow">▾</span>
       </button>
       <div class="dd-panel" id="${addDdId}Panel">
-        <div class="sb-row" onclick="event.stopPropagation(); closeAllDropdowns(); openNoteEditor('create', ${folderId}, null, event)">
+        <div class="sb-row" onclick="event.stopPropagation(); closeAllDropdowns(); startCreateNote(${folderId}, event)">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           <span>Note</span>
         </div>
@@ -720,15 +788,25 @@ function buildFolderSectionFromCards(items, folderId, folderName, key, withActio
   // dela, contar de novo aqui ficaria redundante/confuso).
   const cardCount = items.filter(it => it.type !== 'folder').length;
   const headerHtml = `${folderIcon(true, 12)} ${nameHtml} <span class="sec-count">${cardCount}</span>${leftActions}${divider}${rightAction}`;
+  // Rascunho de nota NOVA em edição (startCreateNote, ver js/folders.js) —
+  // não é um item de `items` (não existe no servidor ainda, não tem posição
+  // em folder.order) — entra sempre no TOPO do corpo, fora do mecanismo de
+  // drag (uma nota que ainda não foi salva não tem o que reordenar).
+  const draftNoteHtml = (withActions && NOTE_CREATE_FOLDER_ID === folderId)
+    ? buildNoteCardHtml({ id: null, folder_id: folderId, description: '' }, true, true)
+    : '';
   // Pasta própria recém-criada, ainda sem nenhum comando/nota/subpasta —
   // mostra um aviso discreto em vez de deixar o corpo da seção parecendo
   // vazio/quebrado (o botão "+ Add" agora mora no cabeçalho, não mais aqui
-  // no corpo).
-  const emptyMsg = (withActions && !items.length)
+  // no corpo). Não mostra esse aviso quando já existe um rascunho de nota
+  // nova ocupando o corpo (draftNoteHtml) — mostrar "Empty folder." ao lado
+  // do editor de uma nota que o próprio usuário acabou de abrir ficaria
+  // contraditório.
+  const emptyMsg = (withActions && !items.length && !draftNoteHtml)
     ? `<p class="sec-folder-empty-msg">Empty folder.</p>`
     : '';
   const active = withActions && editMode;
-  const body = emptyMsg + items.map(it => active
+  const body = draftNoteHtml + emptyMsg + items.map(it => active
     ? wrapItemForFolderDrag(it.html, folderId, it.type, it.id, rootFolderId)
     : it.html
   ).join('');

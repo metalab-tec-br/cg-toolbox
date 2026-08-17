@@ -1258,7 +1258,7 @@ app.post('/api/folders/:id/copy', async (req, res) => {
 // ════════════════════════════════════════════════
 
 // Allow-list de tags para o corpo da nota (contenteditable no front-end,
-// ver js/folders.js: openNoteEditor()) — sanitização própria por regex (sem
+// ver startCreateNote()/startEditNote() em js/folders.js) — sanitização própria por regex (sem
 // dependência de HTML parser/DOMPurify) porque o conteúdo é sempre gerado
 // pelo NOSSO editor (colar imagem -> <img>, texto -> <b>/<i>/<br>/<div>/etc.),
 // nunca HTML arbitrário de fora; ainda assim nunca confiamos no que o
@@ -1269,12 +1269,58 @@ app.post('/api/folders/:id/copy', async (req, res) => {
 // descartado), e <img>/<a> só aceitam src/href com esquema seguro
 // (data:image/ ou http(s):// — nunca javascript:).
 const NOTE_ALLOWED_TAGS = new Set(['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'div', 'span', 'ul', 'ol', 'li', 'a', 'img']);
+// Allow-list de propriedades CSS preservadas no atributo `style` de
+// span/div/p/li — são exatamente as 3 que a barra de formatação da nota
+// aplica (ver neSetFontSize/neSetColor/neExec('justifyLeft'|'justifyCenter'|
+// 'justifyRight') em js/folders.js). Bug reportado pelo usuário: "criei uma
+// nota mas não salvou a formatação que eu fiz" — o branch genérico abaixo
+// (`return '<${lower}>'`) descartava TODOS os atributos de toda tag exceto
+// img/a, inclusive `style`, então qualquer <span style="color:...">/
+// <span style="font-size:...px">/<div style="text-align:...">  virava uma
+// tag "pelada" e a formatação de cor/tamanho/alinhamento se perdia
+// silenciosamente ao salvar (ficava visível só até o próximo reload). Cada
+// valor é validado com uma allow-list/regex própria — nunca aceito cru —
+// pra não abrir uma porta de CSS injection (ex.: `background:url(...)`,
+// `position:fixed`, etc.) só porque o nome da propriedade bateu.
+function _sanitizeNoteStyle(styleAttr) {
+  if (!styleAttr) return '';
+  const kept = [];
+  String(styleAttr).split(';').forEach(decl => {
+    const m = /^\s*([a-zA-Z-]+)\s*:\s*(.+?)\s*$/.exec(decl);
+    if (!m) return;
+    const prop = m[1].toLowerCase();
+    const val = m[2].trim();
+    if (prop === 'color' && /^#[0-9a-fA-F]{3}$|^#[0-9a-fA-F]{6}$|^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/.test(val)) {
+      kept.push(`color:${val}`);
+    } else if (prop === 'font-size' && /^\d{1,3}px$/.test(val)) {
+      kept.push(`font-size:${val}`);
+    } else if (prop === 'text-align' && ['left', 'center', 'right', 'justify'].includes(val.toLowerCase())) {
+      kept.push(`text-align:${val.toLowerCase()}`);
+    }
+  });
+  return kept.join(';');
+}
 function sanitizeNoteHtml(html) {
   if (!html) return '';
   let s = String(html);
   s = s.replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '');
   s = s.replace(/<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:\s+[^<>]*)?)\s*\/?>/g, (m, closing, tag, attrs) => {
     const lower = tag.toLowerCase();
+    // <font ...>/</font>: alguns navegadores ainda emitem isso pra
+    // document.execCommand('foreColor', ...) em vez de um <span
+    // style="color:...">  — convertido pra <span> (com a cor preservada via
+    // style, nunca via atributo legado `color`) pra não perder a formatação
+    // nem precisar admitir `font` na allow-list de tags.
+    if (lower === 'font') {
+      if (closing) return '</span>';
+      const colorAttrM = /\bcolor\s*=\s*"([^"]*)"/i.exec(attrs) || /\bcolor\s*=\s*'([^']*)'/i.exec(attrs);
+      const styleM = /\bstyle\s*=\s*"([^"]*)"/i.exec(attrs) || /\bstyle\s*=\s*'([^']*)'/i.exec(attrs);
+      let styleOut = _sanitizeNoteStyle(styleM ? styleM[1] : '');
+      if (!styleOut && colorAttrM && /^#[0-9a-fA-F]{3}$|^#[0-9a-fA-F]{6}$/.test(colorAttrM[1])) {
+        styleOut = `color:${colorAttrM[1]}`;
+      }
+      return styleOut ? `<span style="${styleOut}">` : '<span>';
+    }
     if (!NOTE_ALLOWED_TAGS.has(lower)) return '';
     if (closing) return `</${lower}>`;
     if (lower === 'img') {
@@ -1294,7 +1340,12 @@ function sanitizeNoteHtml(html) {
       if (!/^https?:\/\//i.test(href)) href = '#';
       return `<a href="${href.replace(/"/g, '&quot;')}" target="_blank" rel="noopener noreferrer">`;
     }
-    return `<${lower}>`;
+    // span/div/p/li/ul/ol/b/strong/i/em/u/br: só `style` sobrevive (validado
+    // e restrito às 3 propriedades acima) — qualquer outro atributo original
+    // (inclusive on*="...") continua descartado, igual antes.
+    const styleM = /\bstyle\s*=\s*"([^"]*)"/i.exec(attrs) || /\bstyle\s*=\s*'([^']*)'/i.exec(attrs);
+    const styleOut = _sanitizeNoteStyle(styleM ? styleM[1] : '');
+    return styleOut ? `<${lower} style="${styleOut}">` : `<${lower}>`;
   });
   return s;
 }

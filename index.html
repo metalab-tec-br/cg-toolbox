@@ -1477,61 +1477,15 @@
   </div>
 </div>
 
-<!-- ══ NOTE EDITOR — create/edit de uma nota dentro de uma pasta própria
-     (task Notes, ver openNoteEditor()/saveNoteEditor() em js/folders.js).
-     Campo ÚNICO — sem input de Título separado, só o corpo "rico" num
-     <div contenteditable> com uma barra de formatação acima: negrito/
-     itálico/sublinhado, tamanho de fonte, cor do texto e alinhamento
-     (esquerda/centro/direita) — tudo via document.execCommand (ver
-     neExec()/neSetFontSize()/neSetColor() em js/folders.js). Além de texto
-     formatado, aceita colar imagens (convertidas pra data URI, ver
-     _neHandlePaste) e redimensioná-las arrastando o canto inferior-direito
-     (ver _neArmImageResize) — sem editor de terceiros, só o mínimo
-     necessário pro que foi pedido. Um título ainda é gerado
-     AUTOMATICAMENTE a partir do texto (ver saveNoteEditor) só para uso
-     interno (mensagem de confirmação ao excluir, nome ao clonar) — nunca
-     aparece como campo/faixa própria na tela. ══ -->
-<div class="modal-overlay" id="noteEditorOverlay">
-  <div class="modal-box">
-    <div class="modal-head">
-      <span class="modal-title" id="noteEditorTitle">New note</span>
-      <button class="modal-close" onclick="closeNoteEditorModal()">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="set-group">
-        <div class="note-editor-toolbar">
-          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec('bold')" title="Bold (Ctrl+B)"><b>B</b></button>
-          <button type="button" class="ne-fmt-btn ne-fmt-italic" onmousedown="event.preventDefault()" onclick="neExec('italic')" title="Italic (Ctrl+I)"><i>I</i></button>
-          <button type="button" class="ne-fmt-btn ne-fmt-underline" onmousedown="event.preventDefault()" onclick="neExec('underline')" title="Underline (Ctrl+U)"><u>U</u></button>
-          <span class="ne-fmt-sep"></span>
-          <select class="ne-fmt-size" onchange="neSetFontSize(this.value); this.value='';" title="Font size">
-            <option value="">Size</option>
-            <option value="11">Small</option>
-            <option value="13">Normal</option>
-            <option value="17">Large</option>
-            <option value="22">X-Large</option>
-          </select>
-          <input type="color" class="ne-fmt-color" oninput="neSetColor(this.value)" title="Text color" value="#000000">
-          <span class="ne-fmt-sep"></span>
-          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec('justifyLeft')" title="Align left">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M1 7h9M1 11h14M1 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-          </button>
-          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec('justifyCenter')" title="Align center">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M3.5 7h9M1 11h14M3.5 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-          </button>
-          <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec('justifyRight')" title="Align right">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M6 7h9M1 11h14M6 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-          </button>
-        </div>
-        <div class="note-editor-body" id="noteBodyEditor" contenteditable="true" data-placeholder="Write the note here — select text to format it, paste an image (Ctrl+V) to attach it."></div>
-      </div>
-    </div>
-    <div class="modal-foot" style="justify-content:flex-end;">
-      <button class="btn" onclick="closeNoteEditorModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveNoteEditor()">Save</button>
-    </div>
-  </div>
-</div>
+<!-- ══ NOTE EDITOR — REMOVIDO (task Notes, 3º redesign: "ajuste para que a
+     edição de nota na pasta Folders seja feita na mesma tela, sem abrir o
+     popup"). A edição agora acontece dentro do próprio card, gerado
+     dinamicamente por buildNoteCardHtml() em js/db-render-engine.js — ver
+     startCreateNote()/startEditNote()/acceptNoteEdit()/cancelNoteEdit() em
+     js/folders.js. Nenhum markup estático precisa existir aqui: cada nota
+     em edição carrega sua própria barra de formatação e seu próprio <div
+     contenteditable>, com ids únicos (noteEditorNew_<folderId> /
+     noteEditorEdit_<noteId>). ══ -->
 
 <!-- ══ NEW API KEY — name prompt (replaces native prompt(), same pattern as
      confirmOverlay above) ══ -->

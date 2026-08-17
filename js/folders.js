@@ -850,109 +850,151 @@ function copyFolderFromUser(folderId, folderName, ev) {
 }
 
 // ── Notes (task Notes) — anotações livres dentro de uma pasta própria ──
-// Editor compartilhado create/edit num modal (#noteEditorOverlay em
-// index.html), mesmo padrão de openFolderPromptModal acima.
-// Redesign (pedido: "achei confusa a tela de notas com comandos, ajustar
-// para que fiquem em um só campo e o usuário possa colocar negrito,
-// itálico etc, deixar o fundo transparente"): não existe mais um campo de
-// Título separado — é tudo HTML "rico" digitado num único <div
-// contenteditable> (#noteBodyEditor), com uma pequena barra de negrito/
-// itálico/sublinhado (ver neExec abaixo) e suporte a colar imagens
-// (convertidas pra data URI e inseridas como <img>, ver _neHandlePaste) e
-// redimensioná-las arrastando o canto inferior direito (ver
-// _neArmImageResize). O backend ainda tem uma coluna `title` (ver
-// schema.sql) — em vez de removê-la (migração desnecessária), ela é
-// preenchida automaticamente a partir do texto puro da nota (ver
-// _deriveNoteTitle abaixo), só pra uso interno: mensagem de confirmação ao
-// excluir e nome ao clonar (" (copy)"). O usuário nunca vê/edita esse campo
-// diretamente. O servidor sanitiza o HTML antes de gravar (sanitizeNoteHtml
-// em server/index.js) — o front-end não precisa (e não deveria) confiar no
-// próprio HTML gerado como seguro por si só, mas também não faz
-// sanitização própria aqui: só o servidor é a fonte de verdade do que fica
-// salvo.
-let _noteEditorFolderId = null;
-let _noteEditorNoteId = null;
+// 3º redesign (pedido: "ajuste para que a edição de nota na pasta Folders
+// seja feita na mesma tela, sem abrir o popup") — não existe mais um modal
+// compartilhado (#noteEditorOverlay, removido de index.html): a edição
+// acontece dentro do próprio card, gerado por buildNoteCardHtml em
+// js/db-render-engine.js. O estado de "quais notas estão em edição agora"
+// mora aqui, no mesmo espírito de FOLDER_EDIT_MODE (acima):
+//   NOTE_EDIT_MODE       — Set de note.id sendo editadas (notas EXISTENTES)
+//   NOTE_CREATE_FOLDER_ID — id da pasta com uma nota NOVA em edição (rascunho
+//                           que ainda não existe no servidor), ou null
+// Só pode haver, no máximo, o conjunto de notas abertas simultaneamente —
+// não há exclusividade global (o usuário pode, em tese, deixar mais de uma
+// aberta); render() reconstrói cada card no estado certo a cada chamada.
+let NOTE_EDIT_MODE = new Set();
+let NOTE_CREATE_FOLDER_ID = null;
+// Rascunho local do HTML de cada editor aberto, indexado por uma chave
+// própria ("edit:<id>" ou "create:<folderId>", ver draftKey em
+// buildNoteCardHtml) — existe só pra PROTEGER contra perda de digitação: como
+// a edição agora mora dentro do HTML gerado por render(), qualquer render()
+// disparado por outro motivo enquanto o usuário digita (busca com debounce,
+// troca de pasta em outra aba do mesmo Folders, etc.) reconstruiria o card
+// do zero a partir de note.description (o valor salvo no servidor, que
+// ainda não tem o que foi digitado) e o texto em andamento seria perdido —
+// isso não existia no design anterior (modal fora do ciclo de render). O
+// listener de 'input' abaixo mantém esse objeto atualizado a cada tecla;
+// buildNoteCardHtml consulta-o com prioridade sobre note.description.
+let NOTE_EDIT_DRAFTS = {};
 // Deriva um "título" curto a partir do texto puro da nota — só usado
-// internamente (ver comentário acima), nunca mostrado como campo próprio.
+// internamente (mensagem de confirmação ao excluir, sufixo " (copy)" ao
+// clonar), nunca mostrado como campo próprio.
 function _deriveNoteTitle(html) {
   const tmp = document.createElement('div');
   tmp.innerHTML = html || '';
   const text = (tmp.textContent || tmp.innerText || '').replace(/\s+/g, ' ').trim();
   return text.length > 80 ? text.slice(0, 80).trim() + '…' : text;
 }
-function openNoteEditor(mode, folderId, noteId, ev) {
-  if (ev) ev.stopPropagation();
-  _noteEditorFolderId = folderId;
-  _noteEditorNoteId = noteId || null;
-  let description = '';
-  if (mode === 'edit' && noteId) {
-    const folder = FOLDERS.find(f => f.id === folderId);
-    const note = folder && (folder.notes || []).find(n => n.id === noteId);
-    if (note) { description = note.description || ''; }
-  }
-  const titleEl = document.getElementById('noteEditorTitle');
-  if (titleEl) titleEl.textContent = mode === 'edit' ? 'Edit note' : 'New note';
-  const body = document.getElementById('noteBodyEditor');
-  if (body) {
-    body.innerHTML = description;
-    _neArmExistingImages(body);
-  }
-  const overlay = document.getElementById('noteEditorOverlay');
-  if (overlay) overlay.classList.add('show');
-  setTimeout(() => { if (body) body.focus(); }, 0);
+// Foca o <div contenteditable> do editor recém-aberto — precisa de um
+// setTimeout(0) porque o card só existe no DOM depois que innerHTML é
+// reatribuído por render() (ver js/render.js), que ainda não rodou no
+// instante em que startCreateNote/startEditNote chamam render().
+function _neFocusEditor(editorId) {
+  setTimeout(() => {
+    const el = document.getElementById(editorId);
+    if (el) el.focus();
+  }, 0);
 }
-function closeNoteEditorModal() {
-  const overlay = document.getElementById('noteEditorOverlay');
-  if (overlay) overlay.classList.remove('show');
-  _noteEditorFolderId = null;
-  _noteEditorNoteId = null;
+function startCreateNote(folderId, ev) {
+  if (ev) ev.stopPropagation();
+  NOTE_CREATE_FOLDER_ID = folderId;
+  delete NOTE_EDIT_DRAFTS[`create:${folderId}`];
+  render();
+  _neFocusEditor(`noteEditorNew_${folderId}`);
+}
+function startEditNote(noteId, ev) {
+  if (ev) ev.stopPropagation();
+  NOTE_EDIT_MODE.add(noteId);
+  delete NOTE_EDIT_DRAFTS[`edit:${noteId}`];
+  render();
+  _neFocusEditor(`noteEditorEdit_${noteId}`);
+}
+// Cancelar descarta o rascunho (local e no NOTE_EDIT_DRAFTS) sem tocar no
+// servidor — para uma nota existente, note.description (já salvo) volta a
+// ser exibido; para uma nota nova, o card de rascunho simplesmente some.
+function cancelNoteEdit(noteId, folderId, ev) {
+  if (ev) ev.stopPropagation();
+  if (noteId) {
+    NOTE_EDIT_MODE.delete(noteId);
+    delete NOTE_EDIT_DRAFTS[`edit:${noteId}`];
+  } else {
+    if (NOTE_CREATE_FOLDER_ID === folderId) NOTE_CREATE_FOLDER_ID = null;
+    delete NOTE_EDIT_DRAFTS[`create:${folderId}`];
+  }
+  render();
 }
 // Botões da barra de formatação (negrito/itálico/sublinhado/alinhamento) do
 // editor — document.execCommand está deprecated mas continua funcionando em
 // todos os navegadores relevantes pra formatar um <div contenteditable>
 // local; é a mesma abordagem simples já usada pra colar/redimensionar
 // imagem aqui (sem editor de terceiros). O onmousedown="event.preventDefault()"
-// no botão (ver index.html) evita que o clique tire o foco/seleção de texto
-// do editor antes do comando rodar — sem isso, a seleção seria perdida e
-// nada seria formatado.
-function neExec(cmd) {
-  const body = document.getElementById('noteBodyEditor');
+// no botão (ver db-render-engine.js) evita que o clique tire o foco/seleção
+// de texto do editor antes do comando rodar — sem isso, a seleção seria
+// perdida e nada seria formatado.
+// Agora existe potencialmente MAIS DE UM editor de nota na tela ao mesmo
+// tempo (uma nota nova + uma existente sendo editada, por exemplo) — por
+// isso `neExec`/`neSetFontSize`/`neSetColor` recebem o próprio elemento
+// clicado (`btn`/`selectEl`/`el`) e localizam o editor mais próximo via
+// `.closest('.note-flat-body-editing')`, em vez de um id fixo único.
+function neExec(btn, cmd) {
+  const wrap = btn.closest('.note-flat-body-editing');
+  const body = wrap && wrap.querySelector('.note-editor-body');
   if (body) body.focus();
   document.execCommand(cmd, false, null);
 }
 
-// Tamanho de fonte e cor (pedido: "permita o usuário alterar o tamanho da
-// fonte, a cor e alinha para esquerda, centro e direita") usam um <select>
-// e um <input type="color"> (ver index.html) — diferente dos botões acima,
-// esses dois elementos PRECISAM ganhar foco pra funcionar (senão o
-// navegador não abre o dropdown/seletor de cor nativo), então
-// onmousedown="event.preventDefault()" não é uma opção aqui: o foco (e,
-// nos navegadores mais rigorosos, a seleção de texto dentro do editor)
-// pode se perder ao clicar neles. Por isso guardamos a última seleção real
-// feita dentro de #noteBodyEditor (_neSaveSelection, disparado em
-// mouseup/keyup lá dentro) e a restauramos (_neRestoreSelection) antes de
-// aplicar o comando — sem isso, escolher um tamanho/cor formataria uma
-// seleção vazia/errada (ou nenhuma).
-let _neLastRange = null;
-function _neSaveSelection() {
-  const body = document.getElementById('noteBodyEditor');
+// Tamanho de fonte e cor (5 cores fixas, ver colorSwatches em
+// buildNoteCardHtml) usam um <select> e botões de swatch — diferente dos
+// botões de formatação acima, o <select> PRECISA ganhar foco pra funcionar
+// (senão o navegador não abre o dropdown nativo), então
+// onmousedown="event.preventDefault()" não é uma opção pra ele: o foco (e,
+// nos navegadores mais rigorosos, a seleção de texto dentro do editor) pode
+// se perder ao clicar nele. Por isso guardamos a última seleção real feita
+// dentro de cada `.note-editor-body` (_neSaveSelectionFor, disparado em
+// mouseup/keyup delegados abaixo) como uma propriedade no PRÓPRIO elemento
+// (`editor._neLastRange`, não uma variável global única — precisa ser
+// por-editor, já que pode haver mais de um editor aberto ao mesmo tempo) e a
+// restauramos (_neRestoreSelectionFor) antes de aplicar o comando — sem
+// isso, escolher um tamanho/cor formataria uma seleção vazia/errada (ou
+// nenhuma).
+function _neSaveSelectionFor(editor) {
   const sel = window.getSelection();
-  if (body && sel && sel.rangeCount && body.contains(sel.anchorNode)) {
-    _neLastRange = sel.getRangeAt(0).cloneRange();
+  if (editor && sel && sel.rangeCount && editor.contains(sel.anchorNode)) {
+    editor._neLastRange = sel.getRangeAt(0).cloneRange();
   }
 }
-function _neRestoreSelection() {
-  const body = document.getElementById('noteBodyEditor');
-  if (!body) return;
-  body.focus();
-  if (_neLastRange) {
+function _neRestoreSelectionFor(editor) {
+  if (!editor) return;
+  editor.focus();
+  if (editor._neLastRange) {
     const sel = window.getSelection();
     sel.removeAllRanges();
-    sel.addRange(_neLastRange);
+    sel.addRange(editor._neLastRange);
   }
 }
-document.getElementById('noteBodyEditor') && document.getElementById('noteBodyEditor').addEventListener('mouseup', _neSaveSelection);
-document.getElementById('noteBodyEditor') && document.getElementById('noteBodyEditor').addEventListener('keyup', _neSaveSelection);
+// Delegados (em vez de um listener fixo por id) porque cada `.note-editor-
+// body` é criado/destruído dinamicamente pelo ciclo de render() — um
+// addEventListener direto no elemento, feito uma única vez no carregamento
+// do script (como na versão anterior, baseada em modal estático), só
+// funcionaria pro PRIMEIRO editor que existisse, nunca mais depois de um
+// render() reconstruir o DOM.
+document.addEventListener('mouseup', ev => {
+  const editor = ev.target.closest && ev.target.closest('.note-editor-body');
+  if (editor) _neSaveSelectionFor(editor);
+});
+document.addEventListener('keyup', ev => {
+  const editor = ev.target.closest && ev.target.closest('.note-editor-body');
+  if (editor) _neSaveSelectionFor(editor);
+});
+// Mantém NOTE_EDIT_DRAFTS (ver comentário acima) sincronizado a cada tecla/
+// edição — é o que protege o texto em andamento de um render() disparado
+// por outro motivo enquanto o usuário ainda está escrevendo/formatando.
+document.addEventListener('input', ev => {
+  const editor = ev.target.closest && ev.target.closest('.note-editor-body');
+  if (editor && editor.dataset.noteDraftKey) {
+    NOTE_EDIT_DRAFTS[editor.dataset.noteDraftKey] = editor.innerHTML;
+  }
+});
 
 // document.execCommand('fontSize', ...) só aceita a escala legada de 1 a 7
 // (sem controle em pixels) — o truque padrão (sem precisar de nenhuma lib)
@@ -960,25 +1002,35 @@ document.getElementById('noteBodyEditor') && document.getElementById('noteBodyEd
 // depois) e então trocar cada <font size="7"> resultante por um `style`
 // inline com o tamanho em px de verdade, removendo o atributo `size`. O
 // próprio <select> volta pro placeholder ("Size") depois de aplicar (ver
-// onchange em index.html), pra poder escolher o MESMO tamanho de novo em
-// seguida sem precisar trocar de opção primeiro.
-function neSetFontSize(px) {
+// onchange em db-render-engine.js), pra poder escolher o MESMO tamanho de
+// novo em seguida sem precisar trocar de opção primeiro.
+function neSetFontSize(selectEl, px) {
   if (!px) return;
-  _neRestoreSelection();
-  document.execCommand('fontSize', false, '7');
-  const body = document.getElementById('noteBodyEditor');
+  const wrap = selectEl.closest('.note-flat-body-editing');
+  const body = wrap && wrap.querySelector('.note-editor-body');
   if (!body) return;
+  _neRestoreSelectionFor(body);
+  document.execCommand('fontSize', false, '7');
   body.querySelectorAll('font[size="7"]').forEach(el => {
     el.removeAttribute('size');
     el.style.fontSize = px + 'px';
   });
 }
-function neSetColor(color) {
-  _neRestoreSelection();
+function neSetColor(el, color) {
+  const wrap = el.closest('.note-flat-body-editing');
+  const body = wrap && wrap.querySelector('.note-editor-body');
+  if (!body) return;
+  _neRestoreSelectionFor(body);
   document.execCommand('foreColor', false, color);
 }
-async function saveNoteEditor() {
-  const bodyEl = document.getElementById('noteBodyEditor');
+// Substitui saveNoteEditor() — salva a nota (nova OU existente) a partir do
+// PRÓPRIO card em edição, localizado pelo id previsível do seu editor
+// (noteEditorEdit_<id> / noteEditorNew_<folderId>, ver buildNoteCardHtml),
+// em vez do antigo #noteBodyEditor fixo do modal.
+async function acceptNoteEdit(noteId, folderId, ev) {
+  if (ev) ev.stopPropagation();
+  const editorId = noteId ? `noteEditorEdit_${noteId}` : `noteEditorNew_${folderId}`;
+  const bodyEl = document.getElementById(editorId);
   const description = bodyEl ? bodyEl.innerHTML : '';
   // "Vazia" = sem texto E sem nenhuma imagem colada — uma nota só com
   // imagem (sem nenhum texto) ainda é válida, então não basta checar se
@@ -991,7 +1043,6 @@ async function saveNoteEditor() {
     return;
   }
   const title = _deriveNoteTitle(description);
-  const folderId = _noteEditorFolderId, noteId = _noteEditorNoteId;
   try {
     const res = noteId
       ? await fetch(`/api/notes/${noteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, description }) })
@@ -1010,16 +1061,23 @@ async function saveNoteEditor() {
       if (!folder.order) folder.order = [];
       if (!folder.order.some(o => o.type === 'note' && o.id === note.id)) folder.order.push({ type: 'note', id: note.id });
     }
-    closeNoteEditorModal();
+    if (noteId) { NOTE_EDIT_MODE.delete(noteId); delete NOTE_EDIT_DRAFTS[`edit:${noteId}`]; }
+    else { if (NOTE_CREATE_FOLDER_ID === folderId) NOTE_CREATE_FOLDER_ID = null; delete NOTE_EDIT_DRAFTS[`create:${folderId}`]; }
     render();
   } catch (e) {
     alert('Failed to save note. Please try again.');
   }
 }
+// Excluir (pedido: "exiba o botão de excluir nota somente quando estiver
+// editando") — só é chamado a partir do botão Delete dentro do modo de
+// edição agora (ver buildNoteCardHtml), mas a lógica de exclusão em si não
+// muda.
 function deleteNoteConfirm(noteId, title, ev) {
   if (ev) ev.stopPropagation();
   openConfirmModal(`Delete note "${title}"? This action cannot be undone.`).then(ok => {
     if (!ok) return;
+    NOTE_EDIT_MODE.delete(noteId);
+    delete NOTE_EDIT_DRAFTS[`edit:${noteId}`];
     FOLDERS.forEach(f => {
       if (f.notes) f.notes = f.notes.filter(n => n.id !== noteId);
       if (f.order) f.order = f.order.filter(o => !(o.type === 'note' && o.id === noteId));
@@ -1065,7 +1123,9 @@ async function cloneNote(noteId, ev) {
 // ponto do cursor como data URI base64 — sem upload nem endpoint próprio de
 // arquivo, a imagem vira parte do próprio HTML da nota. Colar texto normal
 // continua funcionando do jeito padrão do navegador (contenteditable).
-function _neHandlePaste(ev) {
+// `editor` agora é passado explicitamente (delegado, ver listener abaixo) em
+// vez de buscado por id fixo, pelo mesmo motivo de _neSaveSelectionFor.
+function _neHandlePaste(ev, editor) {
   const items = (ev.clipboardData && ev.clipboardData.items) || [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
@@ -1074,14 +1134,13 @@ function _neHandlePaste(ev) {
       const file = item.getAsFile();
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = () => _neInsertImage(reader.result);
+      reader.onload = () => _neInsertImage(reader.result, editor);
       reader.readAsDataURL(file);
       return;
     }
   }
 }
-function _neInsertImage(dataUrl) {
-  const editor = document.getElementById('noteBodyEditor');
+function _neInsertImage(dataUrl, editor) {
   if (!editor) return;
   const img = document.createElement('img');
   img.src = dataUrl;
@@ -1128,20 +1187,34 @@ function _neArmImageResize(img) {
     document.addEventListener('mouseup', onUp);
   });
 }
-// Ao abrir o editor pra EDITAR uma nota existente, as imagens que já
-// estavam na descrição também precisam da alça de redimensionar — só as
-// coladas na hora (via _neInsertImage) ganham isso automaticamente.
+// Ao abrir um editor com conteúdo já existente (nota que já tinha imagens),
+// as imagens que vieram no HTML salvo também precisam da alça de
+// redimensionar — só as coladas na hora (via _neInsertImage) ganham isso
+// automaticamente pelo próprio fluxo de colar.
 function _neArmExistingImages(container) {
   container.querySelectorAll('img').forEach(img => _neArmImageResize(img));
 }
-document.getElementById('noteBodyEditor') && document.getElementById('noteBodyEditor').addEventListener('paste', _neHandlePaste);
-// Antes, clicar fora da caixa (no fundo escuro do overlay) fechava o editor
-// e descartava tudo que o usuário tinha escrito — pedido do usuário: "quando
-// estou editando uma nota ou comando, e clico fora da janela eu perco tudo
-// que tinha feito. mantenha na tela aberta até que eu salve ou feche a
-// janela". Removido o listener de clique-fora-fecha (ver equivalente em
-// js/command-editor.js, mesmo pedido) — agora só fecha via "Cancel"/✕
-// (closeNoteEditorModal(), sem salvar) ou "Save" (saveNoteEditor()).
+document.addEventListener('paste', ev => {
+  const editor = ev.target.closest && ev.target.closest('.note-editor-body');
+  if (editor) _neHandlePaste(ev, editor);
+});
+// Chamado por js/render.js logo depois de reconstruir #out — rearma a alça
+// de redimensionar em TODAS as imagens de TODOS os editores de nota
+// atualmente na tela (existentes ou rascunho novo), já que innerHTML
+// recriou os elementos <img> do zero e qualquer listener anterior neles se
+// perdeu junto. Nome com `_ne` (mesmo prefixo das demais funções de Notes
+// Editor) e `_re` de "rearm", pra não colidir com nada.
+function _neRearmActiveEditors() {
+  document.querySelectorAll('.note-editor-body').forEach(_neArmExistingImages);
+}
+// Antes (modal), clicar fora da caixa fechava o editor e descartava tudo
+// que o usuário tinha escrito — pedido do usuário, em outra ocasião:
+// "quando estou editando uma nota ou comando, e clico fora da janela eu
+// perco tudo que tinha feito. mantenha na tela aberta até que eu salve ou
+// feche a janela". Não existe mais um "fora da caixa" (não há mais overlay
+// modal) — a nota só fecha/descarta via "✕ Cancel" (cancelNoteEdit(), sem
+// salvar) ou "✓ Accept" (acceptNoteEdit()), igual ao padrão de edição de
+// pastas (FOLDER_EDIT_MODE, ver acima).
 
 // Filtra os cards pelo texto digitado no campo de pesquisa (nome, descrição, tags e o
 // próprio texto dos comandos). Roda depois do filtro de pastas, então só esconde

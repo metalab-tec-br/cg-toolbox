@@ -954,22 +954,24 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .cat-delete-btn:hover { border-color: var(--red); color: var(--red); }
 
 /* ─── NOTES (campo único dentro de uma pasta) ─── */
-/* 2º redesign (pedido mais recente: "remova a palavra NOTE, permita o
-   usuário alterar o tamanho da fonte, a cor e alinha para esquerda, centro
-   e direita; deixa a nota em uma caixa branca sem borda do mesmo tamanho
-   da caixa do comando" — reverte o "fundo transparente" do redesign
-   ANTERIOR, ver histórico do git). Continua um bloco ÚNICO — sem cabeçalho/
-   título separado (.note-flat-body abaixo) — mas agora com fundo
-   branco/cinza igual ao comando (var(--surf), mesmo padding) e SEM borda
-   visível (border-color: transparent) em vez de fundo transparente. O
-   badge "Note" foi REMOVIDO (pedido) — a única distinção visual de um
-   comando na mesma seção de pasta passou a ser a ausência de cabeçalho/
-   título, o que é intencional. As ações (clonar/editar/excluir) continuam
-   como mini-toolbar flutuante no canto superior direito, visível só no
-   hover — sem faixa de cabeçalho pra "morarem".
-   Seletor por atributo (`.card[data-note-id]`), NÃO por classe extra — ver
-   comentário em buildNoteCardHtml (js/db-render-engine.js) sobre por que um
-   classname a mais no `.card` quebraria a contagem `cardCount` de
+/* 3º redesign (pedido: "ajuste para que a edição de nota na pasta Folders
+   seja feita na mesma tela, sem abrir o popup") — o antigo
+   #noteEditorOverlay (modal separado) foi removido; editar/criar uma nota
+   agora acontece DENTRO do próprio card, alternando entre um template de
+   visualização (.note-flat-body) e um template de edição (mesma div, classe
+   extra .note-flat-body-editing, com a toolbar de formatação + o
+   contenteditable acima do rótulo/botões — ver buildNoteCardHtml em
+   js/db-render-engine.js e startEditNote()/startCreateNote()/
+   acceptNoteEdit()/cancelNoteEdit() em js/folders.js). Fora de edição, só
+   Clonar/Editar aparecem (mini-toolbar flutuante, hover); Excluir só existe
+   DENTRO do modo de edição, junto de Accept/Cancel — mesmo padrão visual
+   (mesmas classes .sec-folder-pill-btn/.pill-accept/.pill-cancel/.pill-delete)
+   já usado na edição de PASTAS (ver comentário em buildFolderSectionFromCards,
+   js/db-render-engine.js), a pedido do usuário: "Faça igual a edição de
+   pastas com os mesmos botões".
+   Seletor por atributo (`.card[data-note-id]`), NÃO por classe extra no
+   `.card` — ver comentário em buildNoteCardHtml (js/db-render-engine.js)
+   sobre por que um classname a mais aí quebraria a contagem `cardCount` de
    render.js (regex casa `<div class="card"` letra por letra). */
 .card[data-note-id] {
   position: relative; background: var(--surf); border-color: transparent;
@@ -1000,12 +1002,29 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .note-flat-body img { max-width: 100%; height: auto; border-radius: 4px; margin: 4px 0; display: block; }
 .note-flat-body p, .note-flat-body div { margin: 0 0 4px; }
 .note-flat-empty { color: var(--muted); font-style: italic; }
+/* Em edição, não sobra espaço reservado pro mini-toolbar de hover (que some
+   nesse modo — vira o cabeçalho .note-edit-head abaixo) — padding simétrico. */
+.note-flat-body.note-flat-body-editing { padding: 8px 12px 10px; }
+
+/* Cabeçalho fixo (não hover) exibido só durante a edição inline de uma nota
+   — mesmo espírito do cabeçalho de pasta em modo de edição (rótulo à
+   esquerda, botões à direita), pra deixar claro que a nota está "aberta"
+   pra edição mesmo sem passar o mouse em cima. */
+.note-edit-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px 0;
+}
+.note-edit-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .03em; color: var(--muted);
+}
+.note-edit-actions { display: flex; align-items: center; gap: 4px; }
 
 /* Barra de formatação do editor (negrito/itálico/sublinhado/alinhamento,
    ver neExec() em js/folders.js; tamanho de fonte/cor, ver
    neSetFontSize()/neSetColor()) — botões simples, mesmo visual de
-   .edit-btn (borda + fundo --surf), ficam logo acima do #noteBodyEditor. */
-.note-editor-toolbar { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; flex-wrap: wrap; }
+   .edit-btn (borda + fundo --surf), ficam logo acima do .note-editor-body. */
+.note-editor-toolbar { display: flex; align-items: center; gap: 4px; margin: 8px 0 6px; flex-wrap: wrap; }
 .ne-fmt-btn {
   background: var(--surf); border: 1px solid var(--bdr); border-radius: 5px;
   color: var(--text); cursor: pointer; font-size: 11px; line-height: 1;
@@ -1018,29 +1037,36 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 .ne-fmt-sep { width: 1px; height: 18px; background: var(--bdr); margin: 0 2px; }
 /* Select de tamanho de fonte — mesmo visual de .ne-fmt-btn, mas precisa de
    padding lateral menor (o próprio <select> já tem a seta nativa) e altura
-   igual aos outros botões da barra. */
+   igual aos outros botões da barra. Rótulos são os próprios números (px) —
+   pedido do usuário: "mude a descrição do tamanho das fontes para números"
+   (antes eram Small/Normal/Large/X-Large). */
 .ne-fmt-size {
   background: var(--surf); border: 1px solid var(--bdr); border-radius: 5px;
   color: var(--text); cursor: pointer; font-size: 11px; line-height: 1;
   padding: 4px 4px; height: 25px;
 }
 .ne-fmt-size:hover { border-color: var(--teal); }
-/* Input de cor nativo (<input type="color">) — o próprio navegador desenha
-   o swatch; só padroniza tamanho/borda pra combinar com os outros botões. */
-.ne-fmt-color {
-  width: 25px; height: 25px; padding: 1px; border: 1px solid var(--bdr); border-radius: 5px;
-  background: var(--surf); cursor: pointer;
+/* Paleta fixa de 5 cores (pedido do usuário: "na opções de cores deixe
+   apenas preto, verde, azul, amarela e vermelha em ordem alfabética" —
+   ordem alfabética pelo nome em inglês usado no title/tooltip, já que o
+   resto da UI está em inglês: Black, Blue, Green, Red, Yellow) — substitui
+   o <input type="color"> nativo (paleta ilimitada) por swatches simples;
+   cada botão só chama neSetColor(this, '#hex') — ver js/folders.js. */
+.ne-fmt-colors { display: inline-flex; align-items: center; gap: 3px; }
+.ne-fmt-color-swatch {
+  width: 19px; height: 19px; padding: 0; border: 1px solid var(--bdr); border-radius: 5px;
+  cursor: pointer; transition: border-color .12s, transform .12s;
 }
-.ne-fmt-color:hover { border-color: var(--teal); }
+.ne-fmt-color-swatch:hover { border-color: var(--teal); transform: scale(1.1); }
 
-/* Editor de nota (#noteBodyEditor, ver openNoteEditor()/js/folders.js) — um
-   <div contenteditable> em vez de <textarea> pra suportar <img> coladas
-   inline e formatação rica; o placeholder (::before de um elemento vazio)
-   some sozinho no primeiro caractere digitado, mesmo comportamento de um
-   textarea com placeholder normal. */
+/* Editor de nota (.note-editor-body, ver startEditNote()/startCreateNote()
+   em js/folders.js) — um <div contenteditable> em vez de <textarea> pra
+   suportar <img> coladas inline e formatação rica; o placeholder (::before
+   de um elemento vazio) some sozinho no primeiro caractere digitado, mesmo
+   comportamento de um textarea com placeholder normal. */
 .note-editor-body {
-  min-height: 140px; max-height: 360px; overflow-y: auto;
-  background: var(--surf); border: 1px solid var(--bdr); border-radius: 6px;
+  min-height: 100px; max-height: 360px; overflow-y: auto;
+  background: var(--surf2); border: 1px solid var(--bdr); border-radius: 6px;
   padding: 8px 10px; font-size: 12.5px; color: var(--text); line-height: 1.5;
 }
 .note-editor-body:focus { outline: none; border-color: var(--teal); }

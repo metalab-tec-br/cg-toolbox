@@ -449,6 +449,12 @@ async function render() {
   if (VIEW_FOLDERS_HOME && !out.querySelector('.section')) {
     out.insertAdjacentHTML('beforeend', `<div class="empty"><div class="empty-ico">${folderIcon(false, 40)}</div><p>No commands in any folder yet for the current filters.</p></div>`);
   }
+  // Notes (task Notes, 3º redesign): innerHTML acima recriou do zero
+  // qualquer `.note-editor-body` que estivesse em edição — inclusive as
+  // <img> já existentes nele — então as alças de redimensionar (ver
+  // _neArmImageResize em js/folders.js) precisam ser rearmadas depois de
+  // cada render(), senão ficam mortas até o usuário reabrir a nota.
+  if (typeof _neRearmActiveEditors === 'function') _neRearmActiveEditors();
   applySearchFilter();
 }
 
