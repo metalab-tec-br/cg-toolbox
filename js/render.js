@@ -455,6 +455,10 @@ async function render() {
   // _neArmImageResize em js/folders.js) precisam ser rearmadas depois de
   // cada render(), senão ficam mortas até o usuário reabrir a nota.
   if (typeof _neRearmActiveEditors === 'function') _neRearmActiveEditors();
+  // Links em Details/Notes: sempre nova guia + botão de copiar ao lado (ver
+  // enhanceRenderedLinks em js/terminal-renderer.js) — roda depois do
+  // innerHTML acima, senão os <a> ainda nem existem no DOM.
+  if (typeof enhanceRenderedLinks === 'function') enhanceRenderedLinks(out);
   applySearchFilter();
 }
 

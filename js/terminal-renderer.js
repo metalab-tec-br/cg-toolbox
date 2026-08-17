@@ -306,6 +306,51 @@ function copyBtn(text, cmdId) {
   return btn;
 }
 
+// Pedido do usuário: todo link renderizado (Details de comando, Notes em
+// modo de visualização) sempre abre em nova guia, e ganha um botão de copiar
+// logo depois dele (pra copiar a URL sem precisar clicar com o botão direito
+// > copiar link). Como o HTML de details/notes é montado como string solta
+// (sanitizeNoteHtml no server só garante o <a> em si, não sabe nada sobre
+// botão de copiar) e inserido de uma vez via innerHTML (ver out.innerHTML em
+// js/render.js), não dá pra "colocar o botão" na hora de montar a string —
+// os <a> só existem de verdade depois que o innerHTML já foi pro DOM. Por
+// isso isto é um passo de pós-processamento, chamado logo após cada
+// out.innerHTML = ... (ver render()), que varre os <a> já renderizados e:
+// 1) reforça target=_blank/rel=noopener (o server já força isso ao salvar —
+//    ver sanitizeNoteHtml em server/index.js — isto é só um reforço
+//    defensivo caso algum <a> chegue aqui por outro caminho);
+// 2) insere um botão de copiar (reaproveitando _doSingleCopy/_copyToClipboard/
+//    COPY_BTN_ICON já usados nas linhas de comando, mas SEM a máquina de
+//    seleção múltipla — .link-copy-btn é um botão avulso e simples).
+// Escopo: .about-body (Details do comando) e .note-flat-body EM MODO DE
+// VISUALIZAÇÃO — note-flat-body-editing é excluído de propósito, pois lá
+// dentro o link ainda está sendo editado (contenteditable) e o usuário pode
+// querer clicar pra posicionar o cursor, não pra copiar/navegar.
+function enhanceRenderedLinks(root) {
+  const scope = root || document;
+  const links = scope.querySelectorAll('.about-body a, .note-flat-body:not(.note-flat-body-editing) a');
+  links.forEach(a => {
+    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', 'noopener noreferrer');
+    // Evita duplicar o botão se por algum motivo esta função rodar mais de
+    // uma vez sobre o mesmo DOM (normalmente não acontece — render() sempre
+    // recria tudo do zero via innerHTML — mas não custa ser defensivo).
+    if (a.nextElementSibling && a.nextElementSibling.classList.contains('link-copy-btn')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'copy-btn copy-btn-inline link-copy-btn';
+    btn.title = 'Copy link';
+    btn.innerHTML = COPY_BTN_ICON;
+    btn._copyText = a.href;
+    btn.addEventListener('click', ev => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      _doSingleCopy(btn);
+    });
+    a.insertAdjacentElement('afterend', btn);
+  });
+}
+
 // Escape simples para embutir texto (ex.: nomes de usuário) dentro de um atributo
 // HTML comum (title="...") — diferente de jsAttrEscape (query-bar.js), que também
 // escapa aspas simples para sobreviver dentro de um onclick="...('texto')".
