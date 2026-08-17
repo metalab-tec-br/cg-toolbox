@@ -1011,12 +1011,44 @@ function _neCurrentFontSizeAt(editor) {
 // "estilo Word", ver index.html — cmdDetailsEditor). O <select> de tamanho
 // ainda usado nas Notes fica de fora de propósito: continua só "escreve"
 // (escolher aplica), sem refletir o tamanho atual, para não mudar um
-// comportamento que o usuário não pediu para alterar ali.
+// comportamento que o usuário não pediu para alterar ali. Atualiza também o
+// rótulo do botão do dropdown (.ne-fmt-dd-btn-label, ver index.html —
+// tamanho agora fica dentro de um popover, pedido do usuário: "deixe o
+// tamanho e cores em opção dropdown"), quando existir.
 function _neUpdateFontSizeDisplay(editor) {
   const wrap = editor.closest('.note-flat-body-editing');
-  const input = wrap && wrap.querySelector('input.ne-fmt-size');
-  if (input) input.value = _neCurrentFontSizeAt(editor);
+  if (!wrap) return;
+  const input = wrap.querySelector('input.ne-fmt-size');
+  const size = _neCurrentFontSizeAt(editor);
+  if (input) input.value = size;
+  const label = wrap.querySelector('.ne-fmt-dd-btn-label');
+  if (label) label.textContent = size;
 }
+
+// ── Dropdowns de tamanho/cor do toolbar (ver .ne-fmt-dd em index.html) ──
+// Mesmo espírito do toggleFolderMenu() acima (botão e painel resolvidos por
+// proximidade via closest/querySelector, não por id fixo) — necessário aqui
+// porque pode haver mais de um editor de nota aberto na tela ao mesmo tempo
+// (cada um com seu próprio par tamanho/cor), então um id global não serviria.
+function _neToggleFmtDropdown(btn) {
+  const wrap = btn.closest('.ne-fmt-dd');
+  const panel = wrap && wrap.querySelector('.ne-fmt-dd-panel');
+  if (!panel) return;
+  const willOpen = !panel.classList.contains('open');
+  _neCloseFmtDropdowns();
+  panel.classList.toggle('open', willOpen);
+  if (willOpen) {
+    const numInput = panel.querySelector('input[type="number"]');
+    if (numInput) { numInput.focus(); numInput.select(); }
+  }
+}
+function _neCloseFmtDropdowns() {
+  document.querySelectorAll('.ne-fmt-dd-panel.open').forEach(p => p.classList.remove('open'));
+}
+document.addEventListener('click', ev => {
+  if (ev.target.closest('.ne-fmt-dd')) return;
+  _neCloseFmtDropdowns();
+});
 // Mantém NOTE_EDIT_DRAFTS (ver comentário acima) sincronizado a cada tecla/
 // edição — é o que protege o texto em andamento de um render() disparado
 // por outro motivo enquanto o usuário ainda está escrevendo/formatando.
@@ -1041,6 +1073,21 @@ document.addEventListener('input', ev => {
 // um número que o usuário acabou de digitar), e esta função o corrige de
 // volta pro intervalo permitido (8–24) caso ele tenha digitado algo fora
 // da faixa.
+// Bug relatado pelo usuário: "quando seleciono o texto e clico em diminuir o
+// tamanho a seleção está sendo removida. para aumentar dois tamanhos tenho
+// que selecionar duas vezes". Causa: document.execCommand('fontSize') troca
+// o(s) nó(s) de texto selecionado(s) por novos elementos <font> — a Range
+// salva em editor._neLastRange ANTES da troca (pelo mouseup/keyup no editor)
+// passa a apontar pros nós antigos, que não existem mais no DOM depois da
+// troca. Se o usuário aplicar o tamanho de novo em seguida (sem re-selecionar
+// manualmente o texto), _neRestoreSelectionFor tenta restaurar essa Range
+// stale — o navegador não consegue e a seleção visualmente some/fica vazia,
+// então o segundo ajuste não aplica em nada. A correção: depois de trocar os
+// <font size="7"> por spans com o style novo, resseleciona o texto recém-
+// formatado (do início do primeiro elemento afetado ao fim do último) e
+// GRAVA essa Range fresca de volta em _neLastRange — assim tanto a seleção
+// visual quanto um próximo ajuste imediato (aumentar/diminuir de novo sem
+// reselecionar) continuam funcionando corretamente.
 function neSetFontSize(el, px) {
   let n = parseInt(px, 10);
   if (isNaN(n)) return;
@@ -1050,11 +1097,23 @@ function neSetFontSize(el, px) {
   if (!body) return;
   _neRestoreSelectionFor(body);
   document.execCommand('fontSize', false, '7');
-  body.querySelectorAll('font[size="7"]').forEach(f => {
+  const affected = Array.from(body.querySelectorAll('font[size="7"]'));
+  affected.forEach(f => {
     f.removeAttribute('size');
     f.style.fontSize = n + 'px';
   });
+  if (affected.length) {
+    const range = document.createRange();
+    range.setStartBefore(affected[0]);
+    range.setEndAfter(affected[affected.length - 1]);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    _neSaveSelectionFor(body);
+  }
   if (el && el.tagName === 'INPUT') el.value = n;
+  const label = wrap && wrap.querySelector('.ne-fmt-dd-btn-label');
+  if (label) label.textContent = n;
 }
 function neSetColor(el, color) {
   const wrap = el.closest('.note-flat-body-editing');
@@ -1062,6 +1121,16 @@ function neSetColor(el, color) {
   if (!body) return;
   _neRestoreSelectionFor(body);
   document.execCommand('foreColor', false, color);
+  // Fecha o dropdown de cor (se o swatch estiver dentro de um, ver
+  // index.html — pedido do usuário: "deixe... cores em opção dropdown") e
+  // atualiza o preview no botão pra refletir a última cor escolhida, mesmo
+  // padrão de "fechar ao selecionar" já usado nos outros dropdowns do app.
+  const dd = el.closest('.ne-fmt-dd');
+  if (dd) {
+    _neCloseFmtDropdowns();
+    const trigger = dd.querySelector('.ne-fmt-color-trigger-swatch');
+    if (trigger) trigger.style.background = color;
+  }
 }
 // Substitui saveNoteEditor() — salva a nota (nova OU existente) a partir do
 // PRÓPRIO card em edição, localizado pelo id previsível do seu editor

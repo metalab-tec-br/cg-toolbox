@@ -1078,26 +1078,42 @@
               <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'italic')" title="Italic (Ctrl+I)"><i>I</i></button>
               <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'underline')" title="Underline (Ctrl+U)"><u>U</u></button>
               <span class="ne-fmt-sep"></span>
-              <!-- Campo de tamanho de fonte "estilo Word" (pedido do usuário) — em
-                   vez do <select> de valores fixos usado nas Notes, este é um
-                   <input type="number"> (8–24, padrão 12): ao clicar/mover o
-                   cursor dentro do texto o campo mostra o tamanho vigente
-                   naquele ponto (ver _neUpdateFontSizeDisplay em
-                   js/folders.js, disparado pelos listeners de mouseup/keyup
-                   já existentes no editor), e digitar um novo valor + Enter
-                   (ou tirar o foco) aplica no texto selecionado — mesmo
-                   neSetFontSize() das Notes, só que sem o reset de valor no
-                   final (esse reset só é feito no próprio onchange do
-                   <select>, não dentro da função). -->
-              <input type="number" class="ne-fmt-size ne-fmt-size-num" id="cmdDetailsFontSize" min="8" max="24" step="1" value="12" title="Font size"
-                onchange="neSetFontSize(this, this.value)"
-                onkeydown="if(event.key==='Enter'){event.preventDefault(); neSetFontSize(this, this.value); this.blur();}">
-              <span class="ne-fmt-colors" title="Text color">
-                <button type="button" class="ne-fmt-color-swatch" style="background:#000000" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#000000')" title="Black"></button>
-                <button type="button" class="ne-fmt-color-swatch" style="background:#1565c0" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#1565c0')" title="Blue"></button>
-                <button type="button" class="ne-fmt-color-swatch" style="background:#2e7d32" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#2e7d32')" title="Green"></button>
-                <button type="button" class="ne-fmt-color-swatch" style="background:#c62828" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#c62828')" title="Red"></button>
-                <button type="button" class="ne-fmt-color-swatch" style="background:#f9a825" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#f9a825')" title="Yellow"></button>
+              <!-- Tamanho e cor viraram dropdowns (pedido do usuário: "deixe o
+                   tamanho e cores em opção dropdown") em vez de ficarem sempre
+                   visíveis na toolbar — mesmo padrão "botão abre popover, clique
+                   fora fecha" já usado no app (ver toggleFolderMenu em
+                   js/folders.js), só que via .ne-fmt-dd/_neToggleFmtDropdown
+                   (js/folders.js) porque um .dd normal espera um id global único
+                   (toggleDropdown('id')), e aqui pode haver vários editores de
+                   nota abertos ao mesmo tempo (Notes) — cada .ne-fmt-dd resolve
+                   seu próprio painel via closest(), sem precisar de id. -->
+              <span class="ne-fmt-dd">
+                <button type="button" class="ne-fmt-dd-btn" onmousedown="event.preventDefault()" onclick="_neToggleFmtDropdown(this)" title="Font size">
+                  <span class="ne-fmt-dd-btn-label" id="cmdDetailsFontSizeLabel">12</span><span class="ne-fmt-dd-arrow">▾</span>
+                </button>
+                <span class="ne-fmt-dd-panel">
+                  <!-- Campo "estilo Word" (pedido do usuário): ao clicar/mover o
+                       cursor dentro do texto, este campo (e o rótulo do botão
+                       acima) mostram o tamanho vigente naquele ponto (ver
+                       _neUpdateFontSizeDisplay em js/folders.js, disparado pelos
+                       listeners de mouseup/keyup já existentes no editor); digitar
+                       um novo valor (8–24) + Enter aplica no texto selecionado. -->
+                  <input type="number" class="ne-fmt-size ne-fmt-size-num" id="cmdDetailsFontSize" min="8" max="24" step="1" value="12" title="Font size"
+                    onchange="neSetFontSize(this, this.value)"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); neSetFontSize(this, this.value); this.blur(); _neCloseFmtDropdowns();}">
+                </span>
+              </span>
+              <span class="ne-fmt-dd">
+                <button type="button" class="ne-fmt-dd-btn" onmousedown="event.preventDefault()" onclick="_neToggleFmtDropdown(this)" title="Text color">
+                  <span class="ne-fmt-color-trigger-swatch" style="background:#000000"></span><span class="ne-fmt-dd-arrow">▾</span>
+                </button>
+                <span class="ne-fmt-dd-panel ne-fmt-dd-panel-colors">
+                  <button type="button" class="ne-fmt-color-swatch" style="background:#000000" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#000000')" title="Black"></button>
+                  <button type="button" class="ne-fmt-color-swatch" style="background:#1565c0" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#1565c0')" title="Blue"></button>
+                  <button type="button" class="ne-fmt-color-swatch" style="background:#2e7d32" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#2e7d32')" title="Green"></button>
+                  <button type="button" class="ne-fmt-color-swatch" style="background:#c62828" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#c62828')" title="Red"></button>
+                  <button type="button" class="ne-fmt-color-swatch" style="background:#f9a825" onmousedown="event.preventDefault()" onclick="neSetColor(this, '#f9a825')" title="Yellow"></button>
+                </span>
               </span>
               <span class="ne-fmt-sep"></span>
               <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyLeft')" title="Align left">

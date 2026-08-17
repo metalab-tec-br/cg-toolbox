@@ -346,9 +346,14 @@
 #cmdEditorOverlay .set-group-details { flex: 1 1 auto; min-height: 0; }
 #cmdEditorOverlay .set-group-details .note-flat-body-editing {
   flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+  /* width:100% explícito (em vez de confiar só no stretch padrão do flex
+     column pai) — pedido do usuário: "a largura do Details está menor" que
+     Name/Description. box-sizing:border-box já vem do reset global (ver
+     base.css, *{box-sizing:border-box}), repetido aqui só por clareza. */
+  width: 100%; box-sizing: border-box;
 }
 #cmdEditorOverlay .set-group-details .note-editor-body {
-  flex: 1 1 auto; min-height: 0; max-height: none;
+  flex: 1 1 auto; min-height: 0; max-height: none; width: 100%; box-sizing: border-box;
   /* Tamanho padrão 12px (pedido do usuário) — o .note-editor-body
      compartilhado com Notes usa 12.5px; aqui fica exatamente 12, igual ao
      valor inicial do campo de tamanho de fonte (ver index.html) e ao
@@ -1159,6 +1164,37 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
   cursor: pointer; transition: border-color .12s, transform .12s;
 }
 .ne-fmt-color-swatch:hover { border-color: var(--teal); transform: scale(1.1); }
+
+/* Dropdowns de tamanho/cor do Details do editor de comandos (pedido do
+   usuário: "deixe o tamanho e cores em opção dropdown") — ver
+   _neToggleFmtDropdown()/document click-away em js/folders.js. .ne-fmt-dd é
+   o wrapper (position:relative, igual ao .dd padrão), .ne-fmt-dd-btn é o
+   gatilho (mesmo visual de .ne-fmt-btn) e .ne-fmt-dd-panel é o popover que
+   abre embaixo dele — display:none até ganhar .open. */
+.ne-fmt-dd { position: relative; }
+.ne-fmt-dd-btn {
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: 5px;
+  color: var(--text); cursor: pointer; font-size: 11px; line-height: 1;
+  padding: 4px 7px; height: 25px; transition: all .12s;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.ne-fmt-dd-btn:hover { border-color: var(--teal); }
+.ne-fmt-dd-arrow { font-size: 8px; opacity: .6; }
+.ne-fmt-dd-btn-label { min-width: 12px; text-align: center; }
+.ne-fmt-color-trigger-swatch {
+  width: 13px; height: 13px; border-radius: 3px; border: 1px solid var(--bdr);
+}
+.ne-fmt-dd-panel {
+  display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 60;
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: 8px; padding: 6px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.35);
+}
+.ne-fmt-dd-panel.open { display: flex; }
+.ne-fmt-dd-panel-colors { gap: 4px; }
+/* O painel de tamanho reaproveita .ne-fmt-size/.ne-fmt-size-num (mesma caixa
+   do <input> "estilo Word", ver acima) — só precisa de largura um pouco
+   maior aqui dentro do popover, já que não está mais espremido na toolbar. */
+.ne-fmt-dd-panel .ne-fmt-size-num { width: 52px; height: 25px; }
 
 /* Editor de nota (.note-editor-body, ver startEditNote()/startCreateNote()
    em js/folders.js) — um <div contenteditable> em vez de <textarea> pra

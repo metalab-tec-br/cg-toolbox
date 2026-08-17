@@ -619,6 +619,7 @@ function _ceResetForm() {
   // (não recriado) entre uma edição e outra; sem isso o campo continuaria
   // mostrando o último tamanho clicado na edição anterior.
   _ce('cmdDetailsFontSize').value = 12;
+  _ce('cmdDetailsFontSizeLabel').textContent = 12; // rótulo do botão do dropdown (ver index.html)
   _ceSetSingleSeg('cmdVendorSeg', [], 'cmdVendorDDBtn');
   _ceSetSingleSeg('cmdSysSeg', [], 'cmdSysDDBtn');
   _ceSetMultiSeg('cmdVersionsSeg', [], 'cmdVersionsDDBtn', null, 'selected');
@@ -645,6 +646,7 @@ async function _cePopulateForm(id) {
   _ce('cmdDescEmpty').value = row.desc_empty || '';
   _ce('cmdDetailsEditor').innerHTML = row.details || '';
   _ce('cmdDetailsFontSize').value = 12; // mostra o padrão até o usuário clicar no texto (ver _neUpdateFontSizeDisplay)
+  _ce('cmdDetailsFontSizeLabel').textContent = 12;
 
   _ceSetSingleSeg('cmdVendorSeg', row.vendors || [], 'cmdVendorDDBtn');
   _ceSetSingleSeg('cmdSysSeg', row.systems || [], 'cmdSysDDBtn');
