@@ -963,14 +963,13 @@ function neExec(btn, cmd) {
 }
 
 // Tamanho de fonte e cor (5 cores fixas, ver colorSwatches em
-// buildNoteCardHtml) usam um <select> e botões de swatch — diferente dos
-// botões de formatação acima, o <select> PRECISA ganhar foco pra funcionar
-// (senão o navegador não abre o dropdown nativo), então
-// onmousedown="event.preventDefault()" não é uma opção pra ele: o foco (e,
-// nos navegadores mais rigorosos, a seleção de texto dentro do editor) pode
-// se perder ao clicar nele. Por isso guardamos a última seleção real feita
-// dentro de cada `.note-editor-body` (_neSaveSelectionFor, disparado em
-// mouseup/keyup delegados abaixo) como uma propriedade no PRÓPRIO elemento
+// buildNoteCardHtml) usam o mesmo dropdown .ne-fmt-dd (botão + painel de
+// opções, ver index.html/Details) — pedido do usuário: "deixar o menu de
+// formatação em notes de folder igual dos comandos". Como cada opção do
+// dropdown é um botão com onmousedown="event.preventDefault()" (nunca ganha
+// foco), guardamos a última seleção real feita dentro de cada
+// `.note-editor-body` (_neSaveSelectionFor, disparado em mouseup/keyup
+// delegados abaixo) como uma propriedade no PRÓPRIO elemento
 // (`editor._neLastRange`, não uma variável global única — precisa ser
 // por-editor, já que pode haver mais de um editor aberto ao mesmo tempo) e a
 // restauramos (_neRestoreSelectionFor) antes de aplicar o comando — sem
@@ -1026,14 +1025,12 @@ function _neCurrentFontSizeAt(editor) {
   }
   return 12;
 }
-// Atualiza a exibição do tamanho vigente no ponto do cursor: o <select> de
-// tamanho ainda usado nas Notes fica de fora de propósito (continua só
-// "escreve" — escolher aplica, sem refletir o tamanho atual — comportamento
-// que o usuário não pediu para mudar ali); no Details do editor de comandos
-// atualiza o rótulo do botão do dropdown (.ne-fmt-dd-btn-label) e destaca
-// (.on) a opção correspondente na lista de tamanhos pré-definidos (ver
-// .ne-fmt-size-opt em index.html — pedido do usuário: "coloque o menu de
-// tamanho do texto em menu dropdown, estilo da imagem anexa").
+// Atualiza a exibição do tamanho vigente no ponto do cursor: em ambos os
+// editores (Notes e Details do editor de comandos, mesmo dropdown desde o
+// pedido "deixar o menu de formatação em notes de folder igual dos
+// comandos") atualiza o rótulo do botão do dropdown (.ne-fmt-dd-btn-label) e
+// destaca (.on) a opção correspondente na lista de tamanhos pré-definidos
+// (ver .ne-fmt-size-opt em index.html/js/db-render-engine.js).
 // `forceSize`: quando informado, usa esse valor em vez de redetectar via
 // _neCurrentFontSizeAt (ver neSetFontSize abaixo). Necessário porque, logo
 // depois de aplicar um tamanho, a seleção é recriada com setStartBefore/

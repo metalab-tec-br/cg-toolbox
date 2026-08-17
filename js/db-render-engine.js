@@ -498,14 +498,39 @@ function buildNoteCardHtml(note, ownFolder, editing) {
           <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'italic')" title="Italic (Ctrl+I)"><i>I</i></button>
           <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'underline')" title="Underline (Ctrl+U)"><u>U</u></button>
           <span class="ne-fmt-sep"></span>
-          <select class="ne-fmt-size" onchange="neSetFontSize(this, this.value); this.value='';" title="Font size">
-            <option value="">Size</option>
-            <option value="11">11</option>
-            <option value="13">13</option>
-            <option value="17">17</option>
-            <option value="22">22</option>
-          </select>
-          <span class="ne-fmt-colors" title="Text color">${colorSwatches}</span>
+          <!-- Tamanho/cor em dropdown — mesmo padrão do Details do editor de
+               comandos (ver index.html/.ne-fmt-dd), pedido do usuário: "deixar
+               o menu de formatação em notes de folder igual dos comandos".
+               Sem id fixo (diferente do #cmdDetailsFontSizeLabel do Details):
+               pode haver vários editores de nota abertos ao mesmo tempo, e
+               _neToggleFmtDropdown/neSetFontSize/neSetColor/
+               _neUpdateFontSizeDisplay (js/folders.js) já resolvem tudo via
+               closest()/querySelector() a partir do próprio editor, sem
+               precisar de id. -->
+          <span class="ne-fmt-dd">
+            <button type="button" class="ne-fmt-dd-btn" onmousedown="event.preventDefault()" onclick="_neToggleFmtDropdown(this)" title="Font size">
+              <span class="ne-fmt-dd-btn-label">12</span><span class="ne-fmt-dd-arrow">▾</span>
+            </button>
+            <span class="ne-fmt-dd-panel ne-fmt-dd-panel-sizes">
+              <button type="button" class="ne-fmt-size-opt" data-size="8" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 8)">8</button>
+              <button type="button" class="ne-fmt-size-opt" data-size="9" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 9)">9</button>
+              <button type="button" class="ne-fmt-size-opt" data-size="10" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 10)">10</button>
+              <button type="button" class="ne-fmt-size-opt" data-size="11" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 11)">11</button>
+              <button type="button" class="ne-fmt-size-opt on" data-size="12" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 12)">12</button>
+              <button type="button" class="ne-fmt-size-opt" data-size="14" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 14)">14</button>
+              <button type="button" class="ne-fmt-size-opt" data-size="16" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 16)">16</button>
+              <button type="button" class="ne-fmt-size-opt" data-size="18" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 18)">18</button>
+              <button type="button" class="ne-fmt-size-opt" data-size="20" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 20)">20</button>
+              <button type="button" class="ne-fmt-size-opt" data-size="22" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 22)">22</button>
+              <button type="button" class="ne-fmt-size-opt" data-size="24" onmousedown="event.preventDefault()" onclick="neSetFontSize(this, 24)">24</button>
+            </span>
+          </span>
+          <span class="ne-fmt-dd">
+            <button type="button" class="ne-fmt-dd-btn" onmousedown="event.preventDefault()" onclick="_neToggleFmtDropdown(this)" title="Text color">
+              <span class="ne-fmt-color-trigger-swatch" style="background:#000000"></span><span class="ne-fmt-dd-arrow">▾</span>
+            </button>
+            <span class="ne-fmt-dd-panel ne-fmt-dd-panel-colors">${colorSwatches}</span>
+          </span>
           <span class="ne-fmt-sep"></span>
           <button type="button" class="ne-fmt-btn" onmousedown="event.preventDefault()" onclick="neExec(this, 'justifyLeft')" title="Align left">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M1 3h14M1 7h9M1 11h14M1 15h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>

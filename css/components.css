@@ -1151,33 +1151,26 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
 /* Divisor visual entre grupos da toolbar (negrito/itálico/sublinhado |
    tamanho+cor | alinhamento) — só uma linha vertical fininha. */
 .ne-fmt-sep { width: 1px; height: 18px; background: var(--bdr); margin: 0 2px; }
-/* Select de tamanho de fonte — mesmo visual de .ne-fmt-btn, mas precisa de
-   padding lateral menor (o próprio <select> já tem a seta nativa) e altura
-   igual aos outros botões da barra. Rótulos são os próprios números (px) —
-   pedido do usuário: "mude a descrição do tamanho das fontes para números"
-   (antes eram Small/Normal/Large/X-Large). */
-.ne-fmt-size {
-  background: var(--surf); border: 1px solid var(--bdr); border-radius: 5px;
-  color: var(--text); cursor: pointer; font-size: 11px; line-height: 1;
-  padding: 4px 4px; height: 25px;
-}
-.ne-fmt-size:hover { border-color: var(--teal); }
 /* Paleta fixa de 5 cores (pedido do usuário: "na opções de cores deixe
    apenas preto, verde, azul, amarela e vermelha em ordem alfabética" —
    ordem alfabética pelo nome em inglês usado no title/tooltip, já que o
    resto da UI está em inglês: Black, Blue, Green, Red, Yellow) — substitui
    o <input type="color"> nativo (paleta ilimitada) por swatches simples;
-   cada botão só chama neSetColor(this, '#hex') — ver js/folders.js. */
-.ne-fmt-colors { display: inline-flex; align-items: center; gap: 3px; }
+   cada botão só chama neSetColor(this, '#hex') — ver js/folders.js. Usados
+   dentro do dropdown .ne-fmt-dd-panel-colors, tanto em Notes quanto no
+   Details do editor de comandos (mesmo toolbar, ver js/db-render-engine.js/
+   index.html). */
 .ne-fmt-color-swatch {
   width: 19px; height: 19px; padding: 0; border: 1px solid var(--bdr); border-radius: 5px;
   cursor: pointer; transition: border-color .12s, transform .12s;
 }
 .ne-fmt-color-swatch:hover { border-color: var(--teal); transform: scale(1.1); }
 
-/* Dropdowns de tamanho/cor do Details do editor de comandos (pedido do
-   usuário: "deixe o tamanho e cores em opção dropdown") — ver
-   _neToggleFmtDropdown()/document click-away em js/folders.js. .ne-fmt-dd é
+/* Dropdowns de tamanho/cor — compartilhados pelo Details do editor de
+   comandos e pelas Notes de pasta (pedido do usuário: "deixe o tamanho e
+   cores em opção dropdown" / "deixar o menu de formatação em notes de
+   folder igual dos comandos") — ver _neToggleFmtDropdown()/document
+   click-away em js/folders.js. .ne-fmt-dd é
    o wrapper (position:relative, igual ao .dd padrão), .ne-fmt-dd-btn é o
    gatilho (mesmo visual de .ne-fmt-btn) e .ne-fmt-dd-panel é o popover que
    abre embaixo dele — display:none até ganhar .open. */
