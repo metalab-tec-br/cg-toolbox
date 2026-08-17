@@ -946,6 +946,14 @@ body.multi-copy-active .copy-btn:not(.multi-on) { border-style: dashed; border-c
    impedia esse encolhimento. Nomes de pasta comuns (bem menores que os 260px
    de max-width do pop) agora sempre aparecem por inteiro. */
 .folder-menu-name { overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+/* Pedido do usuário (com print anexado): "exiba os nomes da pastas tudo em
+   caixa alta, assim como estão na pasta folders" — a tela de Folders já
+   mostra nomes de pasta em maiúsculas via CSS (.sec-title tem
+   text-transform:uppercase, ver acima), sem alterar o nome de verdade salvo
+   no banco (só uma transformação visual) — aqui é o mesmo tratamento, só que
+   escopado para NÃO alcançar ".folder-menu-new" (o item "+ New folder", que
+   usa a mesma classe .folder-menu-name mas não é o nome de uma pasta). */
+.folder-menu-item:not(.folder-menu-new) .folder-menu-name { text-transform: uppercase; }
 /* Seta (›) de "esta pasta tem subpastas" — empurrada pro fim da linha com
    margin-left:auto (mesmo truque de .wiz-required-note/.sec-folder-actions
    em outras telas), pra sempre ficar colada na borda direita mesmo com nomes
