@@ -1,200 +1,253 @@
 ﻿Name;Description;Details;Vendor;System;Topics;Versions;Environments;Prompt;Exportable;Command
-configuration;Consultar e salvar configuração Gaia;Palavras-chave: interface, IP, link, rede, configuração, auditoria. Quando usar: ao consultar, documentar ou alterar parâmetros do equipamento.;Check Point;Gaia;Configuração;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;Yes;"show configuration
+configuration;Consultar e salvar configuração Gaia;Palavras-chave: Configuração, Gaia, Check Point. Quando usar: consultar e salvar configuração gaia. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Configuração;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;Yes;"show configuration
 show configuration interface
 save config"
-interface;Consultar, incluir, alterar e excluir interface e IP;"Palavras-chave: interface, IP, link, rede, objeto, endereço. Quando usar: em instalação, mudança de IP, link down ou falha de conectividade. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;Interface;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show interfaces
+interface;Gerenciar interfaces e endereços IP;Palavras-chave: Interface, Gaia, Check Point. Quando usar: gerenciar interfaces e endereços ip. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Interface;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show interfaces
 show interface {{interface}}
 set interface {{interface}} state on
 set interface {{interface}} ipv4-address {{src_ip}} mask-length {{prefix}}
 delete interface {{interface}} ipv4-address
 save config"
-vlan;Incluir, alterar e excluir VLAN;"Palavras-chave: interface, IP, link, rede, VLAN, subinterface. Quando usar: em instalação, mudança de IP, link down ou falha de conectividade. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;Interface;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"add interface {{interface}} vlan {{vlan_id}}
+vlan;Gerenciar VLAN;Palavras-chave: Interface, Gaia, Check Point. Quando usar: gerenciar vlan. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Interface;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"add interface {{interface}} vlan {{vlan_id}}
 set interface {{interface}}.{{vlan_id}} ipv4-address {{src_ip}} mask-length {{prefix}}
-delete interface {{interface}} vlan {{vlan_id}}
-save config"
-bonding;Gerenciar bonding;"Palavras-chave: interface, IP, link, rede, bonding, LACP. Quando usar: em instalação, mudança de IP, link down ou falha de conectividade. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;Interface;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"add bonding group {{bond_id}}
+delete interface {{interface}} vlan {{vlan_id}}"
+bonding;Gerenciar bonding;Palavras-chave: Interface, Gaia, Check Point. Quando usar: gerenciar bonding. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Interface;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"add bonding group {{bond_id}}
 set bonding group {{bond_id}} mode {{bond_mode}}
 add bonding group {{bond_id}} interface {{interface}}
-delete bonding group {{bond_id}}
-save config"
-bridge;Gerenciar bridge;"Palavras-chave: interface, IP, link, rede, bridge, camada 2. Quando usar: em instalação, mudança de IP, link down ou falha de conectividade. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;Interface;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"add bridging group {{bridge_id}}
+delete bonding group {{bond_id}}"
+bridge;Gerenciar bridge;Palavras-chave: Interface, Gaia, Check Point. Quando usar: gerenciar bridge. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Interface;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"add bridging group {{bridge_id}}
 add bridging group {{bridge_id}} interface {{interface}}
-delete bridging group {{bridge_id}}
-save config"
-loopback;Gerenciar loopback;"Palavras-chave: interface, IP, link, rede, loopback, IP virtual. Quando usar: em instalação, mudança de IP, link down ou falha de conectividade. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;Interface;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"add interface lo loopback {{loopback_id}}
-set interface lo{{loopback_id}} ipv4-address {{src_ip}} mask-length {{prefix}}
-delete interface lo loopback {{loopback_id}}
-save config"
-route_static;Gerenciar rotas estáticas;"Palavras-chave: rota, gateway, next-hop, objeto, endereço, firewall. Quando usar: quando a rota estiver ausente, incorreta ou o tráfego usar caminho inesperado. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;Roteamento;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show route
+delete bridging group {{bridge_id}}"
+route_static;Gerenciar rota estática;Palavras-chave: Roteamento, Gaia, Check Point. Quando usar: gerenciar rota estática. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Roteamento;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show route
 set static-route {{network}}/{{prefix}} nexthop gateway address {{src_ip}} on
-delete static-route {{network}}/{{prefix}} nexthop gateway address {{src_ip}}
-save config"
-route_policy;Consultar PBR;Palavras-chave: rota, gateway, next-hop, política, regra, acesso. Quando usar: quando a rota estiver ausente, incorreta ou o tráfego usar caminho inesperado.;Check Point;Gaia;Roteamento;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;Yes;"show pbr summary
-show pbr rules
-show pbr tables"
-arp;Consultar e gerenciar ARP;"Palavras-chave: ARP, MAC, vizinhança, objeto, endereço, firewall. Quando usar: em falhas de comunicação local, ARP ou resolução de vizinhança. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;Rede;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show arp dynamic all
+delete static-route {{network}}/{{prefix}} nexthop gateway address {{src_ip}}"
+arp;Consultar e gerenciar ARP;Palavras-chave: Rede, Gaia, Check Point. Quando usar: consultar e gerenciar arp. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Rede;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show arp dynamic all
 add arp static ipv4-address {{src_ip}} macaddress {{mac}}
 delete arp static ipv4-address {{src_ip}}"
-dns;Gerenciar DNS;"Palavras-chave: DNS, resolução de nomes, configuração, auditoria. Quando usar: na implantação ou troubleshooting do serviço. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;Serviço;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show dns
+dns;Gerenciar DNS;Palavras-chave: Serviço, Gaia, Check Point. Quando usar: gerenciar dns. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Serviço;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show dns
 set dns primary {{src_ip}}
 set domainname {{hostname}}
-delete dns primary
-save config"
-ntp;Gerenciar NTP;"Palavras-chave: NTP, horário, sincronismo, configuração, auditoria. Quando usar: na implantação ou troubleshooting do serviço. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;Serviço;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show ntp servers
+delete dns primary"
+ntp;Gerenciar NTP;Palavras-chave: Serviço, Gaia, Check Point. Quando usar: gerenciar ntp. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Serviço;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show ntp servers
 add ntp server {{src_ip}} version {{ntp_version}}
-delete ntp server {{src_ip}}
-save config"
-hostname;Alterar hostname;"Palavras-chave: configuração, auditoria. Quando usar: em manutenção, inventário ou alteração global do equipamento. Cuidado: altera configuração; valide valores, dependências e plano de retorno antes de aplicar.";Check Point;Gaia;Sistema;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show hostname
-set hostname {{hostname}}
-save config"
-timezone;Alterar timezone;"Palavras-chave: configuração, auditoria. Quando usar: em manutenção, inventário ou alteração global do equipamento. Cuidado: altera configuração; valide valores, dependências e plano de retorno antes de aplicar.";Check Point;Gaia;Sistema;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show timezone
-set timezone {{timezone}}
-save config"
-user;Gerenciar usuário local;"Palavras-chave: usuário, acesso, conta, configuração, auditoria. Quando usar: na criação, revisão ou correção de acesso administrativo. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;Usuário;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show users
+delete ntp server {{src_ip}}"
+hostname;Alterar hostname;Palavras-chave: Sistema, Gaia, Check Point. Quando usar: alterar hostname. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Sistema;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show hostname
+set hostname {{hostname}}"
+user;Gerenciar usuário local;Palavras-chave: Usuário, Gaia, Check Point. Quando usar: gerenciar usuário local. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Usuário;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show users
 add user {{user}} uid {{uid}} homedir /home/{{user}}
 set user {{user}} password
-delete user {{user}}
-save config"
-rba_role;Gerenciar role RBA;"Palavras-chave: RBA, permissão, role. Quando usar: na criação, revisão ou correção de acesso administrativo. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;Usuário;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show rba roles
-add rba role {{role}} domain-type System readwritefeatures {{feature}}
-delete rba role {{role}}"
-allowed_client;Gerenciar clientes permitidos;"Palavras-chave: Acesso. Quando usar: na liberação, restrição ou falha de acesso administrativo. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;Acesso;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show allowed-client all
+delete user {{user}}"
+allowed_client;Gerenciar cliente administrativo permitido;Palavras-chave: Acesso, Gaia, Check Point. Quando usar: gerenciar cliente administrativo permitido. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Acesso;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show allowed-client all
 add allowed-client host {{src_ip}}
 delete allowed-client host {{src_ip}}"
-ssh;Gerenciar SSH;"Palavras-chave: configuração, auditoria. Quando usar: na liberação, restrição ou falha de acesso administrativo. Cuidado: altera configuração; valide valores, dependências e plano de retorno antes de aplicar.";Check Point;Gaia;Acesso;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show ssh server
+ssh;Gerenciar SSH;Palavras-chave: Acesso, Gaia, Check Point. Quando usar: gerenciar ssh. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Acesso;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show ssh server
 set ssh server enable
-set ssh server port {{src_port}}
-save config"
-web_ssl_port;Alterar porta do Gaia Portal;"Palavras-chave: configuração, auditoria. Quando usar: na liberação, restrição ou falha de acesso administrativo. Cuidado: altera configuração; valide valores, dependências e plano de retorno antes de aplicar.";Check Point;Gaia;Acesso;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show web ssl-port
-set web ssl-port {{src_port}}
-save config"
-expert_password;Alterar senha Expert;"Palavras-chave: Acesso. Quando usar: na liberação, restrição ou falha de acesso administrativo. Cuidado: altera configuração; valide valores, dependências e plano de retorno antes de aplicar.";Check Point;Gaia;Acesso;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;set expert-password
-snmp;Gerenciar SNMP;"Palavras-chave: SNMP, monitoramento. Quando usar: na integração ou falha de coleta pela ferramenta de monitoramento. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;Monitoramento;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show snmp
+set ssh server port {{src_port}}"
+snmp;Gerenciar SNMP;Palavras-chave: Monitoramento, Gaia, Check Point. Quando usar: gerenciar snmp. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Monitoramento;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show snmp
 set snmp agent on
-add snmp traps receiver {{src_ip}} version v3
-delete snmp traps receiver {{src_ip}}"
-syslog;Gerenciar Syslog;"Palavras-chave: log, registro, SIEM, Syslog, objeto, endereço. Quando usar: quando logs não chegarem, estiverem incompletos ou precisarem ser validados. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;Log;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show syslog all
-add syslog log-remote-address {{src_ip}} level {{severity}}
-delete syslog log-remote-address {{src_ip}}"
-backup;Criar e consultar backup;"Palavras-chave: backup, restauração. Quando usar: antes de mudanças e em procedimentos de recuperação. Cuidado: altera configuração; valide valores, dependências e plano de retorno antes de aplicar.";Check Point;Gaia;Backup;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show backups
+add snmp traps receiver {{src_ip}} version v3"
+syslog;Gerenciar Syslog;Palavras-chave: Log, Gaia, Check Point. Quando usar: gerenciar syslog. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Log;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show syslog all
+add syslog log-remote-address {{src_ip}} level {{severity}}"
+backup;Criar e consultar backup;Palavras-chave: Backup, Gaia, Check Point. Quando usar: criar e consultar backup. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Backup;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show backups
 show backup status
 add backup local"
-snapshot;Criar e consultar snapshot;"Palavras-chave: backup, restauração, snapshot, rollback. Quando usar: antes de mudanças e em procedimentos de recuperação. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;Backup;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show snapshots
+snapshot;Criar e consultar snapshot;Palavras-chave: Backup, Gaia, Check Point. Quando usar: criar e consultar snapshot. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Backup;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show snapshots
 set snapshot name {{hostname}}
 delete snapshot {{hostname}}"
-cpuse;Gerenciar pacotes CPUSE;"Palavras-chave: CPUSE, hotfix, upgrade. Quando usar: durante planejamento, validação ou execução de atualização. Cuidado: pode interromper tráfego, serviços ou alterar o ambiente; execute com autorização, backup e janela de mudança.";Check Point;Gaia;Atualização;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show installer status
+cpuse;Gerenciar pacotes CPUSE;Palavras-chave: Atualização, Gaia, Check Point. Quando usar: gerenciar pacotes cpuse. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Atualização;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"show installer status
 installer verify {{hostname}}
 installer install {{hostname}}
 installer uninstall {{hostname}}"
-license_cplic;Gerenciar licenças locais;"Palavras-chave: licença, contrato, assinatura. Quando usar: para consultar, instalar ou remover licença e contrato. Cuidado: altera configuração; valide valores, dependências e plano de retorno antes de aplicar.";Check Point;Gaia;Licença;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;No;"cplic print
-cplic print -x
+license_cplic;Gerenciar licença local;Palavras-chave: Licença, Gaia, Check Point. Quando usar: gerenciar licença local. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Licença;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;No;"cplic print
 cplic put -l {{license}}
 cplic del {{signature}}
 cplic db_add -l {{license}}
 cplic db_rm {{signature}}"
-license_cp_conf;Gerenciar licenças no Management;"Palavras-chave: licença, contrato, assinatura. Quando usar: para consultar, instalar ou remover licença e contrato. Cuidado: altera configuração; valide valores, dependências e plano de retorno antes de aplicar.";Check Point;Gaia;Licença;R81.10, R81.20, R82, R82.10;Management, MDS, MLM, Standalone;[Expert@MGMT]#;No;"cp_conf lic get
+license_cp_conf;Gerenciar licença no Management;Palavras-chave: Licença, Gaia, Check Point. Quando usar: gerenciar licença no management. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Licença;R81.10, R81.20, R82, R82.10;Management, MDS, MLM, Standalone;[Expert@MGMT]#;No;"cp_conf lic get
 cp_conf lic add -f {{license}}
 cp_conf lic del {{signature}}"
-contract;Consultar contratos;Palavras-chave: contrato, licença. Quando usar: para consultar, instalar ou remover licença e contrato.;Check Point;Gaia;Licença;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"cplic contract print
-cpstat os -f licensing"
-processes_cp;Consultar serviços Check Point;"Palavras-chave: processo, serviço, daemon. Quando usar: na implantação ou troubleshooting do serviço. Cuidado: pode interromper tráfego, serviços ou alterar o ambiente; execute com autorização, backup e janela de mudança.";Check Point;Gaia;Serviço;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"cpwd_admin list
-cpstat -f all
-cpstop
-cpstart"
-policy;Consultar e atualizar política;"Palavras-chave: política, regra, acesso. Quando usar: para validar política instalada ou investigar regra aplicada. Cuidado: pode interromper tráfego, serviços ou alterar o ambiente; execute com autorização, backup e janela de mudança.";Check Point;Gaia;Política;R81.10, R81.20, R82, R82.10;Firewall, Cluster, VSX, Maestro, Standalone;[Expert@FW]#;Yes;"fw stat
-fw fetch {{src_ip}}
-fw unloadlocal"
-connections;Consultar e limpar conexões;"Palavras-chave: conexão, sessão, tabela. Quando usar: para analisar sessões e recriá-las após mudança controlada. Cuidado: pode interromper tráfego, serviços ou alterar o ambiente; execute com autorização, backup e janela de mudança.";Check Point;Gaia;Conexão;R81.10, R81.20, R82, R82.10;Firewall, Cluster, VSX, Maestro, Standalone;[Expert@FW]#;Yes;"fw tab -t connections -s
-fw tab -t connections -x"
-tcpdump;Capturar pacotes;"Palavras-chave: interface, IP, link, rede, tcpdump, captura. Quando usar: quando for necessário confirmar se o pacote chega, sai ou em qual interface passa. Cuidado: pode gerar alto volume ou consumo; aplique filtros, limite a coleta e encerre o debug ao final.";Check Point;Gaia;Captura;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"tcpdump -D
-tcpdump -nni any host {{src_ip}}
-tcpdump -nni {{interface}} host {{src_ip}} and host {{dst_ip}}
-tcpdump -nni {{interface}} host {{src_ip}} and port {{src_port}}"
-fw_monitor;Capturar fluxo no kernel;"Palavras-chave: fw monitor, kernel, captura. Quando usar: quando for necessário confirmar se o pacote chega, sai ou em qual interface passa. Cuidado: pode gerar alto volume ou consumo; aplique filtros, limite a coleta e encerre o debug ao final.";Check Point;Gaia;Captura;R81.10, R81.20, R82, R82.10;Firewall, Cluster, VSX, Maestro, Standalone;[Expert@FW]#;Yes;"fw monitor -F {{src_ip}},0,{{dst_ip}},0,0 -F {{dst_ip}},0,{{src_ip}},0,0
-fw monitor -e ""accept host({{src_ip}});"""
-drop_debug;Analisar drops;"Palavras-chave: debug, troubleshooting, diagnóstico. Quando usar: em troubleshooting avançado, com filtro e tempo de coleta controlado. Cuidado: pode interromper tráfego, serviços ou alterar o ambiente; execute com autorização, backup e janela de mudança.";Check Point;Gaia;Debug;R81.10, R81.20, R82, R82.10;Firewall, Cluster, VSX, Maestro, Standalone;[Expert@FW]#;Yes;"fw ctl zdebug + drop | grep {{src_ip}}
-fw ctl debug 0"
-route_linux;Consultar rota no kernel;Palavras-chave: rota, gateway, next-hop. Quando usar: quando a rota estiver ausente, incorreta ou o tráfego usar caminho inesperado.;Check Point;Gaia;Roteamento;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"ip route show
-ip route get {{src_ip}}
-ip rule show"
-interface_linux;Diagnosticar interface;Palavras-chave: interface, IP, link, rede, objeto, endereço. Quando usar: em instalação, mudança de IP, link down ou falha de conectividade.;Check Point;Gaia;Interface;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"ip -br address show
-ip -s link show {{interface}}
-ethtool {{interface}}"
-diagnostic_network;Testar conectividade;Palavras-chave: rota, gateway, next-hop. Quando usar: em consultas, mudanças ou troubleshooting relacionados ao recurso.;Check Point;Gaia;Troubleshooting;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"ping -c {{count}} {{src_ip}}
-traceroute {{src_ip}}
-curl_cli -vk https://{{hostname}}:{{src_port}}/
-nc -vz {{src_ip}} {{src_port}}"
-system_resources;Consultar recursos;Palavras-chave: CPU, memória, performance. Quando usar: em alta CPU, memória, lentidão ou suspeita de gargalo.;Check Point;Gaia;Performance;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"uptime
-top
-free -m
-df -h"
-cpview;Monitorar performance;Palavras-chave: CPU, memória, performance. Quando usar: em alta CPU, memória, lentidão ou suspeita de gargalo.;Check Point;Gaia;Performance;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"cpview
-cpview -t"
-cpinfo;Coletar diagnóstico;"Palavras-chave: Diagnóstico. Quando usar: na triagem ou coleta para suporte técnico. Cuidado: pode gerar alto volume ou consumo; aplique filtros, limite a coleta e encerre o debug ao final.";Check Point;Gaia;Diagnóstico;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;cpinfo -y all
-hcp;Executar health check;"Palavras-chave: Diagnóstico. Quando usar: na triagem ou coleta para suporte técnico. Cuidado: pode gerar alto volume ou consumo; aplique filtros, limite a coleta e encerre o debug ao final.";Check Point;Gaia;Diagnóstico;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"hcp -r all
-hcp --show-last"
-logs_system;Consultar logs;"Palavras-chave: log, registro, SIEM. Quando usar: quando logs não chegarem, estiverem incompletos ou precisarem ser validados. Cuidado: pode gerar alto volume ou consumo; aplique filtros, limite a coleta e encerre o debug ao final.";Check Point;Gaia;Log;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"tail -f /var/log/messages
-tail -f $CPDIR/log/cpd.elg
-tail -f $FWDIR/log/fwd.elg"
-clusterxl;Consultar ClusterXL;Palavras-chave: ClusterXL, HA, failover, cluster. Quando usar: em falha de sincronismo, estado, interface ou failover.;Check Point;Gaia;Cluster;R81.10, R81.20, R82, R82.10;Cluster, VSX, Maestro;[Expert@FW]#;Yes;"cphaprob stat
-cphaprob -a if
-cphaprob list
-cphaprob syncstat"
-cluster_admin;Alterar estado do membro;"Palavras-chave: ClusterXL, HA, failover. Quando usar: em falha de sincronismo, estado, interface ou failover. Cuidado: pode interromper tráfego, serviços ou alterar o ambiente; execute com autorização, backup e janela de mudança.";Check Point;Gaia;Cluster;R81.10, R81.20, R82, R82.10;Cluster, VSX;[Expert@FW]#;No;"clusterXL_admin down
-clusterXL_admin up"
-securexl;Consultar SecureXL;"Palavras-chave: SecureXL, aceleração, performance. Quando usar: em troubleshooting de offload ou desempenho. Cuidado: pode interromper tráfego, serviços ou alterar o ambiente; execute com autorização, backup e janela de mudança.";Check Point;Gaia;Aceleração;R81.10, R81.20, R82, R82.10;Firewall, Cluster, VSX, Maestro, Standalone;[Expert@FW]#;Yes;"fwaccel stat
-fwaccel stats -s
-fwaccel off
-fwaccel on"
-corexl;Consultar CoreXL;Palavras-chave: CoreXL, CPU, performance. Quando usar: em troubleshooting de offload ou desempenho.;Check Point;Gaia;Aceleração;R81.10, R81.20, R82, R82.10;Firewall, Cluster, VSX, Maestro, Standalone;[Expert@FW]#;Yes;"fw ctl multik stat
-fw ctl affinity -l -r"
-vpn;Consultar VPN;Palavras-chave: VPN, túnel, IPsec. Quando usar: quando o túnel não subir, oscilar ou não transportar tráfego.;Check Point;Gaia;VPN;R81.10, R81.20, R82, R82.10;Firewall, Cluster, VSX, Maestro, Standalone;[Expert@FW]#;Yes;"vpn tu
-vpn tu tlist
-vpn tu del {{src_ip}}
-cpstat vpn -f all"
-vpn_debug;Executar debug VPN;"Palavras-chave: debug, troubleshooting, diagnóstico, VPN, túnel, IPsec. Quando usar: em troubleshooting avançado, com filtro e tempo de coleta controlado. Cuidado: pode interromper tráfego, serviços ou alterar o ambiente; execute com autorização, backup e janela de mudança.";Check Point;Gaia;Debug;R81.10, R81.20, R82, R82.10;Firewall, Cluster, VSX, Maestro, Standalone;[Expert@FW]#;No;"vpn debug ikeon
-vpn debug ikeoff
-vpn debug trunc"
-vsx;Consultar VSX;Palavras-chave: HA, cluster, failover, VSX, Virtual System, VS. Quando usar: ao consultar ou operar um Virtual System específico.;Check Point;Gaia;VSX;R81.10, R81.20, R82, R82.10;VSX;[Expert@FW]#;Yes;"vsx stat -v
+vsx;Consultar e selecionar VSX;Palavras-chave: VSX, Gaia, Check Point. Quando usar: consultar e selecionar vsx. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;VSX;R81.10, R81.20, R82, R82.10;VSX;[Expert@FW]#;Yes;"vsx stat -v
 vsenv {{vs_id}}
 cphaprob -vs {{vs_id}} state"
-virtual_system;Selecionar Virtual System;"Palavras-chave: VSX, Virtual System, VS. Quando usar: ao consultar ou operar um Virtual System específico. Cuidado: altera configuração; valide valores, dependências e plano de retorno antes de aplicar.";Check Point;Gaia;VSX;R81.10, R81.20, R82, R82.10;VSX;[Clish]>;No;"show virtual-system all
-set virtual-system {{vs_id}}"
-mds;Consultar MDS;"Palavras-chave: MDS, domínio, CMA. Quando usar: ao consultar ou operar domínio/CMA no MDS. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;MDS;R81.10, R81.20, R82, R82.10;MDS;[Expert@MDS]#;Yes;"mdsstat
-mdsenv {{hostname}}
-mdsstop
-mdsstart"
-management_api;Controlar Management API;"Palavras-chave: Management, API, automação. Quando usar: em automação, consulta ou alteração via API. Cuidado: inclui alteração, remoção ou limpeza; confirme o objeto e o impacto antes de executar.";Check Point;Gaia;API;R81.10, R81.20, R82, R82.10;Management, MDS, Standalone;[Expert@MGMT]#;Yes;"api status
+mds;Consultar MDS e selecionar domínio;Palavras-chave: MDS, Gaia, Check Point. Quando usar: consultar mds e selecionar domínio. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;MDS;R81.10, R81.20, R82, R82.10;MDS, Multi-Domain;[Expert@MDS]#;Yes;"mdsstat
+mdsenv {{hostname}}"
+management_api;Controlar Management API;Palavras-chave: API, Gaia, Check Point. Quando usar: controlar management api. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;API;R81.10, R81.20, R82, R82.10;Management, MDS, Multi-Domain, Standalone;[Expert@MGMT]#;Yes;"api status
 api start
 api stop
 api restart"
-management_cli;Operar Management API;"Palavras-chave: usuário, acesso, conta, log, registro, SIEM. Quando usar: em automação, consulta ou alteração via API. Cuidado: pode interromper tráfego, serviços ou alterar o ambiente; execute com autorização, backup e janela de mudança.";Check Point;Gaia;API;R81.10, R81.20, R82, R82.10;Management, MDS, Standalone;[Expert@MGMT]#;No;"mgmt_cli login -u {{user}}
+management_cli;Operar Management API;Palavras-chave: API, Gaia, Check Point. Quando usar: operar management api. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;API;R81.10, R81.20, R82, R82.10;Management, MDS, Multi-Domain, Standalone;[Expert@MGMT]#;No;"mgmt_cli login -u {{user}}
 mgmt_cli show gateways-and-servers
-mgmt_cli add host name {{hostname}} ip-address {{src_ip}}
 mgmt_cli publish
 mgmt_cli logout"
-log_connection;Consultar conexão de logs;Palavras-chave: conexão, sessão, tabela, log, registro, SIEM. Quando usar: quando logs não chegarem, estiverem incompletos ou precisarem ser validados.;Check Point;Gaia;Log;R81.10, R81.20, R82, R82.10;Firewall, Cluster, VSX, Maestro, Standalone;[Expert@FW]#;Yes;"cpstat fw -f log_connection
+log_connection;Consultar conexão de logs;Palavras-chave: Log, Gaia, Check Point. Quando usar: consultar conexão de logs. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Log;R81.10, R81.20, R82, R82.10;Firewall, Maestro, VSX, Cluster, Standalone;[Expert@FW]#;Yes;"cpstat fw -f log_connection
 cpwd_admin list | grep -E ""fwd|cplogd"""
-log_exporter;Controlar Log Exporter;Palavras-chave: log, registro, SIEM. Quando usar: quando logs não chegarem, estiverem incompletos ou precisarem ser validados.;Check Point;Gaia;Log;R81.10, R81.20, R82, R82.10;Management, MDS, MLM, Standalone;[Expert@MGMT]#;Yes;"cp_log_export show
+log_exporter;Controlar Log Exporter;Palavras-chave: Log, Gaia, Check Point. Quando usar: controlar log exporter. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Log;R81.10, R81.20, R82, R82.10;Management, MDS, Multi-Domain, MLM, Standalone;[Expert@MGMT]#;Yes;"cp_log_export show
 cp_log_export status
 cp_log_export restart name {{hostname}}"
-sic;Consultar e redefinir SIC;"Palavras-chave: SIC. Quando usar: quando policy install, trust ou comunicação com o Management falhar. Cuidado: pode interromper tráfego, serviços ou alterar o ambiente; execute com autorização, backup e janela de mudança.";Check Point;Gaia;SIC;R81.10, R81.20, R82, R82.10;Firewall, Cluster, VSX, Maestro, Standalone;[Expert@FW]#;No;"cp_conf sic state
+sic;Consultar e redefinir SIC;Palavras-chave: SIC, Gaia, Check Point. Quando usar: consultar e redefinir sic. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;SIC;R81.10, R81.20, R82, R82.10;Firewall, Maestro, VSX, Cluster, Standalone;[Expert@FW]#;No;"cp_conf sic state
 cp_conf sic init {{signature}}"
-dynamic_objects;Gerenciar Dynamic Objects;"Palavras-chave: Objeto. Quando usar: na criação, ajuste ou remoção de objetos usados em políticas. Cuidado: pode interromper tráfego, serviços ou alterar o ambiente; execute com autorização, backup e janela de mudança.";Check Point;Gaia;Objeto;R81.10, R81.20, R82, R82.10;Firewall, Cluster, VSX, Maestro, Standalone;[Expert@FW]#;No;"dynamic_objects -l
+dynamic_objects;Gerenciar Dynamic Objects;Palavras-chave: Objeto, Gaia, Check Point. Quando usar: gerenciar dynamic objects. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Objeto;R81.10, R81.20, R82, R82.10;Firewall, Maestro, VSX, Cluster, Standalone;[Expert@FW]#;No;"dynamic_objects -l
 dynamic_objects -n {{hostname}} -r {{start_ip}} {{end_ip}} -a
 dynamic_objects -o {{hostname}} -r {{start_ip}} {{end_ip}} -d"
-maestro_status;Consultar Maestro;Palavras-chave: Maestro, Security Group, SGM. Quando usar: ao validar Security Group, SGM ou estado do Maestro.;Check Point;Gaia;Maestro;R81.10, R81.20, R82, R82.10;Maestro;[Expert@SG]#;Yes;"orch_stat
+maestro_status;Consultar Maestro;Palavras-chave: Maestro, Gaia, Check Point. Quando usar: consultar maestro. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Maestro;R81.10, R81.20, R82, R82.10;Maestro;[Expert@SG]#;Yes;"orch_stat
 asg monitor
-asg stat -v
-show smo state"
-maestro_gclish;Operar Security Group em gClish;"Palavras-chave: interface, IP, link, rede, Maestro, Security Group. Quando usar: ao validar Security Group, SGM ou estado do Maestro. Cuidado: altera configuração; valide valores, dependências e plano de retorno antes de aplicar.";Check Point;Gaia;Maestro;R81.10, R81.20, R82, R82.10;Maestro;[gClish]>;No;"show security-groups
+asg stat -v"
+maestro_gclish;Operar gClish no Security Group;Palavras-chave: Maestro, Gaia, Check Point. Quando usar: operar gclish no security group. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Maestro;R81.10, R81.20, R82, R82.10;Maestro;[gClish]>;No;"show security-groups
 set security-group {{sg_id}}
 show interfaces
 save config"
-maestro_member;Acessar membro Maestro;Palavras-chave: Maestro, Security Group, SGM. Quando usar: ao validar Security Group, SGM ou estado do Maestro.;Check Point;Gaia;Maestro;R81.10, R81.20, R82, R82.10;Maestro;[Expert@SG]#;No;"m {{member_id}}
-m {{sg_id}} {{member_id}}
-g_all ""{{command}}"""
-files;Consultar arquivos;Palavras-chave: Arquivo. Quando usar: em consultas, mudanças ou troubleshooting relacionados ao recurso.;Check Point;Gaia;Arquivo;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"ls -lah {{path}}
-find {{path}} -name ""{{pattern}}"""
-reboot_shutdown;Reiniciar ou desligar Gaia;"Palavras-chave: HA, cluster, failover. Quando usar: em manutenção, inventário ou alteração global do equipamento. Cuidado: pode interromper tráfego, serviços ou alterar o ambiente; execute com autorização, backup e janela de mudança.";Check Point;Gaia;Sistema;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"reboot
+system_resources;Consultar CPU memória e disco;Palavras-chave: Performance, Gaia, Check Point. Quando usar: consultar cpu memória e disco. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Performance;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"uptime
+top
+free -m
+df -h"
+reboot_shutdown;Reiniciar ou desligar Gaia;Palavras-chave: Sistema, Gaia, Check Point. Quando usar: reiniciar ou desligar gaia. Cuidado: valide contexto, parâmetros e impacto antes de executar alterações.;Check Point;Gaia;Sistema;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Clish]>;No;"reboot
 halt"
+tcpdump;Captura de pacotes em interfaces Gaia;"Palavras-chave: tcpdump, captura, pacote, interface, host, porta, protocolo, rede. Quando usar: confirmar se o tráfego chega ou sai do Gaia e identificar interface, IP ou porta. Cuidado: aplique filtros e limite a duração; captura ampla pode elevar CPU e gerar grande volume.";Check Point;Gaia;Captura;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"tcpdump -D
+tcpdump -nni any
+tcpdump -nni {{interface}}
+tcpdump -nni any host {{src_ip}}
+tcpdump -nni {{interface}} host {{src_ip}}
+tcpdump -nni {{interface}} host {{src_ip}} and host {{dst_ip}}
+tcpdump -nni {{interface}} src host {{src_ip}}
+tcpdump -nni {{interface}} dst host {{src_ip}}
+tcpdump -nni {{interface}} port {{src_port}}
+tcpdump -nni {{interface}} src port {{src_port}}
+tcpdump -nni {{interface}} dst port {{src_port}}
+tcpdump -nni {{interface}} host {{src_ip}} and port {{src_port}}
+tcpdump -nni {{interface}} tcp and port {{src_port}}
+tcpdump -nni {{interface}} udp and port {{src_port}}
+tcpdump -nni {{interface}} icmp
+tcpdump -nni {{interface}} arp
+tcpdump -nni {{interface}} net {{network}}/{{prefix}}
+tcpdump -nni {{interface}} host {{src_ip}} and \( port {{src_port}} or port {{dst_port}} \)
+tcpdump -nni {{interface}} not host {{src_ip}}
+tcpdump -nni {{interface}} -c {{count}}
+tcpdump -nni {{interface}} -s 0 -vvv
+tcpdump -nni {{interface}} -e
+tcpdump -nnr {{hostname}}.pcap"
+fw_monitor;Captura de tráfego nos pontos de inspeção do kernel;"Palavras-chave: fw monitor, INSPECT, kernel, iIoO, NAT, policy, SecureXL, VSX. Quando usar: comparar fluxo antes e depois da inspeção, validar NAT, policy e caminho interno. Cuidado: só uma instância pode executar por vez; use filtros e contadores em tráfego alto.";Check Point;Gaia;Captura;R81.10, R81.20, R82, R82.10;Firewall, Maestro, VSX, Cluster, Standalone;[Expert@FW]#;Yes;"fw monitor -h
+fw monitor
+fw monitor -F ""{{src_ip}},0,{{dst_ip}},0,0"" -F ""{{dst_ip}},0,{{src_ip}},0,0""
+fw monitor -F ""{{src_ip}},{{src_port}},{{dst_ip}},{{dst_port}},{{protocol}}"" -F ""{{dst_ip}},{{dst_port}},{{src_ip}},{{src_port}},{{protocol}}""
+fw monitor -e ""accept host({{src_ip}});""
+fw monitor -e ""accept host({{src_ip}}) and host({{dst_ip}});""
+fw monitor -e ""accept host({{src_ip}}) and port({{src_port}});""
+fw monitor -e ""accept (host({{src_ip}}) and port({{src_port}}));""
+fw monitor -H ""{{src_ip}}""
+fw monitor -ci {{count}} -co {{count}}
+fw monitor -m iIoO
+fw monitor -p all
+fw monitor -p all -a
+fw monitor -v {{vs_id}}
+fw monitor -l {{length}}
+fw monitor -T
+fw monitor -U
+fw6 monitor -H ""{{src_ip}}"""
+cppcap;Captura otimizada com CPPCAP;"Palavras-chave: cppcap, PCAP, captura, SecureXL, interface, rotação, direção. Quando usar: captura em gateway com menor sobrecarga que tcpdump e visibilidade de tráfego acelerado. Cuidado: filtre interface, direção, quantidade e tamanho; em Maestro execute no contexto do SGM aplicável.";Check Point;Gaia;Captura;R81.10, R81.20, R82, R82.10;Firewall, Maestro, VSX, Cluster, Standalone;[Expert@FW]#;Yes;"cppcap -h
+cppcap -i {{interface}} -f ""host {{src_ip}}""
+cppcap -i {{interface}} -f ""host {{src_ip}} and host {{dst_ip}}""
+cppcap -i {{interface}} -f ""host {{src_ip}} and port {{src_port}}""
+cppcap -i {{interface}} -d in -f ""host {{src_ip}}""
+cppcap -i {{interface}} -d out -f ""host {{src_ip}}""
+cppcap -I {{interface}} -f ""host {{src_ip}}""
+cppcap -p {{count}} -c 0 -i {{interface}} -f ""host {{src_ip}}""
+cppcap -N -i {{interface}} -f ""host {{src_ip}}""
+cppcap -D -i {{interface}} -f ""host {{src_ip}}""
+cppcap -v {{vs_id}} -i {{interface}} -f ""host {{src_ip}}"""
+drop_debug;Análise rápida de drops e mensagens do kernel;"Palavras-chave: fw ctl zdebug, drop, kernel, bloqueio, spoofing, policy, NAT. Quando usar: descobrir rapidamente a razão de descarte de um IP ou fluxo. Cuidado: saída pode ser intensa; filtre por IP e execute por período curto.";Check Point;Gaia;Debug;R81.10, R81.20, R82, R82.10;Firewall, Maestro, VSX, Cluster, Standalone;[Expert@FW]#;Yes;"fw ctl zdebug drop
+fw ctl zdebug + drop
+fw ctl zdebug drop | grep {{src_ip}}
+fw ctl zdebug + drop | grep {{src_ip}}
+fw ctl zdebug + drop | grep -E ""{{src_ip}}|{{dst_ip}}""
+fw ctl zdebug + conn | grep {{src_ip}}
+fw ctl zdebug + packet | grep {{src_ip}}
+fw ctl zdebug + xlate | grep {{src_ip}}"
+kernel_debug;Preparar, executar, verificar e encerrar kernel debug;"Palavras-chave: fw ctl debug, kdebug, kernel, módulo, flag, buffer, TAC. Quando usar: troubleshooting avançado com módulo e flags definidos pelo procedimento ou TAC. Cuidado: pode causar alto consumo e gerar dados sensíveis; use janela, filtro, tempo curto e sempre finalize com fw ctl debug 0.";Check Point;Gaia;Debug;R81.10, R81.20, R82, R82.10;Firewall, Maestro, VSX, Cluster, Standalone;[Expert@FW]#;Yes;"fw ctl debug 0
+fw ctl debug -buf 8200
+fw ctl debug -m fw
+fw ctl debug -m fw + conn drop
+fw ctl debug -m fw + conn drop vm nat xlate xltrc
+fw ctl debug -m cluster + all
+fw ctl debug -m fw + sync
+fw ctl debug -m CPAS + sync
+fw ctl kdebug -T -f
+fw ctl debug 0"
+fw_ctl;Consultas operacionais do kernel Firewall;"Palavras-chave: fw ctl, chain, pstat, iflist, conntab, kernel, interface. Quando usar: mapear módulos, interfaces internas, memória e estado do kernel durante troubleshooting. Cuidado: comandos de consulta são seguros; evite subcomandos de alteração sem procedimento aprovado.";Check Point;Gaia;Diagnóstico;R81.10, R81.20, R82, R82.10;Firewall, Maestro, VSX, Cluster, Standalone;[Expert@FW]#;Yes;"fw ctl pstat
+fw ctl iflist
+fw ctl chain
+fw ctl multik stat
+fw ctl affinity -l -r
+fw ctl conntab
+fw ctl get int {{hostname}} -a"
+connections;Consultar e limpar tabelas de conexões;"Palavras-chave: connections, fw tab, conntab, sessão, kernel, NAT. Quando usar: validar quantidade, conteúdo e comportamento de sessões após policy ou NAT. Cuidado: limpeza interrompe sessões ativas; aplique somente com autorização e impacto conhecido.";Check Point;Gaia;Conexão;R81.10, R81.20, R82, R82.10;Firewall, Maestro, VSX, Cluster, Standalone;[Expert@FW]#;Yes;"fw tab -t connections -s
+fw tab -t connections -f
+fw tab -t connections -u
+fw ctl conntab
+fw tab -t connections -x"
+securexl;Consultar e controlar SecureXL;"Palavras-chave: SecureXL, fwaccel, aceleração, offload, templates, conexão, performance. Quando usar: validar tráfego acelerado, taxa de offload e troubleshooting de desempenho. Cuidado: fwaccel off reduz desempenho e pode impactar produção; use por tempo curto e reative ao final.";Check Point;Gaia;Aceleração;R81.10, R81.20, R82, R82.10;Firewall, Maestro, VSX, Cluster, Standalone;[Expert@FW]#;Yes;"fwaccel stat
+fwaccel stats -s
+fwaccel conns
+fwaccel conns -s
+fwaccel templates
+fwaccel dos stats
+fwaccel off
+fwaccel on"
+corexl;Consultar CoreXL e afinidades;Palavras-chave: CoreXL, SND, FWK, CPU, affinity, multik, performance. Quando usar: investigar distribuição de carga, instâncias Firewall e afinidade de CPU. Cuidado: comandos de alteração de afinidade exigem dimensionamento e procedimento aprovado.;Check Point;Gaia;Aceleração;R81.10, R81.20, R82, R82.10;Firewall, Maestro, VSX, Cluster, Standalone;[Expert@FW]#;Yes;"fw ctl multik stat
+fw ctl affinity -l -r
+fw ctl affinity -l
+fw ctl multik print_heavy_conn
+cpstat os -f cpu"
+clusterxl;Consultar estado e sincronismo ClusterXL;Palavras-chave: ClusterXL, cphaprob, sync, interface, PNOTE, Active, Standby, failover. Quando usar: membro Down ou Ready, perda de sincronismo, interface crítica ou validação pré e pós-mudança. Cuidado: comandos clusterXL_admin, cphastop e cphastart podem provocar failover ou perda de redundância.;Check Point;Gaia;Cluster;R81.10, R81.20, R82, R82.10;Cluster, VSX, Maestro;[Expert@FW]#;Yes;"cphaprob stat
+cphaprob -a if
+cphaprob list
+cphaprob syncstat
+cphaprob mmagic
+cphaprob state
+clusterXL_admin down
+clusterXL_admin up
+cphastop
+cphastart"
+vpn;Consultar túneis e estado VPN;Palavras-chave: VPN, IPsec, IKE, túnel, SA, peer, comunidade. Quando usar: túnel não sobe, oscila, não trafega ou precisa remover SA específica. Cuidado: exclusão de túnel força renegociação e pode interromper tráfego.;Check Point;Gaia;VPN;R81.10, R81.20, R82, R82.10;Firewall, Maestro, VSX, Cluster, Standalone;[Expert@FW]#;Yes;"vpn tu
+vpn tu tlist
+vpn tu del {{src_ip}}
+vpn show_tcpt
+vpn shell show tunnels ipsec all
+cpstat vpn -f all"
+vpn_debug;Executar e encerrar debug de VPN e IKE;"Palavras-chave: vpn debug, IKE, IPsec, proposal, PSK, certificado, peer. Quando usar: falha de negociação, proposal mismatch, autenticação, NAT-T ou DPD. Cuidado: debug gera alto volume e informações sensíveis; reproduza uma vez, desligue e limpe ao final.";Check Point;Gaia;Debug;R81.10, R81.20, R82, R82.10;Firewall, Maestro, VSX, Cluster, Standalone;[Expert@FW]#;Yes;"vpn debug trunc
+vpn debug ikeon
+vpn debug ikeoff
+vpn debug on
+vpn debug off
+vpn debug trunc"
+policy;Consultar, buscar e descarregar política;"Palavras-chave: fw stat, policy, fetch, unload, instalação, gateway. Quando usar: confirmar política instalada, buscar policy do Management ou troubleshooting de instalação. Cuidado: fw unloadlocal remove a política carregada e altera a proteção; use somente em procedimento aprovado.";Check Point;Gaia;Política;R81.10, R81.20, R82, R82.10;Firewall, Maestro, VSX, Cluster, Standalone;[Expert@FW]#;Yes;"fw stat
+fw stat -l
+fw fetch {{src_ip}}
+fw unloadlocal"
+logs_system;Consultar logs do sistema e processos;"Palavras-chave: messages, cpd.elg, fwd.elg, logs, daemon, erro, kernel. Quando usar: correlacionar falha de serviço, SIC, policy, logging ou sistema operacional. Cuidado: tail contínuo pode produzir alto volume; use grep e encerre após a coleta.";Check Point;Gaia;Log;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"tail -f /var/log/messages
+tail -f $CPDIR/log/cpd.elg
+tail -f $FWDIR/log/fwd.elg
+less $CPDIR/log/cpd.elg
+less $FWDIR/log/fwd.elg
+grep -i ""{{pattern}}"" /var/log/messages
+dmesg | tail -n {{lines}}"
+processes_cp;Consultar e controlar processos Check Point;"Palavras-chave: cpwd_admin, cpstat, cpstart, cpstop, daemon, serviço, processo. Quando usar: serviço parado, componente não responde ou validação após manutenção. Cuidado: cpstop interrompe serviços Check Point e pode derrubar tráfego ou gerenciamento; use em janela aprovada.";Check Point;Gaia;Serviço;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"cpwd_admin list
+cpstat -f all
+cpstat os
+cpstat fw
+cpstop
+cpstart"
+route_linux;Consultar rota, regra e vizinhança no kernel Linux;"Palavras-chave: ip route, route get, ip rule, neighbor, gateway, interface. Quando usar: identificar caminho efetivo, interface de saída e next-hop. Cuidado: use estes comandos para consulta; configuração persistente deve ser feita em Gaia Clish.";Check Point;Gaia;Roteamento;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"ip route show
+ip route get {{src_ip}}
+ip rule show
+ip neigh show
+netstat -rn"
+diagnostic_network;Testes de conectividade e serviço;Palavras-chave: ping, traceroute, curl_cli, nc, telnet, DNS, porta, TLS. Quando usar: validar alcance IP, caminho, porta TCP, resolução e resposta HTTPS. Cuidado: não use testes repetitivos ou volumosos em produção.;Check Point;Gaia;Troubleshooting;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"ping -c {{count}} {{src_ip}}
+traceroute {{src_ip}}
+curl_cli -vk https://{{hostname}}:{{src_port}}/
+nc -vz {{src_ip}} {{src_port}}
+telnet {{src_ip}} {{src_port}}
+nslookup {{hostname}}"
+cpinfo;Coletar informações para suporte;"Palavras-chave: cpinfo, TAC, diagnóstico, versão, configuração, suporte. Quando usar: abertura ou atualização de chamado e coleta de baseline técnico. Cuidado: a saída pode conter informações sensíveis; armazene e compartilhe apenas por canal autorizado.";Check Point;Gaia;Diagnóstico;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"cpinfo -y all
+cpinfo -d -D -i"
+hcp;Executar HealthCheck Point;Palavras-chave: HCP, health check, TAC, saúde, diagnóstico, relatório. Quando usar: triagem ampla ou preparação de evidências para suporte. Cuidado: revise espaço, duração e sensibilidade do relatório.;Check Point;Gaia;Diagnóstico;R81.10, R81.20, R82, R82.10;Firewall, Management, Maestro, Multi-Domain, VSX, Cluster, Standalone, MDS, MLM;[Expert@FW]#;Yes;"hcp -r all
+hcp --show-last"
