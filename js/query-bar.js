@@ -541,6 +541,21 @@ function currentTypedFieldFragment() {
   if (raw.includes(':')) return '';
   return raw.trim().toLowerCase();
 }
+// Bug reportado: "ao digitar src ele trazia os parametro que continham src e
+// eu selecionava um... isso parou de funcionar" — desde que os 8 parâmetros
+// fixos ganharam sua própria linha sempre visível (CPQ_FIXED_PARAM_ORDER, ver
+// js/catalogs.js), a lista completa (#cpqChipsOthers) passou a ficar
+// escondida por padrão, só abrindo com um clique manual em "Others:"
+// (toggleQueryOthersPanel). Isso quebrou o comportamento original pedido pelo
+// próprio usuário (ver comentário de currentTypedFieldFragment acima: "ao
+// digitar src deve trazer src_ip e src_port") — digitar sozinho não abre mais
+// nada, então o typeahead corria escondido atrás de um painel fechado. Fix:
+// abrir o painel "Others" automaticamente assim que houver texto digitado
+// (fragmento de nome de campo, sem ':' ainda), e fechá-lo de novo quando o
+// campo esvaziar — mas só se foi ESTE código quem abriu (a flag
+// _othersAutoOpenedByTyping evita fechar um "Others" que o usuário tenha
+// aberto manualmente clicando no rótulo).
+let _othersAutoOpenedByTyping = false;
 function applyQueryChipsFilter() {
   // A linha fixa (#cpqChips, 8 parâmetros + "Others:") é sempre visível — não
   // entra no typeahead (pedido do usuário: esses ficam "fixos"). Só a lista
@@ -548,8 +563,20 @@ function applyQueryChipsFilter() {
   // — o antigo filtro por "parâmetros realmente usados pelos comandos
   // visíveis" foi removido (pedido do usuário: simplificar, mostrar sempre
   // todos os parâmetros cadastrados dentro de Others).
-  const chips = document.querySelectorAll('#cpqChipsOthers .cpq-chip');
+  const othersPanel = document.getElementById('cpqChipsOthers');
   const typed = currentTypedFieldFragment();
+  if (othersPanel) {
+    if (typed) {
+      if (!othersPanel.classList.contains('open')) {
+        othersPanel.classList.add('open');
+        _othersAutoOpenedByTyping = true;
+      }
+    } else if (_othersAutoOpenedByTyping) {
+      othersPanel.classList.remove('open');
+      _othersAutoOpenedByTyping = false;
+    }
+  }
+  const chips = document.querySelectorAll('#cpqChipsOthers .cpq-chip');
   let anyVisible = false;
   chips.forEach(chip => {
     // Casa tanto pelo nome técnico do campo (data-field, ex.: "src_ip")
