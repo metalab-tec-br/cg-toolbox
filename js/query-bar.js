@@ -175,7 +175,19 @@ function updateQueryClearBtn() {
 // continuam síncronos (baratos, só refletem o texto/tags na tela); só o
 // render() em si (caro, cresce com o total de comandos) é postergado.
 let _queryInputDebounceTimer = null;
+// Bug reportado: "após informar um parametro e pressionar enter, estou
+// clicando na linha ou digitando algo mas os parametros não estão sendo
+// exibidos. preciso clicar fora da linha e clicar nela novamente" — o painel
+// #cpqPanel só reabre no evento 'focus' do <input> (ver onfocus="openQueryPanel()"
+// no HTML), mas insertFieldToken() (escolher um chip) fecha o painel SEM tirar
+// o foco do campo — o usuário continua digitando/clicando com o campo já
+// focado, e como 'focus' não dispara de novo em cima de um elemento que já
+// tinha foco, o painel nunca mais reabre sozinho até um blur+focus manual
+// (clicar fora e voltar). Fix: toda tecla digitada garante o painel aberto,
+// não só o evento de foco inicial.
 function onQueryInput() {
+  const panel = document.getElementById('cpqPanel');
+  if (panel) panel.classList.add('open');
   applyQueryToHiddenInputs(getComposedQuery());
   updateQueryClearBtn();
   // Typeahead dos chips (ver applyQueryChipsFilter) é síncrono e barato (só
