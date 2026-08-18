@@ -259,13 +259,45 @@ function renderFolderScopeOptions() {
   const userRows = usernames.map(u => {
     const jsEsc = typeof jsAttrEscapeCmdSearch === 'function' ? jsAttrEscapeCmdSearch(u) : u;
     const safe = typeof escapeCmdSearchHistoryHtml === 'function' ? escapeCmdSearchHistoryHtml(u) : u;
-    return `<button type="button" class="seg-btn${FOLDER_SCOPE === 'user:' + u ? ' on' : ''}" onclick="setFolderScope('user:${jsEsc}')">${safe}</button>`;
+    return `<button type="button" class="seg-btn${FOLDER_SCOPE === 'user:' + u ? ' on' : ''}" data-user="${safe}" onclick="setFolderScope('user:${jsEsc}')">${safe}</button>`;
   }).join('');
+  // Pedido do usuário: "se a lista estiver grande vai ficar ruim procurar em
+  // usuário. incluir a opção de poder digitar e pesquisar o nome" — caixa de
+  // busca fixa no topo (sticky, ver .dd-search-input em css/components.css)
+  // que filtra só os botões de usuário (data-user) por substring, mantendo
+  // "My folders"/"All" sempre visíveis (não são usernames, não faz sentido
+  // escondê-los numa busca). innerHTML é reconstruído a cada
+  // renderFolderScopeOptions(), então o texto digitado zera quando o escopo
+  // muda — aceitável, já que nesse ponto o dropdown está fechando de qualquer
+  // forma (ver setFolderScope()).
   panel.innerHTML = `
+    <input type="text" class="dd-search-input" id="folderScopeSearch" placeholder="Search user..." autocomplete="off" oninput="filterFolderScopeOptions(this.value)">
     <button type="button" class="seg-btn${FOLDER_SCOPE === 'mine' ? ' on' : ''}" onclick="setFolderScope('mine')">My folders</button>
     ${userRows}
     <button type="button" class="seg-btn${FOLDER_SCOPE === 'all' ? ' on' : ''}" onclick="setFolderScope('all')">All</button>
   `;
+}
+// Filtra os botões de usuário (data-user) do dropdown de escopo de pastas
+// por substring, case-insensitive, conforme o usuário digita na busca.
+function filterFolderScopeOptions(query) {
+  const panel = document.getElementById('folderScopeToggle');
+  if (!panel) return;
+  const q = (query || '').trim().toLowerCase();
+  panel.querySelectorAll('.seg-btn[data-user]').forEach(btn => {
+    const name = (btn.getAttribute('data-user') || '').toLowerCase();
+    btn.style.display = !q || name.includes(q) ? '' : 'none';
+  });
+}
+// Foca a busca ao abrir o dropdown (chamado direto no onclick do botão,
+// junto de toggleDropdown) — setTimeout(0) porque a classe ".open" (que
+// exibe o painel via CSS) só é aplicada pelo toggleDropdown chamado logo
+// antes, no mesmo evento de clique.
+function focusFolderScopeSearch() {
+  setTimeout(() => {
+    const dd = document.getElementById('folderScopeDD');
+    const input = document.getElementById('folderScopeSearch');
+    if (dd && dd.classList.contains('open') && input) input.focus();
+  }, 0);
 }
 function setFolderScope(scope) {
   FOLDER_SCOPE = scope || 'mine';

@@ -596,6 +596,23 @@ textarea.set-input { resize: vertical; min-height: 52px; font-family: var(--sans
 }
 .dd-panel-foot .btn { padding: 4px 10px; font-size: 11px; }
 
+/* Caixa de busca no topo de um dropdown de lista (ex.: escopo de pastas —
+   "Filter by", ver #folderScopeToggle em js/folders.js) — pedido do usuário:
+   "se a lista estiver grande vai ficar ruim procurar em usuário. incluir a
+   opção de poder digitar e pesquisar o nome". position:sticky com margens
+   negativas iguais ao padding do .dd-panel pai (5px) faz ela ficar fixa no
+   topo enquanto a lista de baixo rola dentro do mesmo .dd-panel (que já tem
+   overflow-y:auto) — sem precisar de um wrapper novo só para isso. */
+.dd-search-input {
+  position: sticky; top: -5px; z-index: 2;
+  margin: -5px -5px 4px -5px; padding: 7px 8px;
+  border: none; border-bottom: 1px solid var(--bdr); border-radius: 8px 8px 0 0;
+  background: var(--surf); color: var(--text); font-size: 12px; font-family: var(--sans);
+  outline: none; width: calc(100% + 10px);
+}
+.dd-search-input:focus { border-color: var(--teal); }
+.dd-search-input::placeholder { color: var(--muted); }
+
 /* ─── Editor de comandos: dropdown "Inserir variável" (na linha de cabeçalho, entre Exportável e Remover) ─── */
 .row-head .ln-var-dd { flex-shrink: 0; min-width: 0; }
 .ln-var-dd .dd-btn { width: auto; padding: 4px 8px; font-size: 10.5px; gap: 6px; }
