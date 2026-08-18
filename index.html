@@ -732,6 +732,32 @@
             </button>
           </div>
         </div>
+        <!-- Pedido do usuário: "em system criar opção para importar e
+             exportar a pasta folders. incluir todas subfolders, comandos e
+             anotações." — diferente de "Export/Import commands" acima (que
+             lida com o catálogo inteiro em CSV), aqui é UMA pasta específica
+             (escolhida no modal), com toda a sua subárvore (subpastas +
+             comandos + notes), num arquivo .json auto-contido — pensado
+             sobretudo para levar uma pasta de uma instalação do CG Toolbox
+             para outra. Sem gate de admin (igual ao grupo "Commands" acima):
+             pastas são dados privados de cada usuário, não uma operação de
+             banco inteiro (essa continua só em "Database", admin-only). Ver
+             js/folders.js (openFolderExportModal/openFolderImportModal) e
+             GET /api/folders/:id/export + POST /api/folders/import em
+             server/index.js. -->
+        <div class="set-group">
+          <span class="set-label">Folders</span>
+          <div class="settings-action-row">
+            <button type="button" class="btn btn-ghost" onclick="openFolderExportModal()" title="Exports one folder — including all its subfolders, commands and notes — as a .json file.">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 2v7.5M4.5 6.5L8 10l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <span>Export folder</span>
+            </button>
+            <button type="button" class="btn btn-ghost" onclick="openFolderImportModal()" title="Recreates a folder (with subfolders, commands and notes) from a .json file exported here.">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 10.5V3M4.5 6.5L8 3l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <span>Import folder</span>
+            </button>
+          </div>
+        </div>
         <div class="set-group" id="sysGroupDatabase" style="display:none;">
           <span class="set-label">Database</span>
           <div class="settings-action-row">
@@ -950,6 +976,62 @@
     <div class="modal-foot">
       <div></div>
       <button class="btn" onclick="closeBackupManagerModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ EXPORT FOLDER MODAL (Settings → System → Folders → "Export folder") ══
+     Pedido do usuário: "criar opção para importar e exportar a pasta
+     folders. incluir todas subfolders, comandos e anotações." — ver
+     js/folders.js (openFolderExportModal/confirmExportFolder) e
+     GET /api/folders/:id/export em server/index.js. -->
+<div class="modal-overlay" id="folderExportOverlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title">📤 Export folder</span>
+      <button class="modal-close" onclick="closeFolderExportModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="set-group">
+        <span class="set-label">Folder</span>
+        <span class="set-hint">Includes every subfolder, command and note inside it. Choose a top-level folder or one of its subfolders — the whole branch below your choice goes into the file.</span>
+        <select class="set-input" id="folderExportSelect"></select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeFolderExportModal()">Cancel</button>
+      <button class="btn btn-primary" id="folderExportConfirmBtn" onclick="confirmExportFolder()">Export</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ IMPORT FOLDER MODAL (Settings → System → Folders → "Import folder") ══
+     Ver js/folders.js (openFolderImportModal/confirmImportFolder) e
+     POST /api/folders/import em server/index.js. -->
+<div class="modal-overlay" id="folderImportOverlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title">📥 Import folder</span>
+      <button class="modal-close" onclick="closeFolderImportModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="set-group">
+        <span class="set-label">File</span>
+        <span class="set-hint">A .json file created by "Export folder" (this or another CG Toolbox installation). The whole folder is recreated as new — it never overwrites anything you already have.</span>
+        <input type="file" id="folderImportFile" accept="application/json,.json" onchange="onFolderImportFileChosen()">
+      </div>
+      <div class="set-group">
+        <span class="set-label">Import into</span>
+        <span class="set-hint">Where the imported folder lands. If you already have a folder with the same name there, it's imported as "(copy)".</span>
+        <select class="set-input" id="folderImportParentSelect">
+          <option value="">Top level</option>
+        </select>
+      </div>
+      <div class="set-hint" id="folderImportPreview" style="display:none;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeFolderImportModal()">Cancel</button>
+      <button class="btn btn-primary" id="folderImportConfirmBtn" onclick="confirmImportFolder()" disabled>Import</button>
     </div>
   </div>
 </div>

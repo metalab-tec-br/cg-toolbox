@@ -1864,3 +1864,211 @@ document.addEventListener('mouseout', ev => {
   const item = ev.target.closest && ev.target.closest('.folder-menu-item.has-children');
   if (item) _folderMenuScheduleHideSubmenu(item);
 });
+
+// ════════════════════════════════════════════════
+// Import/Export de uma pasta inteira (Settings → System → Folders) — pedido
+// do usuário: "criar opção para importar e exportar a pasta folders. incluir
+// todas subfolders, comandos e anotações." Formato: um .json auto-contido
+// (ver GET /api/folders/:id/export + POST /api/folders/import em
+// server/index.js) — cada comando vai por INTEIRO no arquivo, não só uma
+// referência por id (o id só faz sentido no banco de origem). Pensado
+// sobretudo para levar uma pasta de uma instalação do CG Toolbox para outra;
+// dentro da MESMA instalação, "Copy folder" (copyFolderFromUser acima) já
+// resolve, só que sem subpastas.
+// ════════════════════════════════════════════════
+
+// Lista de <option> com toda a árvore de pastas do usuário atual, indentada
+// por profundidade — reaproveitada tanto pelo seletor "qual pasta exportar"
+// quanto por "importar pasta para dentro de" (mesma árvore, dois contextos).
+function _folderTreeOptionsHtml() {
+  const tree = buildFolderTree(FOLDERS);
+  let html = '';
+  const walk = (list, depth) => {
+    list.forEach(f => {
+      const indent = '    '.repeat(depth) + (depth ? '↳ ' : '');
+      const label = typeof escapeCmdSearchHistoryHtml === 'function' ? escapeCmdSearchHistoryHtml(f.name) : f.name;
+      html += `<option value="${f.id}">${indent}${label}</option>`;
+      walk(tree.childrenOf(f.id), depth + 1);
+    });
+  };
+  walk(tree.roots, 0);
+  return html;
+}
+
+function openFolderExportModal() {
+  if (!FOLDERS.length) { alert("You don't have any folders yet."); return; }
+  const overlay = document.getElementById('folderExportOverlay');
+  const select = document.getElementById('folderExportSelect');
+  if (!overlay || !select) return;
+  select.innerHTML = _folderTreeOptionsHtml();
+  overlay.classList.add('show');
+}
+function closeFolderExportModal() {
+  const overlay = document.getElementById('folderExportOverlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
+// Baixa o .json da pasta escolhida (+ toda a subárvore) — mesma técnica de
+// "Blob + <a download> sintético" já usada por exportCommandsCsv()
+// (js/csv-export.js), só que gerando JSON em vez de CSV.
+async function confirmExportFolder() {
+  const select = document.getElementById('folderExportSelect');
+  const id = select && select.value;
+  if (!id) return;
+  const btn = document.getElementById('folderExportConfirmBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch(`/api/folders/${id}/export`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(data.message || 'Failed to export the folder.');
+      return;
+    }
+    const folderName = (data.root && data.root.name) || 'folder';
+    const slug = folderName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'folder';
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cg-toolbox-folder-${slug}-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    closeFolderExportModal();
+  } catch (e) {
+    alert('Failed to export the folder. Please try again.');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Soma comandos/notes/subpastas de toda a árvore lida do arquivo — só para
+// mostrar um resumo ("X folders, Y commands, Z notes") antes de confirmar o
+// import, mesmo espírito do relatório "N imported, M failed" do import de
+// CSV (js/csv-import.js).
+function _countFolderExportNode(node) {
+  let folders = 1;
+  let commands = (node.commands || []).length;
+  let notes = (node.notes || []).length;
+  (node.children || []).forEach(c => {
+    if (!c || !c.folder) return;
+    const sub = _countFolderExportNode(c.folder);
+    folders += sub.folders; commands += sub.commands; notes += sub.notes;
+  });
+  return { folders, commands, notes };
+}
+
+// Guarda o arquivo já lido/validado (o objeto "root" pronto para mandar em
+// POST /api/folders/import) enquanto o modal está aberto — só populado por
+// onFolderImportFileChosen(), lido por confirmImportFolder().
+let _folderImportParsed = null;
+
+function openFolderImportModal() {
+  const overlay = document.getElementById('folderImportOverlay');
+  if (!overlay) return;
+  _folderImportParsed = null;
+  const fileInput = document.getElementById('folderImportFile');
+  if (fileInput) fileInput.value = '';
+  const parentSelect = document.getElementById('folderImportParentSelect');
+  if (parentSelect) parentSelect.innerHTML = '<option value="">Top level</option>' + _folderTreeOptionsHtml();
+  const preview = document.getElementById('folderImportPreview');
+  if (preview) { preview.style.display = 'none'; preview.textContent = ''; }
+  const confirmBtn = document.getElementById('folderImportConfirmBtn');
+  if (confirmBtn) confirmBtn.disabled = true;
+  overlay.classList.add('show');
+}
+function closeFolderImportModal() {
+  const overlay = document.getElementById('folderImportOverlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
+// Lê e valida o arquivo escolhido assim que o <input type="file"> muda —
+// FileReader (mesmo padrão de leitura de imagem colada/enviada no editor de
+// comandos, ver command-editor.js) em vez de mandar o arquivo cru pro
+// servidor: assim a gente já mostra um resumo (contagem de pastas/comandos/
+// notes) e barra arquivos claramente inválidos ANTES do usuário clicar em
+// "Import".
+function onFolderImportFileChosen() {
+  const fileInput = document.getElementById('folderImportFile');
+  const preview = document.getElementById('folderImportPreview');
+  const confirmBtn = document.getElementById('folderImportConfirmBtn');
+  _folderImportParsed = null;
+  if (confirmBtn) confirmBtn.disabled = true;
+  const file = fileInput && fileInput.files && fileInput.files[0];
+  if (!file) { if (preview) { preview.style.display = 'none'; preview.textContent = ''; } return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    let parsed = null;
+    try { parsed = JSON.parse(reader.result); } catch (e) { parsed = null; }
+    if (!parsed || parsed.type !== 'cg-toolbox-folder-export' || !parsed.root || typeof parsed.root.name !== 'string') {
+      if (preview) {
+        preview.style.display = 'block';
+        preview.textContent = "This doesn't look like a folder export file (or it's from an incompatible version).";
+      }
+      return;
+    }
+    _folderImportParsed = parsed;
+    const counts = _countFolderExportNode(parsed.root);
+    if (preview) {
+      preview.style.display = 'block';
+      preview.textContent = `"${parsed.root.name}" — ${counts.folders} folder(s), ${counts.commands} command(s), ${counts.notes} note(s).`;
+    }
+    if (confirmBtn) confirmBtn.disabled = false;
+  };
+  reader.onerror = () => {
+    if (preview) { preview.style.display = 'block'; preview.textContent = 'Failed to read the file.'; }
+  };
+  reader.readAsText(file);
+}
+
+// Envia a árvore já lida/validada pro servidor, que recria tudo (pasta +
+// subpastas + comandos + notes) como NOVO, sempre pertencendo ao usuário
+// atual (mesmo espírito de copyFolderFromUser acima) — nunca sobrescreve
+// nada que já existe. invalidateCommandsCache() (js/api-client.js) garante
+// que os comandos recém-criados apareçam na tela principal também, não só
+// dentro da pasta.
+async function confirmImportFolder() {
+  if (!_folderImportParsed) return;
+  const parentSelect = document.getElementById('folderImportParentSelect');
+  const parentId = parentSelect && parentSelect.value ? Number(parentSelect.value) : null;
+  const btn = document.getElementById('folderImportConfirmBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch('/api/folders/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tree: _folderImportParsed.root, parent_id: parentId }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(body.message || 'Failed to import the folder.');
+      if (btn) btn.disabled = false;
+      return;
+    }
+    closeFolderImportModal();
+    if (typeof invalidateCommandsCache === 'function') invalidateCommandsCache();
+    await reloadFoldersFromServer();
+    let msg = `Imported ${body.folders} folder(s), ${body.commands} command(s) and ${body.notes} note(s).`;
+    if (body.commandsFailed) msg += ` ${body.commandsFailed} command(s) failed to import — check that their Vendor/System/Version/Environment exist in this installation's catalog.`;
+    alert(msg);
+  } catch (e) {
+    alert('Failed to import the folder. Please try again.');
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Click-outside-to-close + Escape, mesmo padrão de backup.js/csv-export.js.
+(() => {
+  const exportOverlay = document.getElementById('folderExportOverlay');
+  if (exportOverlay) exportOverlay.addEventListener('click', ev => { if (ev.target.id === 'folderExportOverlay') closeFolderExportModal(); });
+  const importOverlay = document.getElementById('folderImportOverlay');
+  if (importOverlay) importOverlay.addEventListener('click', ev => { if (ev.target.id === 'folderImportOverlay') closeFolderImportModal(); });
+  document.addEventListener('keydown', ev => {
+    if (ev.key !== 'Escape') return;
+    const eo = document.getElementById('folderExportOverlay');
+    if (eo && eo.classList.contains('show')) closeFolderExportModal();
+    const io = document.getElementById('folderImportOverlay');
+    if (io && io.classList.contains('show')) closeFolderImportModal();
+  });
+})();

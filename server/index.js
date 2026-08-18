@@ -1241,6 +1241,220 @@ app.post('/api/folders/:id/copy', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════
+// Export / Import de uma pasta inteira (pedido do usuário: "criar opção para
+// importar e exportar a pasta folders. incluir todas subfolders, comandos e
+// anotações.") — pensado para levar uma pasta (com toda a árvore de
+// subpastas, os comandos que ela contém e as notes) de uma instalação para
+// outra (ex.: entre ambientes de clientes diferentes do CG Toolbox), não só
+// entre usuários da MESMA instalação (isso já existia via "copy" acima, mas
+// só uma pasta única, sem subpastas). Formato do arquivo: um JSON
+// auto-contido — cada comando vai por INTEIRO (mesmo shape de
+// GET /api/commands/:id, ver shapeCommand acima), não só uma referência por
+// id, já que o id só faz sentido dentro do banco de origem.
+// ════════════════════════════════════════════════
+
+// Converte o formato de LEITURA de `lines` (shapeCommand: {default:[...],
+// empty:[...]}) de volta para o formato de ESCRITA que insertChildren()
+// espera (array única, achatada, com `variant` explícito em cada linha) —
+// os dois lados dessa mesma informação já existiam antes desta feature (ver
+// nota em POST /api/commands acima sobre essa assimetria GET vs POST), só
+// não havia ainda um conversor de um para o outro.
+function flattenCommandLinesForImport(lines) {
+  const out = [];
+  ((lines && lines.default) || []).forEach(l => out.push(Object.assign({}, l, { variant: 'default' })));
+  ((lines && lines.empty) || []).forEach(l => out.push(Object.assign({}, l, { variant: 'empty' })));
+  return out;
+}
+
+// Monta recursivamente a árvore de exportação de uma pasta: seu nome, suas
+// notes, seus comandos (sort_order dentro da pasta + definição COMPLETA via
+// shapeCommand) e suas subpastas (mesma estrutura, recursivamente) —
+// espelha o que GET /api/folders já devolve para uma pasta (command_ids +
+// notes + order), só que resolvendo cada command_id para o comando inteiro
+// (em vez de só o id) e caminhando por parent_id para trazer as subpastas.
+async function buildFolderExportNode(folderId, username) {
+  const { rows: folderRows } = await pool.query('SELECT id, name FROM folders WHERE id = $1', [folderId]);
+  if (!folderRows.length) return null;
+  const name = folderRows[0].name;
+
+  const { rows: noteRows } = await pool.query(
+    'SELECT title, description, sort_order FROM notes WHERE folder_id = $1 ORDER BY sort_order, id',
+    [folderId]
+  );
+
+  const { rows: fcRows } = await pool.query(
+    'SELECT command_id, sort_order FROM folder_commands WHERE folder_id = $1 ORDER BY sort_order, created_at',
+    [folderId]
+  );
+  const commands = [];
+  for (const fc of fcRows) {
+    const cmdRow = await findCommand(fc.command_id);
+    if (!cmdRow) continue; // comando pode ter sido excluído sem a membership ainda ter sido limpa — ignora silenciosamente
+    commands.push({ sort_order: fc.sort_order, command: await shapeCommand(cmdRow, username) });
+  }
+
+  const { rows: childRows } = await pool.query(
+    'SELECT id, sort_order FROM folders WHERE parent_id = $1 ORDER BY sort_order, name',
+    [folderId]
+  );
+  const children = [];
+  for (const cf of childRows) {
+    const childNode = await buildFolderExportNode(cf.id, username);
+    if (childNode) children.push({ sort_order: cf.sort_order, folder: childNode });
+  }
+
+  return { name, notes: noteRows, commands, children };
+}
+
+// Exporta uma pasta (+ toda a subárvore) do usuário atual. 404 tanto se o id
+// não existir quanto se pertencer a outro usuário — mesma convenção "não
+// vaza a distinção" do resto destes endpoints (folders são dados privados do
+// usuário, ver PUT/DELETE /api/folders/:id acima).
+app.get('/api/folders/:id/export', async (req, res) => {
+  try {
+    const username = getCurrentUsername(req);
+    const owned = await pool.query('SELECT id FROM folders WHERE id = $1 AND username = $2', [req.params.id, username]);
+    if (!owned.rows.length) return res.status(404).json({ error: 'not_found', message: `Folder '${req.params.id}' not found` });
+    const root = await buildFolderExportNode(Number(req.params.id), username);
+    res.json({ type: 'cg-toolbox-folder-export', version: 1, exported_at: new Date().toISOString(), root });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// Acha um nome de pasta livre para `username` a partir de `baseName`, dentro
+// da MESMA transação/client do import abaixo — mesmo algoritmo de sufixo
+// "(copy)"/"(copy N)" já usado por POST /api/folders/:id/copy (mais acima),
+// só que reescrito para aceitar um `client` de transação em vez do `pool`
+// direto (o import inteiro roda dentro de uma única transação — ver
+// POST /api/folders/import abaixo).
+async function findAvailableFolderName(client, username, baseName) {
+  let name = baseName;
+  let suffix = 1;
+  for (;;) {
+    const exists = await client.query('SELECT 1 FROM folders WHERE username = $1 AND name = $2', [username, name]);
+    if (!exists.rows.length) return name;
+    suffix++;
+    name = suffix === 2 ? `${baseName} (copy)` : `${baseName} (copy ${suffix - 1})`;
+  }
+}
+
+// Recria recursivamente um nó da árvore de exportação (pasta + notes +
+// comandos + subpastas) para `username`, dentro de `parentId` (null = pasta
+// de topo) — usado por POST /api/folders/import abaixo. `stats` é acumulado
+// por referência (mesma convenção de contadores/relatório usada no import de
+// CSV, ver js/csv-import.js: "N imported, M failed"). Devolve o id da pasta
+// recém-criada (usado só para o log de auditoria do endpoint acima dela).
+async function importFolderTreeNode(client, node, username, parentId, stats) {
+  const baseName = String((node && node.name) || 'Imported folder').trim() || 'Imported folder';
+  const name = await findAvailableFolderName(client, username, baseName);
+  const { rows } = await client.query(
+    'INSERT INTO folders (username, name, parent_id) VALUES ($1, $2, $3) RETURNING id',
+    [username, name, parentId]
+  );
+  const folderId = rows[0].id;
+  stats.folders++;
+
+  for (const n of (node.notes || [])) {
+    await client.query(
+      'INSERT INTO notes (folder_id, username, title, description, sort_order) VALUES ($1, $2, $3, $4, $5)',
+      [folderId, username, String((n && n.title) || ''), sanitizeNoteHtml((n && n.description) || ''), Number.isInteger(n && n.sort_order) ? n.sort_order : 0]
+    );
+    stats.notes++;
+  }
+
+  for (const c of (node.commands || [])) {
+    const cmd = c && c.command;
+    if (!cmd) continue;
+    const body = Object.assign({}, cmd, { lines: flattenCommandLinesForImport(cmd.lines) });
+    const errors = validateBody(body);
+    if (errors.length) {
+      stats.commandsFailed++;
+      stats.errors.push(`"${cmd.name || '?'}": ${errors.join('; ')}`);
+      continue;
+    }
+    const cols = buildCommandColumns(body);
+    cols.created_by = username;
+    cols.modified_by = username;
+    const { rows: cmdRows } = await client.query(
+      `INSERT INTO commands (
+        topic, icon, sort_order, requires_ip_port, placeholder_resolver,
+        name, name_empty, "desc", desc_empty,
+        details,
+        created_by, modified_by
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      RETURNING id`,
+      [
+        cols.topic, cols.icon, cols.sort_order, cols.requires_ip_port,
+        cols.placeholder_resolver,
+        cols.name, cols.name_empty, cols.desc, cols.desc_empty,
+        cols.details,
+        cols.created_by, cols.modified_by,
+      ]
+    );
+    const newCmdId = cmdRows[0].id;
+    await insertChildren(client, newCmdId, body);
+    await client.query(
+      'INSERT INTO folder_commands (folder_id, command_id, sort_order) VALUES ($1, $2, $3)',
+      [folderId, newCmdId, Number.isInteger(c && c.sort_order) ? c.sort_order : 0]
+    );
+    stats.commands++;
+  }
+
+  for (const child of (node.children || [])) {
+    if (child && child.folder) await importFolderTreeNode(client, child.folder, username, folderId, stats);
+  }
+
+  return folderId;
+}
+
+// Importa um arquivo exportado por GET /api/folders/:id/export acima — body:
+// { tree: <o mesmo objeto "root" do export>, parent_id?: <pasta de destino
+// já existente, opcional> }. Toda a árvore (pasta + subpastas + comandos +
+// notes) é recriada como NOVA (novos ids, sempre pertencendo ao usuário
+// atual — mesmo espírito de POST /api/folders/:id/copy), numa ÚNICA
+// transação: como nenhuma das 5 colunas "soft" de escopo de um comando
+// (vendor/system/version/environment/topic — ver schema.sql, sem FK formal
+// por design) pode falhar por violação de integridade referencial, uma
+// falha real aqui só pode vir de dado malformado no próprio arquivo — nesse
+// caso é melhor desfazer tudo (all-or-nothing) do que deixar a árvore pela
+// metade.
+// Observação (não é um erro, é só uma limitação a documentar pro usuário):
+// se o Vendor/Sistema/Versão/Ambiente de um comando importado não existir no
+// catálogo da instalação de DESTINO, o comando é criado normalmente mas pode
+// não aparecer nos filtros até esses catálogos serem cadastrados lá também.
+app.post('/api/folders/import', async (req, res) => {
+  try {
+    const tree = req.body && req.body.tree;
+    if (!tree || typeof tree !== 'object' || typeof tree.name !== 'string') {
+      return res.status(400).json({ error: 'validation_error', message: 'Invalid or missing "tree" (expected the "root" object from a folder export file)' });
+    }
+    const parentIdRaw = req.body && req.body.parent_id;
+    const parentId = (parentIdRaw === undefined || parentIdRaw === null || parentIdRaw === '') ? null : Number(parentIdRaw);
+    if (parentIdRaw != null && parentIdRaw !== '' && !Number.isInteger(parentId)) {
+      return res.status(400).json({ error: 'validation_error', message: '"parent_id" must be an integer' });
+    }
+    const username = getCurrentUsername(req);
+    if (parentId !== null) {
+      const parent = await pool.query('SELECT id FROM folders WHERE id = $1 AND username = $2', [parentId, username]);
+      if (!parent.rows.length) return res.status(404).json({ error: 'not_found', message: `Parent folder '${parentId}' not found` });
+    }
+
+    const stats = { folders: 0, notes: 0, commands: 0, commandsFailed: 0, errors: [] };
+    let rootFolderId;
+    await withTransaction(async client => {
+      rootFolderId = await importFolderTreeNode(client, tree, username, parentId, stats);
+    });
+    await logAudit(username, 'create', 'folder', String(rootFolderId), tree.name, `Imported folder tree: ${stats.folders} folder(s), ${stats.commands} command(s), ${stats.notes} note(s)${stats.commandsFailed ? `, ${stats.commandsFailed} command(s) failed` : ''}`);
+    res.status(201).json(stats);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error', message: err.message });
+  }
+});
+
+// ════════════════════════════════════════════════
 // Notes — anotações livres (título + descrição em HTML) que só existem
 // DENTRO de uma pasta (ver notes em schema.sql). Mesma filosofia de
 // permissão do resto de "Folders": só o dono da pasta (username ===
